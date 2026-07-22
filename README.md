@@ -42,7 +42,7 @@ git push -u origin main
 ### 3. أنشئ مشروع Supabase
 1. https://supabase.com/dashboard → **New Project**.
 2. Region: الأقرب لجمهورك (Frankfurt / Bahrain).
-3. سجّل: **Project URL**, **anon key**, **service_role key**.
+   onCreated={(c: any)=>{setRows(r=>[c,...r]); setOpen(null);}}
 4. افتح **SQL Editor** والصق كامل ملف `supabase/migrations/0001_init.sql` ثم `Run`.
 5. تأكد أن bucket `lesson-assets` أُنشئ (خاص/private).
 
