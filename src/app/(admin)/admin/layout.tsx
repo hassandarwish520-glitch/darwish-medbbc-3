@@ -1,20 +1,27 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { requireAdmin } from "@/lib/supabase/server";
+import { requireUser, isAdminProfile } from "@/lib/supabase/server";
 import { Users, FileText, HelpCircle, Layers, Video, BookOpen, Brain } from "lucide-react";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const ctx = await requireAdmin();
-  if (!ctx) redirect("/sign-in");
+  const ctx = await requireUser();
+
+  if (!ctx) {
+    redirect("/sign-in");
+  }
+
+  if (!isAdminProfile(ctx.profile)) {
+    redirect("/dashboard");
+  }
 
   const nav = [
-    { href: "/admin",            label: "Students",   icon: Users },
-    { href: "/admin/courses",    label: "Courses",    icon: BookOpen },
-    { href: "/admin/documents",  label: "Documents",  icon: FileText },
-    { href: "/admin/qbank",      label: "QBank",      icon: HelpCircle },
+    { href: "/admin", label: "Students", icon: Users },
+    { href: "/admin/courses", label: "Courses", icon: BookOpen },
+    { href: "/admin/documents", label: "Documents", icon: FileText },
+    { href: "/admin/qbank", label: "QBank", icon: HelpCircle },
     { href: "/admin/flashcards", label: "Flashcards", icon: Layers },
-    { href: "/admin/videos",     label: "Videos",     icon: Video },
-    { href: "/admin/ai",         label: "AI Studio",  icon: Brain },
+    { href: "/admin/videos", label: "Videos", icon: Video },
+    { href: "/admin/ai", label: "AI Studio", icon: Brain },
   ];
 
   return (
@@ -25,11 +32,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <div className="font-bold">MedBBC Admin</div>
         </div>
         <nav className="space-y-1 text-sm">
-          {nav.map(n => {
+          {nav.map((n) => {
             const I = n.icon;
             return (
-              <Link key={n.href} href={n.href}
-                className="flex items-center gap-3 px-3 py-2 rounded-xl text-slate-300 hover:bg-ink-800">
+              <Link
+                key={n.href}
+                href={n.href}
+                className="flex items-center gap-3 px-3 py-2 rounded-xl text-slate-300 hover:bg-ink-800"
+              >
                 <I className="h-4 w-4" /> {n.label}
               </Link>
             );

@@ -19,7 +19,7 @@ const NAV = [
 
 export default function AppShell({
   children, profile,
-}: { children: React.ReactNode; profile: { full_name?: string; role: string; email: string } | null }) {
+}: { children: React.ReactNode; profile: { full_name?: string | null; role?: string | null; email?: string | null } | null }) {
   const path = usePathname();
   const router = useRouter();
   const groups = Array.from(new Set(NAV.map(n => n.group)));
