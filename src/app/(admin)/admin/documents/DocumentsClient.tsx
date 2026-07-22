@@ -61,7 +61,7 @@ export default function DocumentsClient({ initial, courses }: { initial: Lesson[
       </div>
 
       {modal && <UploadModal kind={modal} courses={courses} onClose={()=>setModal(null)}
-        onCreated={(l)=>{ setRows(rs=>[l,...rs]); setModal(null); }} />}
+        onCreated={(l: Lesson)=>{ setRows(rs=>[l,...rs]); setModal(null); }} />}
     </>
   );
 }

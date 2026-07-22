@@ -42,7 +42,7 @@ export default function FlashcardsAdmin({ initial, lessons }: { initial: F[]; le
         </div>
       )}
 
-      {open==="add" && <AddModal onClose={()=>setOpen(null)} onCreated={c=>{setRows(r=>[c,...r]); setOpen(null);}} lessons={lessons}/>}
+      {open==="add" && <AddModal onClose={()=>setOpen(null)} onCreated={(c: F)=>{setRows(r=>[c,...r]); setOpen(null);}} lessons={lessons}/>}
       {open==="ai"  && <AIModal  onClose={()=>setOpen(null)} lessons={lessons}/>}
     </>
   );

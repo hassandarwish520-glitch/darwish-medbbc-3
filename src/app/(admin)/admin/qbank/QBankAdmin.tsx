@@ -45,7 +45,7 @@ export default function QBankAdmin({ initial, lessons }:{ initial: Q[]; lessons:
         </div>
       )}
 
-      {open === "add" && <AddModal onClose={()=>setOpen(null)} onCreated={q=>{ setRows(r=>[q,...r]); setOpen(null); }} lessons={lessons}/>}
+      {open === "add" && <AddModal onClose={()=>setOpen(null)} onCreated={(q: Q)=>{ setRows(r=>[q,...r]); setOpen(null); }} lessons={lessons}/>}
       {open === "ai"  && <AIModal  onClose={()=>setOpen(null)} lessons={lessons}/>}
     </>
   );
