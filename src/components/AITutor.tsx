@@ -1,8 +1,19 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
-import { MessageSquare, X, Send, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, MessageSquare, Send, X } from "lucide-react";
 
-type Msg = { role: "user" | "assistant"; content: string };
+type Citation = {
+  n: number;
+  title: string;
+  source_label: string;
+  lesson_kind?: string | null;
+};
+
+type Msg = {
+  role: "user" | "assistant";
+  content: string;
+  citations?: Citation[];
+};
 
 export default function AITutor() {
   const [open, setOpen] = useState(false);
@@ -13,50 +24,92 @@ export default function AITutor() {
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { scrollRef.current?.scrollTo({ top: 1e6 }); }, [msgs, open]);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 1e6 });
+  }, [msgs, open]);
 
   async function send() {
     if (!q.trim() || busy) return;
     const question = q.trim();
+    const history = msgs.slice(-6).map((m) => ({ role: m.role, content: m.content }));
     setQ("");
-    setMsgs(m => [...m, { role: "user", content: question }]);
+    setMsgs((m) => [...m, { role: "user", content: question }]);
     setBusy(true);
+
     try {
-      const r = await fetch("/api/ai/tutor", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, history: msgs.slice(-6) }) });
-      const { answer, error } = await r.json();
-      setMsgs(m => [...m, { role: "assistant", content: answer || error || "…" }]);
-    } catch (e: any) {
-      setMsgs(m => [...m, { role: "assistant", content: "Error: " + e.message }]);
-    } finally { setBusy(false); }
+      const r = await fetch("/api/ai/tutor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, history }),
+      });
+      const { answer, citations, error } = await r.json();
+      setMsgs((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content: answer || error || "…",
+          citations: Array.isArray(citations) ? citations : [],
+        },
+      ]);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Request failed";
+      setMsgs((m) => [...m, { role: "assistant", content: `Error: ${message}` }]);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <>
-      <button onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 h-14 w-14 rounded-full bg-brand text-ink-950 grid place-items-center shadow-lg hover:bg-brand-dark">
+      <button
+        onClick={() => setOpen(true)}
+        className="fixed bottom-5 right-5 z-40 h-14 w-14 rounded-full bg-brand text-ink-950 grid place-items-center shadow-lg hover:bg-brand-dark"
+      >
         <MessageSquare className="h-6 w-6" />
       </button>
 
       {open && (
-        <div className="fixed bottom-5 right-5 z-50 w-[92vw] sm:w-[400px] h-[560px] card flex flex-col">
+        <div className="fixed bottom-5 right-5 z-50 w-[92vw] sm:w-[420px] h-[560px] card flex flex-col">
           <div className="flex items-center justify-between p-3 border-b border-ink-700">
             <div className="font-semibold">AI Tutor</div>
-            <button onClick={() => setOpen(false)}><X className="h-4 w-4" /></button>
+            <button onClick={() => setOpen(false)}>
+              <X className="h-4 w-4" />
+            </button>
           </div>
           <div ref={scrollRef} className="flex-1 overflow-auto p-3 space-y-3 text-sm">
             {msgs.map((m, i) => (
-              <div key={i} className={`p-3 rounded-xl ${m.role==="user" ? "bg-brand/10 ml-6" : "bg-ink-800 mr-6"}`}>
+              <div key={i} className={`p-3 rounded-xl ${m.role === "user" ? "bg-brand/10 ml-6" : "bg-ink-800 mr-6"}`}>
                 <div className="text-xs text-slate-500 mb-1">{m.role}</div>
                 <div className="whitespace-pre-wrap">{m.content}</div>
+                {!!m.citations?.length && (
+                  <div className="mt-3 border-t border-ink-700 pt-2 space-y-1">
+                    <div className="text-[11px] uppercase tracking-wide text-slate-500">Sources</div>
+                    {m.citations.map((c) => (
+                      <div key={`${i}-${c.n}`} className="text-xs text-slate-300">
+                        [{c.n}] {c.source_label}: {c.title}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
-            {busy && <div className="flex items-center gap-2 text-slate-400"><Loader2 className="h-4 w-4 animate-spin"/> Thinking…</div>}
+            {busy && (
+              <div className="flex items-center gap-2 text-slate-400">
+                <Loader2 className="h-4 w-4 animate-spin" /> Thinking…
+              </div>
+            )}
           </div>
           <div className="p-3 border-t border-ink-700 flex gap-2">
-            <input className="input" value={q} onChange={e=>setQ(e.target.value)}
-              onKeyDown={e=>e.key==="Enter" && send()} placeholder="Ask a medical question…"/>
-            <button className="btn-primary" disabled={busy} onClick={send}><Send className="h-4 w-4"/></button>
+            <input
+              className="input"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send()}
+              placeholder="Ask a medical question…"
+            />
+            <button className="btn-primary" disabled={busy} onClick={send}>
+              <Send className="h-4 w-4" />
+            </button>
           </div>
         </div>
       )}

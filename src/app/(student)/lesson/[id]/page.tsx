@@ -1,19 +1,25 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import LessonViewer from "@/components/LessonViewer";
 import BookmarkButton from "@/components/BookmarkButton";
+import LessonViewer from "@/components/LessonViewer";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function LessonPage({ params }: { params: { id: string } }) {
   const s = createClient();
   const { data: lesson } = await s.from("lessons").select("*").eq("id", params.id).single();
   if (!lesson || !lesson.visible) notFound();
 
+  const isVideo = lesson.meta?.type === "video";
+  const lessonLabel = isVideo ? "video session" : `${lesson.kind} lesson`;
+
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <div className="flex items-start justify-between gap-4 mb-4">
         <div>
-          <div className="text-xs uppercase text-slate-500">{lesson.kind} lesson</div>
+          <div className="text-xs uppercase text-slate-500">{lessonLabel}</div>
           <h1 className="text-2xl font-bold mt-1">{lesson.title}</h1>
+          {isVideo && lesson.meta?.provider && (
+            <div className="text-sm text-slate-400 mt-1">Provider: {String(lesson.meta.provider)}</div>
+          )}
         </div>
         <BookmarkButton lessonId={lesson.id} />
       </div>

@@ -1,17 +1,40 @@
 import { chat, TUTOR_SYSTEM } from "./engine";
 import { retrieve } from "./rag";
 
-export async function tutorAnswer(question: string, history: {role:"user"|"assistant";content:string}[] = []) {
-  const ctx = await retrieve(question, 6);
-  const context = ctx.map((c, i) => `[[${i+1}]] ${c.content}`).join("\n\n");
+export async function tutorAnswer(question: string, history: { role: "user" | "assistant"; content: string }[] = []) {
+  const ctx = await retrieve(question, 8);
+  const context = ctx
+    .map(
+      (c, i) =>
+        `[[${i + 1}]] ${c.source_label}: ${c.title}${c.lesson_kind ? ` (${c.lesson_kind})` : ""}\n${c.content}`
+    )
+    .join("\n\n");
+
   const messages = [
     { role: "system" as const, content: TUTOR_SYSTEM },
-    { role: "system" as const, content: `CONTEXT (from platform lessons; cite as [[n]]):\n${context || "(none)"}` },
+    {
+      role: "system" as const,
+      content:
+        `CONTEXT PRIORITY: Question Bank > HTML Lessons > PDF Lessons > Flashcards > Notes. ` +
+        `Use the context first and cite sources as [[n]]. If context is insufficient, say that clearly.\n\n` +
+        `CONTEXT:\n${context || "(none)"}`,
+    },
     ...history,
     { role: "user" as const, content: question },
   ];
+
   const answer = await chat(messages, { temperature: 0.2 });
-  return { answer, citations: ctx.map((c,i) => ({ n: i+1, source_type: c.source_type, source_id: c.source_id })) };
+  return {
+    answer,
+    citations: ctx.map((c, i) => ({
+      n: i + 1,
+      source_type: c.source_type,
+      source_id: c.source_id,
+      title: c.title,
+      source_label: c.source_label,
+      lesson_kind: c.lesson_kind ?? null,
+    })),
+  };
 }
 
 export async function generateQuestions(sourceText: string, count = 5, difficulty = "intermediate") {
@@ -22,7 +45,11 @@ SOURCE:\n${sourceText.slice(0, 8000)}`;
     [{ role: "system", content: TUTOR_SYSTEM }, { role: "user", content: prompt }],
     { temperature: 0.4, json: true }
   );
-  try { return JSON.parse(raw).questions ?? []; } catch { return []; }
+  try {
+    return JSON.parse(raw).questions ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export async function generateFlashcards(sourceText: string, count = 10) {
@@ -34,13 +61,22 @@ SOURCE:\n${sourceText.slice(0, 8000)}`;
     [{ role: "system", content: TUTOR_SYSTEM }, { role: "user", content: prompt }],
     { temperature: 0.4, json: true }
   );
-  try { return JSON.parse(raw).cards ?? []; } catch { return []; }
+  try {
+    return JSON.parse(raw).cards ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export async function summarize(sourceText: string) {
   return chat(
-    [{ role: "system", content: TUTOR_SYSTEM },
-     { role: "user", content: `Summarize the following medical lesson in 8 bullet points, clinically focused:\n\n${sourceText.slice(0, 8000)}` }],
+    [
+      { role: "system", content: TUTOR_SYSTEM },
+      {
+        role: "user",
+        content: `Summarize the following medical lesson in 8 bullet points, clinically focused:\n\n${sourceText.slice(0, 8000)}`,
+      },
+    ],
     { temperature: 0.2 }
   );
 }
