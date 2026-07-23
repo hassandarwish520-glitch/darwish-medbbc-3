@@ -1,14 +1,15 @@
 // Secure internal viewer — streams lesson bytes without exposing storage URLs.
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient, requireActive } from "@/lib/supabase/server";
+import { createAdminClient, isAdminProfile, requireActive } from "@/lib/supabase/server";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string; fmt: string } }) {
   const ctx = await requireActive();
   if (!ctx) return new NextResponse("Unauthorized", { status: 401 });
 
+  const canPreviewHidden = isAdminProfile(ctx.profile);
   const admin = createAdminClient();
   const { data: lesson } = await admin.from("lessons").select("*").eq("id", params.id).single();
-  if (!lesson || !lesson.visible) return new NextResponse("Not found", { status: 404 });
+  if (!lesson || (!lesson.visible && !canPreviewHidden)) return new NextResponse("Not found", { status: 404 });
 
   if (params.fmt === "html" && lesson.kind === "html" && lesson.html_body) {
     return new NextResponse(lesson.html_body, {

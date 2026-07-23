@@ -1,6 +1,18 @@
 "use client";
 import { useMemo, useState } from "react";
-import { CheckCircle2, Eye, EyeOff, FileText, FileType2, Globe, Loader2, PencilLine, Trash2, Upload } from "lucide-react";
+import {
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  ExternalLink,
+  FileText,
+  FileType2,
+  Globe,
+  Loader2,
+  PencilLine,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 
 type Lesson = {
@@ -31,12 +43,25 @@ function formatBytes(size?: number) {
   return `${value.toFixed(value >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`;
 }
 
+function viewerHref(lesson: Lesson) {
+  const fmt = lesson.kind === "pdf" ? "pdf" : "html";
+  return `/api/viewer/${lesson.id}/${fmt}`;
+}
+
+function lessonHref(lesson: Lesson) {
+  return `/lesson/${lesson.id}`;
+}
+
 export default function DocumentsClient({ initial, courses }: { initial: Lesson[]; courses: Course[] }) {
   const [rows, setRows] = useState<Lesson[]>(initial);
   const [tab, setTab] = useState<"all" | "html" | "pdf">("all");
   const [modal, setModal] = useState<null | "html-page" | "html-file" | "pdf">(null);
 
   const shown = useMemo(() => rows.filter((r) => tab === "all" || r.kind === tab), [rows, tab]);
+  const courseName = useMemo(
+    () => Object.fromEntries(courses.map((course) => [course.id, course.title])),
+    [courses]
+  );
 
   async function toggle(lesson: Lesson) {
     const r = await fetch("/api/admin/lessons", {
@@ -48,7 +73,7 @@ export default function DocumentsClient({ initial, courses }: { initial: Lesson[
   }
 
   async function remove(lesson: Lesson) {
-    if (!confirm(`Delete "${lesson.title}"?`)) return;
+    if (!confirm(`Delete \"${lesson.title}\"?`)) return;
     const r = await fetch(`/api/admin/lessons?id=${lesson.id}`, { method: "DELETE" });
     if (r.ok) setRows((list) => list.filter((item) => item.id !== lesson.id));
   }
@@ -90,31 +115,43 @@ export default function DocumentsClient({ initial, courses }: { initial: Lesson[
           const originalName = typeof lesson.meta?.original_name === "string" ? lesson.meta.original_name : null;
           const fileSize = typeof lesson.meta?.file_size === "number" ? lesson.meta.file_size : null;
           return (
-            <div key={lesson.id} className="card p-3 flex items-center gap-3">
-              <Icon className="h-5 w-5 text-brand" />
-              <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{lesson.title}</div>
-                <div className="text-xs text-slate-500 uppercase flex flex-wrap gap-2">
-                  <span>{lesson.kind}</span>
-                  {originalName && <span className="normal-case">{originalName}</span>}
-                  {fileSize && <span className="normal-case">{formatBytes(fileSize)}</span>}
-                  {ragIndexed && <span className="text-brand">RAG</span>}
+            <div key={lesson.id} className="card p-3 flex flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="flex items-start gap-3 flex-1 min-w-0">
+                <Icon className="h-5 w-5 text-brand mt-0.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate">{lesson.title}</div>
+                  <div className="text-xs text-slate-500 flex flex-wrap gap-2 mt-1">
+                    <span className="uppercase">{lesson.kind}</span>
+                    {originalName && <span className="break-all">{originalName}</span>}
+                    {fileSize && <span>{formatBytes(fileSize)}</span>}
+                    {lesson.course_id && courseName[lesson.course_id] && <span>{courseName[lesson.course_id]}</span>}
+                    {ragIndexed && <span className="text-brand">RAG</span>}
+                    {!lesson.visible && <span className="text-amber-300">Hidden</span>}
+                  </div>
                 </div>
               </div>
-              <button className="btn-ghost text-xs" onClick={() => toggle(lesson)}>
-                {lesson.visible ? (
-                  <>
-                    <Eye className="h-3 w-3" /> Visible
-                  </>
-                ) : (
-                  <>
-                    <EyeOff className="h-3 w-3" /> Hidden
-                  </>
-                )}
-              </button>
-              <button className="btn-ghost text-xs" onClick={() => remove(lesson)}>
-                <Trash2 className="h-3 w-3" />
-              </button>
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                <a className="btn-ghost text-xs" href={viewerHref(lesson)} target="_blank" rel="noreferrer">
+                  <Eye className="h-3 w-3" /> Viewer
+                </a>
+                <a className="btn-ghost text-xs" href={lessonHref(lesson)} target="_blank" rel="noreferrer">
+                  <ExternalLink className="h-3 w-3" /> Page
+                </a>
+                <button className="btn-ghost text-xs" onClick={() => toggle(lesson)}>
+                  {lesson.visible ? (
+                    <>
+                      <Eye className="h-3 w-3" /> Visible
+                    </>
+                  ) : (
+                    <>
+                      <EyeOff className="h-3 w-3" /> Hidden
+                    </>
+                  )}
+                </button>
+                <button className="btn-ghost text-xs" onClick={() => remove(lesson)}>
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
             </div>
           );
         })}
@@ -182,15 +219,13 @@ function UploadModal({
         fd.set("html", html);
       } else {
         const uploadFile = file as File;
-        const ext = kind === "pdf" ? "pdf" : (uploadFile.name.toLowerCase().endsWith(".htm") ? "htm" : "html");
+        const ext = kind === "pdf" ? "pdf" : uploadFile.name.toLowerCase().endsWith(".htm") ? "htm" : "html";
         const storage_path = randomPath(ext);
         const supabase = createSupabaseClient();
-        const { error: uploadError } = await supabase.storage
-          .from("lesson-assets")
-          .upload(storage_path, uploadFile, {
-            upsert: false,
-            contentType: uploadFile.type || (kind === "pdf" ? "application/pdf" : "text/html"),
-          });
+        const { error: uploadError } = await supabase.storage.from("lesson-assets").upload(storage_path, uploadFile, {
+          upsert: false,
+          contentType: uploadFile.type || (kind === "pdf" ? "application/pdf" : "text/html"),
+        });
         if (uploadError) throw new Error(uploadError.message);
 
         fd.set("kind", kind === "pdf" ? "pdf" : "html-file");
@@ -285,7 +320,13 @@ function UploadModal({
             Cancel
           </button>
           <button className="btn-primary" disabled={busy} onClick={submit}>
-            {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : "Save"}
+            {busy ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+              </>
+            ) : (
+              "Save"
+            )}
           </button>
         </div>
       </div>

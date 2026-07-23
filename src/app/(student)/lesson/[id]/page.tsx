@@ -1,12 +1,16 @@
 import { notFound } from "next/navigation";
 import BookmarkButton from "@/components/BookmarkButton";
 import LessonViewer from "@/components/LessonViewer";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient, isAdminProfile, requireActive } from "@/lib/supabase/server";
 
 export default async function LessonPage({ params }: { params: { id: string } }) {
-  const s = createClient();
-  const { data: lesson } = await s.from("lessons").select("*").eq("id", params.id).single();
-  if (!lesson || !lesson.visible) notFound();
+  const ctx = await requireActive();
+  if (!ctx) notFound();
+
+  const canPreviewHidden = isAdminProfile(ctx.profile);
+  const db = canPreviewHidden ? createAdminClient() : createClient();
+  const { data: lesson } = await db.from("lessons").select("*").eq("id", params.id).single();
+  if (!lesson || (!lesson.visible && !canPreviewHidden)) notFound();
 
   const isVideo = lesson.meta?.type === "video";
   const lessonLabel = isVideo ? "video session" : `${lesson.kind} lesson`;
@@ -19,6 +23,11 @@ export default async function LessonPage({ params }: { params: { id: string } })
           <h1 className="text-2xl font-bold mt-1">{lesson.title}</h1>
           {isVideo && lesson.meta?.provider && (
             <div className="text-sm text-slate-400 mt-1">Provider: {String(lesson.meta.provider)}</div>
+          )}
+          {!lesson.visible && canPreviewHidden && (
+            <div className="mt-2 inline-flex rounded-full bg-amber-500/15 px-3 py-1 text-xs text-amber-300">
+              Hidden item preview (admin only)
+            </div>
           )}
         </div>
         <BookmarkButton lessonId={lesson.id} />
