@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
-import { Eye, EyeOff, FileText, FileType2, Globe, PencilLine, Trash2, Upload } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CheckCircle2, Eye, EyeOff, FileText, FileType2, Globe, Loader2, PencilLine, Trash2, Upload } from "lucide-react";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 
 type Lesson = {
   id: string;
@@ -13,12 +14,29 @@ type Lesson = {
 
 type Course = { id: string; title: string };
 
+function randomPath(ext: string) {
+  const token = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+  return `${Date.now()}-${token}.${ext}`;
+}
+
+function formatBytes(size?: number) {
+  if (!size || size < 1) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = size;
+  let idx = 0;
+  while (value >= 1024 && idx < units.length - 1) {
+    value /= 1024;
+    idx += 1;
+  }
+  return `${value.toFixed(value >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`;
+}
+
 export default function DocumentsClient({ initial, courses }: { initial: Lesson[]; courses: Course[] }) {
   const [rows, setRows] = useState<Lesson[]>(initial);
   const [tab, setTab] = useState<"all" | "html" | "pdf">("all");
   const [modal, setModal] = useState<null | "html-page" | "html-file" | "pdf">(null);
 
-  const shown = rows.filter((r) => tab === "all" || r.kind === tab);
+  const shown = useMemo(() => rows.filter((r) => tab === "all" || r.kind === tab), [rows, tab]);
 
   async function toggle(lesson: Lesson) {
     const r = await fetch("/api/admin/lessons", {
@@ -50,7 +68,7 @@ export default function DocumentsClient({ initial, courses }: { initial: Lesson[
       </div>
 
       <div className="mt-3 text-xs text-slate-500">
-        HTML is preserved in the secure internal viewer. PDFs can also be indexed for AI Tutor by adding RAG text / notes.
+        Files are uploaded directly to Supabase Storage from the browser for better persistence and faster handling of larger PDFs.
       </div>
 
       <div className="flex gap-2 mt-4 text-sm">
@@ -69,13 +87,17 @@ export default function DocumentsClient({ initial, courses }: { initial: Lesson[
         {shown.map((lesson) => {
           const Icon = lesson.kind === "pdf" ? FileType2 : FileText;
           const ragIndexed = typeof lesson.meta?.index_text === "string" && lesson.meta.index_text.length > 0;
+          const originalName = typeof lesson.meta?.original_name === "string" ? lesson.meta.original_name : null;
+          const fileSize = typeof lesson.meta?.file_size === "number" ? lesson.meta.file_size : null;
           return (
             <div key={lesson.id} className="card p-3 flex items-center gap-3">
               <Icon className="h-5 w-5 text-brand" />
-              <div className="flex-1">
-                <div className="font-medium">{lesson.title}</div>
-                <div className="text-xs text-slate-500 uppercase flex gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate">{lesson.title}</div>
+                <div className="text-xs text-slate-500 uppercase flex flex-wrap gap-2">
                   <span>{lesson.kind}</span>
+                  {originalName && <span className="normal-case">{originalName}</span>}
+                  {fileSize && <span className="normal-case">{formatBytes(fileSize)}</span>}
                   {ragIndexed && <span className="text-brand">RAG</span>}
                 </div>
               </div>
@@ -132,30 +154,59 @@ function UploadModal({
   const [indexText, setIndexText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+
+  async function createRow(body: FormData) {
+    const r = await fetch("/api/admin/lessons", { method: "POST", body });
+    if (!r.ok) throw new Error(await r.text());
+    const { lesson } = await r.json();
+    return lesson as Lesson;
+  }
 
   async function submit() {
     setBusy(true);
     setErr(null);
+    setOk(null);
     try {
+      if (!title.trim()) throw new Error("Title is required");
+      if (kind === "html-page" && !html.trim()) throw new Error("HTML content is required");
+      if (kind !== "html-page" && !file) throw new Error("Please choose a file first");
+
       const fd = new FormData();
-      fd.set("title", title);
+      fd.set("title", title.trim());
       fd.set("course_id", course);
       if (indexText.trim()) fd.set("index_text", indexText.trim());
 
       if (kind === "html-page") {
         fd.set("kind", "html-inline");
         fd.set("html", html);
-      } else if (kind === "html-file") {
-        fd.set("kind", "html-file");
-        if (file) fd.set("file", file);
       } else {
-        fd.set("kind", "pdf");
-        if (file) fd.set("file", file);
+        const uploadFile = file as File;
+        const ext = kind === "pdf" ? "pdf" : (uploadFile.name.toLowerCase().endsWith(".htm") ? "htm" : "html");
+        const storage_path = randomPath(ext);
+        const supabase = createSupabaseClient();
+        const { error: uploadError } = await supabase.storage
+          .from("lesson-assets")
+          .upload(storage_path, uploadFile, {
+            upsert: false,
+            contentType: uploadFile.type || (kind === "pdf" ? "application/pdf" : "text/html"),
+          });
+        if (uploadError) throw new Error(uploadError.message);
+
+        fd.set("kind", kind === "pdf" ? "pdf" : "html-file");
+        fd.set("storage_path", storage_path);
+        fd.set(
+          "meta",
+          JSON.stringify({
+            original_name: uploadFile.name,
+            file_size: uploadFile.size,
+            uploaded_via: "browser-direct",
+          })
+        );
       }
 
-      const r = await fetch("/api/admin/lessons", { method: "POST", body: fd });
-      if (!r.ok) throw new Error(await r.text());
-      const { lesson } = await r.json();
+      const lesson = await createRow(fd);
+      setOk("Saved successfully");
       onCreated(lesson);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to save document");
@@ -208,6 +259,7 @@ function UploadModal({
                 accept={kind === "pdf" ? "application/pdf" : "text/html,.html,.htm"}
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
+              {file && <div className="mt-2 text-xs text-slate-500">Selected: {file.name} · {formatBytes(file.size)}</div>}
             </div>
           )}
 
@@ -222,13 +274,18 @@ function UploadModal({
           </div>
 
           {err && <p className="text-sm text-red-400">{err}</p>}
+          {ok && (
+            <p className="text-sm text-emerald-400 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" /> {ok}
+            </p>
+          )}
         </div>
         <div className="mt-4 flex justify-end gap-2">
           <button className="btn-ghost" onClick={onClose}>
             Cancel
           </button>
           <button className="btn-primary" disabled={busy} onClick={submit}>
-            {busy ? "Saving…" : "Save"}
+            {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : "Save"}
           </button>
         </div>
       </div>

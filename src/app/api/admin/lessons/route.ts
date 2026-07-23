@@ -4,6 +4,13 @@ import { createAdminClient, requireAdmin } from "@/lib/supabase/server";
 import { indexSource } from "@/lib/ai/rag";
 import { extractLessonIndexText, safeMeta } from "@/lib/ai/source-text";
 
+function inferExtFromPath(path: string) {
+  const lower = path.toLowerCase();
+  if (lower.endsWith(".pdf")) return "pdf";
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "html";
+  return "html";
+}
+
 export async function POST(req: NextRequest) {
   const ctx = await requireAdmin();
   if (!ctx) return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -14,6 +21,7 @@ export async function POST(req: NextRequest) {
   const kind = String(fd.get("kind") || "");
   const index_text = String(fd.get("index_text") || "").trim();
   const meta = safeMeta(fd.get("meta"));
+  const preUploadedPath = String(fd.get("storage_path") || "").trim();
   if (!title) return NextResponse.json({ error: "title required" }, { status: 400 });
 
   const admin = createAdminClient();
@@ -23,8 +31,20 @@ export async function POST(req: NextRequest) {
 
   if (kind === "html-inline") {
     const html = String(fd.get("html") || "");
+    if (!html.trim()) return NextResponse.json({ error: "html required" }, { status: 400 });
     row = { ...row, kind: "html", html_body: html, meta: mergedMeta };
     indexText = extractLessonIndexText({ kind: "html", html_body: html, meta: mergedMeta });
+  } else if (preUploadedPath) {
+    const inferredKind = kind === "pdf" ? "pdf" : inferExtFromPath(preUploadedPath);
+    row = { ...row, kind: inferredKind, storage_path: preUploadedPath, meta: mergedMeta };
+
+    if (inferredKind === "html") {
+      const { data } = await admin.storage.from("lesson-assets").download(preUploadedPath);
+      const uploadedHtml = data ? await data.text() : "";
+      indexText = extractLessonIndexText({ kind: inferredKind, meta: mergedMeta }, uploadedHtml);
+    } else {
+      indexText = extractLessonIndexText({ kind: inferredKind, meta: mergedMeta });
+    }
   } else {
     const file = fd.get("file") as File | null;
     if (!file) return NextResponse.json({ error: "file required" }, { status: 400 });
@@ -36,9 +56,14 @@ export async function POST(req: NextRequest) {
       .upload(path, bytes, { contentType: file.type || (ext === "pdf" ? "application/pdf" : "text/html") });
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
-    row = { ...row, kind: ext, storage_path: path, meta: mergedMeta };
+    row = {
+      ...row,
+      kind: ext,
+      storage_path: path,
+      meta: { ...mergedMeta, original_name: file.name, file_size: file.size },
+    };
     const uploadedHtml = ext === "html" ? bytes.toString("utf-8") : "";
-    indexText = extractLessonIndexText({ kind: ext, meta: mergedMeta }, uploadedHtml);
+    indexText = extractLessonIndexText({ kind: ext, meta: row.meta as Record<string, unknown> }, uploadedHtml);
   }
 
   const { data: lesson, error } = await admin.from("lessons").insert(row).select().single();
@@ -67,7 +92,11 @@ export async function PATCH(req: NextRequest) {
   if (data && (Object.prototype.hasOwnProperty.call(patch, "meta") || Object.prototype.hasOwnProperty.call(patch, "html_body"))) {
     try {
       await admin.from("rag_chunks").delete().eq("source_type", "lesson").eq("source_id", id);
-      const text = extractLessonIndexText(data);
+      let text = extractLessonIndexText(data);
+      if (!text && data.storage_path && data.kind === "html") {
+        const { data: blob } = await admin.storage.from("lesson-assets").download(data.storage_path);
+        text = blob ? extractLessonIndexText(data, await blob.text()) : text;
+      }
       if (text) await indexSource("lesson", id, text);
     } catch {
       // ignore reindex errors on patch
