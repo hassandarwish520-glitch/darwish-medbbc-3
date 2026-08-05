@@ -1,0 +1,236 @@
+/**
+ * Direct question importer — no AI required.
+ * Parses JSON, JS, or any structured text file into question rows
+ * exactly as written: stem, choices, answer key, explanation, images.
+ */
+
+export type DirectQuestion = {
+  stem: string;
+  choices: { key: string; text: string }[];
+  answer_key: string;
+  explanation: string;
+  image_path: string | null;
+  image_caption: string | null;
+  difficulty: string;
+  tags: string[];
+  subject: string;
+  system: string;
+  topic: string;
+};
+
+const CHOICE_KEYS = ["A", "B", "C", "D", "E", "F"] as const;
+
+function coerceString(v: unknown): string {
+  if (typeof v === "string") return v.trim();
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  return "";
+}
+
+/** Pull the letter key out of "A. text", "A) text", "(A) text", "A: text", or just "A" */
+function extractKey(raw: string): string | null {
+  const m = raw.match(/^\s*\(?([A-Fa-f])\)?[\s.\-):]/);
+  return m ? m[1].toUpperCase() : null;
+}
+
+/** Remove the leading "A. " / "A) " prefix from a choice string */
+function stripKeyPrefix(raw: string): string {
+  return raw.replace(/^\s*\(?[A-Fa-f]\)?[\s.\-):]+/, "").trim();
+}
+
+/**
+ * Resolve the answer_key field — handles:
+ *   - "A", "B", … (letter string)
+ *   - 0, 1, 2, … (0-based index integer)
+ *   - "A. Full answer text" (letter prefix then text)
+ *   - "correct" / "true" boolean strings (assumes first option)
+ */
+function resolveAnswerKey(raw: unknown, choices: { key: string; text: string }[]): string {
+  if (typeof raw === "number") {
+    return choices[raw]?.key ?? choices[0]?.key ?? "A";
+  }
+  const s = coerceString(raw).toUpperCase();
+  if (/^[A-F]$/.test(s)) return s;
+  const fromPrefix = extractKey(raw as string);
+  if (fromPrefix) return fromPrefix;
+  // Try matching the text against choices
+  const needle = coerceString(raw).toLowerCase();
+  for (const c of choices) {
+    if (c.text.toLowerCase().startsWith(needle.slice(0, 30))) return c.key;
+  }
+  return choices[0]?.key ?? "A";
+}
+
+/**
+ * Normalise an array field that may arrive as:
+ *   - string[] with optional "A. text" prefixes
+ *   - {key,text}[] or {label,value}[] objects
+ *   - {A: "text", B: "text"} plain object
+ */
+function normalizeChoices(raw: unknown): { key: string; text: string }[] {
+  if (!raw) return [];
+
+  // Plain object mapping {A: "...", B: "..."}
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return Object.entries(raw as Record<string, string>)
+      .filter(([k]) => /^[A-Fa-f]$/.test(k))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => ({ key: k.toUpperCase(), text: coerceString(v) }));
+  }
+
+  if (!Array.isArray(raw)) return [];
+
+  const arr = raw as unknown[];
+
+  // Array of objects {key,text} / {label,value} / {option,content} / {letter,description}
+  if (arr.length && typeof arr[0] === "object" && arr[0] !== null) {
+    return arr.map((item, idx) => {
+      const o = item as Record<string, unknown>;
+      const text = coerceString(
+        o.text ?? o.value ?? o.content ?? o.description ?? o.answer ?? o.option ?? o.label ?? ""
+      );
+      const key = coerceString(
+        o.key ?? o.letter ?? o.label ?? o.id ?? CHOICE_KEYS[idx] ?? "A"
+      ).toUpperCase().slice(0, 1);
+      return { key: CHOICE_KEYS.includes(key as (typeof CHOICE_KEYS)[number]) ? key : CHOICE_KEYS[idx] ?? "A", text };
+    });
+  }
+
+  // Array of strings: "A. text", "A) text", or bare text
+  const result: { key: string; text: string }[] = [];
+  for (let i = 0; i < arr.length; i++) {
+    const s = coerceString(arr[i]);
+    const k = extractKey(s);
+    result.push({ key: k ?? CHOICE_KEYS[i] ?? "A", text: k ? stripKeyPrefix(s) : s });
+  }
+  return result;
+}
+
+/** Normalise a single raw question object from any JSON format */
+function normalizeOne(raw: Record<string, unknown>, fallbackDifficulty: string): DirectQuestion | null {
+  // Stem
+  const stem = coerceString(
+    raw.stem ?? raw.question ?? raw.q ?? raw.text ?? raw.prompt ?? raw.vignette ?? raw.case ?? ""
+  );
+  if (!stem) return null;
+
+  // Choices
+  const choicesRaw = raw.choices ?? raw.options ?? raw.answers ?? raw.variants ?? raw.items ?? raw.opts;
+  const choices = normalizeChoices(choicesRaw);
+  if (choices.length < 2) return null;
+
+  // Answer key
+  const answerRaw = raw.answer_key ?? raw.answer ?? raw.correct ?? raw.correct_answer ?? raw.correctAnswer ?? raw.key ?? raw.ans ?? raw.correctOption ?? raw.right ?? null;
+  const answer_key = resolveAnswerKey(answerRaw, choices);
+
+  // Explanation
+  const explanation = coerceString(
+    raw.explanation ?? raw.rationale ?? raw.reason ?? raw.discussion ?? raw.exp ?? raw.feedback ?? raw.solution ?? raw.justification ?? ""
+  ) || "No explanation provided.";
+
+  // Image
+  const image_path = coerceString(
+    raw.image_path ?? raw.image ?? raw.imageUrl ?? raw.image_url ?? raw.img ?? raw.imageLink ?? raw.figure ?? ""
+  ) || null;
+  const image_caption = coerceString(
+    raw.image_caption ?? raw.imageCaption ?? raw.caption ?? raw.img_caption ?? raw.figureCaption ?? ""
+  ) || null;
+
+  // Difficulty
+  const diffRaw = coerceString(raw.difficulty ?? raw.level ?? raw.complexity ?? fallbackDifficulty).toLowerCase();
+  const difficulty = ["foundation", "intermediate", "advanced", "expert"].includes(diffRaw) ? diffRaw : fallbackDifficulty;
+
+  // Tags
+  const tagsRaw = raw.tags ?? raw.keywords ?? raw.categories ?? raw.labels ?? [];
+  const tags: string[] = Array.isArray(tagsRaw)
+    ? tagsRaw.map((t) => coerceString(t)).filter(Boolean)
+    : coerceString(tagsRaw).split(",").map((t) => t.trim()).filter(Boolean);
+
+  // Subject / system / topic (optional metadata)
+  const subject = coerceString(raw.subject ?? raw.category ?? raw.system ?? raw.specialty ?? "");
+  const system = coerceString(raw.system ?? raw.organ_system ?? raw.organSystem ?? subject ?? "");
+  const topic = coerceString(raw.topic ?? raw.theme ?? raw.subtopic ?? "");
+
+  return { stem, choices, answer_key, explanation, image_path, image_caption, difficulty, tags, subject, system, topic };
+}
+
+/**
+ * Extract a JS/TS array literal from source text.
+ * Handles: `const x = [...]`, `export default [...]`, `module.exports = [...]`
+ */
+function extractJsonFromJs(text: string): string | null {
+  // Try to find the first top-level array
+  const arrayStart = text.search(/\[\s*\{/);
+  if (arrayStart === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let stringChar = "";
+  let escape = false;
+  for (let i = arrayStart; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === "\\") { escape = true; continue; }
+    if (inString) { if (ch === stringChar) inString = false; continue; }
+    if (ch === '"' || ch === "'" || ch === "`") { inString = true; stringChar = ch; continue; }
+    if (ch === "[" || ch === "{") depth++;
+    if (ch === "]" || ch === "}") {
+      depth--;
+      if (depth === 0) {
+        // Replace JS-style unquoted keys with JSON-compatible keys
+        let slice = text.slice(arrayStart, i + 1);
+        // Replace single-quoted strings with double-quoted
+        slice = slice.replace(/'([^'\\]*(\\.[^'\\]*)*)'/g, (_, inner) => `"${inner.replace(/"/g, '\\"')}"`);
+        // Quote unquoted keys: `key:` -> `"key":`
+        slice = slice.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":');
+        // Remove trailing commas before ] or }
+        slice = slice.replace(/,(\s*[}\]])/g, "$1");
+        return slice;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Parse a file's text content into DirectQuestion[].
+ * Supports JSON arrays, JS module exports, and plain structured text.
+ */
+export function parseDirectImportFile(
+  text: string,
+  filename: string,
+  fallbackDifficulty = "intermediate"
+): DirectQuestion[] {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+
+  let parsed: unknown = null;
+
+  // 1. Try direct JSON parse
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    // 2. Try extracting JSON array from JS/TS source
+    if (["js", "ts", "jsx", "tsx", "mjs", "cjs"].includes(ext) || !parsed) {
+      const extracted = extractJsonFromJs(text);
+      if (extracted) {
+        try { parsed = JSON.parse(extracted); } catch { /* fall through */ }
+      }
+    }
+  }
+
+  if (!parsed) return [];
+
+  // Unwrap {questions: [...]} envelope
+  let arr: unknown[] = [];
+  if (Array.isArray(parsed)) {
+    arr = parsed;
+  } else if (typeof parsed === "object" && parsed !== null) {
+    const obj = parsed as Record<string, unknown>;
+    const key = ["questions", "items", "data", "records", "qbank", "bank"].find((k) => Array.isArray(obj[k]));
+    if (key) arr = obj[key] as unknown[];
+    else arr = [parsed]; // single question object
+  }
+
+  return arr
+    .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+    .map((item) => normalizeOne(item, fallbackDifficulty))
+    .filter((q): q is DirectQuestion => q !== null);
+}

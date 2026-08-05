@@ -1,0 +1,268 @@
+import { unstable_cache } from "next/cache";
+import { createAdminClient } from "@/lib/supabase/server";
+import {
+  classifySubjectFromText,
+  getSubjectMeta,
+  getSubjectMetaBySlug,
+  normalizeSubjectTitle,
+  SUBJECT_CATALOG,
+  subjectSlugFromTitle,
+  type SubjectMeta,
+} from "@/lib/subjects";
+
+type LessonRow = {
+  id: string;
+  title: string;
+  kind: string;
+  meta?: Record<string, unknown> | null;
+  visible?: boolean | null;
+  position?: number | null;
+};
+
+type QuestionRow = {
+  id: string;
+  lesson_id?: string | null;
+  tags?: string[] | null;
+  stem?: string | null;
+};
+
+type FlashcardRow = {
+  id: string;
+  lesson_id?: string | null;
+  tags?: string[] | null;
+  front: string;
+  back: string;
+};
+
+type SubjectOverview = SubjectMeta & {
+  exam: string;
+  videoCount: number;
+  documentCount: number;
+  qbankCount: number;
+  keyPointCount: number;
+};
+
+type SubjectDetail = {
+  exam: string;
+  subject: SubjectMeta;
+  videos: LessonRow[];
+  documents: LessonRow[];
+  qbankSources: Array<{ id: string; title: string; questionCount: number }>;
+  qbankQuestionCount: number;
+  keyPoints: FlashcardRow[];
+};
+
+const SUBJECT_HINTS: Record<string, string[]> = {
+  Neurology: ["neurology", "neurologic", "brain", "seizure", "stroke", "cranial"],
+  "Gastrointestinal System": [
+    "gastrointestinal", "gastric", "stomach", "intestin", "bowel", "colon", "rectal",
+    "hepatic", "liver", "pancreas", "biliary", "bile", "esophag", "diarrhea",
+    "constipation", "colitis", "crohn", "ibd", "gerd", "peptic", "ulcer",
+    "hepatitis", "cirrhosis", "jaundice", "colorectal", "malabsorption", "celiac",
+    "appendicitis", "hemorrhoid", "gi tract",
+  ],
+  Obstetrics: ["obstetric", "pregnancy", "pregnant", "antenatal", "prenatal", "labor", "delivery", "postpartum", "fetal", "maternal", "placenta", "obs", "obgyn"],
+  Gynecology: ["gyne", "gyn", "gynecology", "gynecologic", "ovary", "ovarian", "uterus", "uterine", "cervix", "cervical", "pelvic", "menstrual", "contraception", "infertility", "obgyn"],
+  Pediatrics: ["pediatric", "pediatrics", "child", "infant", "newborn", "adolescent", "vaccine", "vaccination"],
+};
+
+function lessonText(lesson: LessonRow) {
+  const meta = lesson.meta ?? {};
+  return [
+    lesson.title,
+    typeof meta.subject === "string" ? meta.subject : "",
+    typeof meta.notes === "string" ? meta.notes : "",
+    typeof meta.index_text === "string" ? meta.index_text : "",
+    typeof meta.description === "string" ? meta.description : "",
+    typeof meta.url === "string" ? meta.url : "",
+    typeof meta.document_name === "string" ? meta.document_name : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function questionText(question: QuestionRow) {
+  return [question.stem || "", ...(question.tags ?? [])].join("\n");
+}
+
+function flashcardText(card: FlashcardRow) {
+  return [card.front, card.back, ...(card.tags ?? [])].join("\n");
+}
+
+function tagsMatchSubject(subjectTitle: string, tags?: string[] | null) {
+  const normalizedSubject = normalizeSubjectTitle(subjectTitle);
+  const normalizedTags = (tags ?? []).map((tag) => normalizeSubjectTitle(tag)).filter(Boolean);
+  if (normalizedTags.includes(normalizedSubject)) return true;
+
+  const loweredTags = (tags ?? []).map((tag) => tag.toLowerCase());
+  if (normalizedSubject === "Obstetrics") {
+    return loweredTags.some((tag) => tag.includes("obstetric") || tag === "obs" || tag.includes("obgyn"));
+  }
+  if (normalizedSubject === "Gynecology") {
+    return loweredTags.some((tag) => tag.includes("gyn") || tag.includes("gyne") || tag.includes("obgyn"));
+  }
+  return false;
+}
+
+function hintsMatchSubject(subjectTitle: string, value: string) {
+  const hints = SUBJECT_HINTS[normalizeSubjectTitle(subjectTitle)] ?? [];
+  if (!hints.length) return false;
+  const lowered = value.toLowerCase();
+  return hints.some((hint) => lowered.includes(hint));
+}
+
+function lessonAssignedSubject(lesson: LessonRow): string {
+  const raw = typeof lesson.meta?.subject === "string" ? lesson.meta.subject.trim() : "";
+  if (!raw) return "";
+  // Try catalog lookup (normalised alias → canonical title)
+  const catalogTitle = getSubjectMeta(normalizeSubjectTitle(raw))?.title ?? "";
+  // Fall back to the raw value so manually-typed subjects still match
+  return catalogTitle || raw;
+}
+
+/** Case-insensitive subject match: catalog title OR raw meta.subject value */
+function subjectTitleMatches(assignedSubject: string, targetTitle: string): boolean {
+  if (!assignedSubject) return false;
+  return assignedSubject === targetTitle || assignedSubject.toLowerCase() === targetTitle.toLowerCase();
+}
+
+function matchesSubject(subjectTitle: string, value: string, tags?: string[] | null) {
+  const normalizedSubject = normalizeSubjectTitle(subjectTitle);
+  if (tagsMatchSubject(normalizedSubject, tags)) return true;
+  if (hintsMatchSubject(normalizedSubject, [value, ...(tags ?? [])].join("\n"))) return true;
+  return classifySubjectFromText([value, ...(tags ?? [])].join("\n")) === normalizedSubject;
+}
+
+// Cache base data for 5 minutes to avoid redundant DB round-trips on every page load.
+const loadBaseDataCached = unstable_cache(
+  async (exam: string) => {
+    const admin = createAdminClient();
+    const [subjectsRes, lessonsRes, questionsRes, flashcardsRes] = await Promise.all([
+      admin
+        .from("exam_subject_configs")
+        .select("subject_title, position")
+        .eq("exam_code", exam)
+        .eq("is_active", true)
+        .order("position"),
+      admin
+        .from("lessons")
+        .select("id,title,kind,meta,visible,position")
+        .eq("visible", true)
+        .order("position"),
+      admin.from("questions").select("id,lesson_id,tags,stem"),
+      admin.from("flashcards").select("id,lesson_id,tags,front,back"),
+    ]);
+
+    const configuredSubjects = (subjectsRes.data ?? [])
+      .map((row: any) => normalizeSubjectTitle(row.subject_title))
+      .filter(Boolean);
+
+    const fallbackIfomSubjects = ["Neurology", "Gastrointestinal System", "Obstetrics", "Gynecology", "Pediatrics"];
+    const subjectTitles = configuredSubjects.length
+      ? Array.from(new Set([...configuredSubjects, ...fallbackIfomSubjects]))
+      : SUBJECT_CATALOG.map((subject) => subject.title);
+
+    const subjects = subjectTitles
+      .map((title) => getSubjectMeta(title))
+      .filter((subject): subject is SubjectMeta => Boolean(subject));
+
+    return {
+      exam,
+      subjects,
+      lessons: (lessonsRes.data ?? []) as LessonRow[],
+      questions: (questionsRes.data ?? []) as QuestionRow[],
+      flashcards: (flashcardsRes.data ?? []) as FlashcardRow[],
+    };
+  },
+  ["subject-base-data"],
+  { revalidate: 300 }, // 5 minutes
+);
+
+async function loadBaseData(exam = "IFOM_CSE") {
+  return loadBaseDataCached(exam);
+}
+
+export async function getSubjectOverviews(exam = "IFOM_CSE"): Promise<SubjectOverview[]> {
+  const { subjects, lessons, questions, flashcards } = await loadBaseData(exam);
+
+  return subjects.map((subject) => {
+    const videos = lessons.filter((lesson) => {
+      const type = typeof lesson.meta?.type === "string" ? String(lesson.meta?.type) : "";
+      const assignedSubject = lessonAssignedSubject(lesson);
+      return type === "video" && (assignedSubject ? subjectTitleMatches(assignedSubject, subject.title) : matchesSubject(subject.title, lessonText(lesson)));
+    });
+
+    // Documents: ONLY show if admin explicitly tagged meta.subject — no auto-detection fallback.
+    const documents = lessons.filter((lesson) => {
+      const type = typeof lesson.meta?.type === "string" ? String(lesson.meta?.type) : "";
+      const assignedSubject = lessonAssignedSubject(lesson);
+      const documentKinds = new Set(["html", "pdf", "html-file", "html-inline", "notes", "qbank"]);
+      return type !== "video" && documentKinds.has(lesson.kind) && subjectTitleMatches(assignedSubject, subject.title);
+    });
+
+    const qbankSources = new Set(
+      questions
+        .filter((question) => matchesSubject(subject.title, questionText(question), question.tags))
+        .map((question) => question.lesson_id || question.id),
+    );
+
+    const keyPoints = flashcards.filter((card) => matchesSubject(subject.title, flashcardText(card), card.tags));
+
+    return {
+      ...subject,
+      exam,
+      videoCount: videos.length,
+      documentCount: documents.length,
+      qbankCount: qbankSources.size,
+      keyPointCount: keyPoints.length,
+    };
+  });
+}
+
+export async function getSubjectDetail(slug: string, exam = "IFOM_CSE"): Promise<SubjectDetail | null> {
+  const { subjects, lessons, questions, flashcards } = await loadBaseData(exam);
+  const subject = getSubjectMetaBySlug(slug) || subjects.find((item) => item.slug === slug) || null;
+  if (!subject) return null;
+
+  const videos = lessons.filter((lesson) => {
+    const type = typeof lesson.meta?.type === "string" ? String(lesson.meta?.type) : "";
+    const assignedSubject = lessonAssignedSubject(lesson);
+    return type === "video" && (assignedSubject ? subjectTitleMatches(assignedSubject, subject.title) : matchesSubject(subject.title, lessonText(lesson)));
+  });
+
+  // Documents: ONLY show if admin explicitly tagged meta.subject — no auto-detection fallback.
+  const documents = lessons.filter((lesson) => {
+    const type = typeof lesson.meta?.type === "string" ? String(lesson.meta?.type) : "";
+    const assignedSubject = lessonAssignedSubject(lesson);
+    const documentKinds = new Set(["html", "pdf", "html-file", "html-inline", "notes", "qbank"]);
+    return type !== "video" && documentKinds.has(lesson.kind) && subjectTitleMatches(assignedSubject, subject.title);
+  });
+
+  const relevantQuestions = questions.filter((question) => matchesSubject(subject.title, questionText(question), question.tags));
+  const lessonName = new Map(lessons.map((lesson) => [lesson.id, lesson.title]));
+  const sourceMap = new Map<string, { id: string; title: string; questionCount: number }>();
+
+  for (const question of relevantQuestions) {
+    const key = question.lesson_id || `pool-${subject.slug}`;
+    const title = question.lesson_id ? lessonName.get(question.lesson_id) || subject.title : `${subject.title} Practice Pool`;
+    const existing = sourceMap.get(key) || { id: key, title, questionCount: 0 };
+    existing.questionCount += 1;
+    sourceMap.set(key, existing);
+  }
+
+  const keyPoints = flashcards.filter((card) => matchesSubject(subject.title, flashcardText(card), card.tags));
+
+  return {
+    exam,
+    subject,
+    videos,
+    documents,
+    qbankSources: [...sourceMap.values()].sort((a, b) => b.questionCount - a.questionCount || a.title.localeCompare(b.title)),
+    qbankQuestionCount: relevantQuestions.length,
+    keyPoints,
+  };
+}
+
+export function subjectHref(title: string, exam = "IFOM_CSE") {
+  return `/subjects/${subjectSlugFromTitle(title)}?exam=${encodeURIComponent(exam)}`;
+}
