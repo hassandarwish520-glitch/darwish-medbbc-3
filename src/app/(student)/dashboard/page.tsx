@@ -10,18 +10,37 @@ import {
   BarChart2,
   ChevronRight,
   Target,
+  Zap,
+  Trophy,
+  Clock,
+  Flame,
+  TrendingUp,
+  Brain,
+  Star,
+  ArrowRight,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 type AttemptRow = {
   correct: boolean;
-  questions?: { tags?: string[] | null } | null;
+  created_at: string;
+  questions?: { tags?: string[] | null; subject?: string | null } | null;
+};
+
+type LessonRow = {
+  id: string;
+  title: string;
+  kind: string;
+  course_id?: string | null;
 };
 
 export default async function DashboardPage() {
   const ctx = await requireUser();
   const s = await createClient();
+
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0];
 
   const [
     { count: qCount },
@@ -30,6 +49,7 @@ export default async function DashboardPage() {
     { count: documentCount },
     { count: videoCount },
     { data: attempts },
+    { data: recentLessons },
   ] = await Promise.all([
     s.from("questions").select("*", { count: "exact", head: true }),
     s.from("flashcards").select("*", { count: "exact", head: true }),
@@ -38,10 +58,11 @@ export default async function DashboardPage() {
     s.from("lessons").select("*", { count: "exact", head: true }).eq("visible", true).contains("meta", { type: "video" }),
     s
       .from("question_attempts")
-      .select("correct,questions(tags)")
+      .select("correct,created_at,questions(tags)")
       .eq("user_id", ctx!.user.id)
       .order("created_at", { ascending: false })
       .limit(400),
+    s.from("lessons").select("id,title,kind,course_id").eq("visible", true).limit(6),
   ]);
 
   const firstName = (ctx?.profile?.full_name || ctx?.profile?.email || "Doctor").split(" ")[0];
@@ -50,6 +71,23 @@ export default async function DashboardPage() {
   const correct = attemptRows.filter((item) => item.correct).length;
   const accuracy = totalAttempts ? Math.round((correct / totalAttempts) * 100) : 0;
 
+  // Daily streak
+  const uniqueDays = new Set(attemptRows.map((a) => a.created_at?.split("T")[0]).filter(Boolean));
+  let streak = 0;
+  const checkDate = new Date();
+  while (uniqueDays.has(checkDate.toISOString().split("T")[0])) {
+    streak++;
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+
+  // Today's attempts
+  const todayAttempts = attemptRows.filter((a) => a.created_at?.startsWith(todayStr));
+  const todayCorrect = todayAttempts.filter((a) => a.correct).length;
+  const todayTotal = todayAttempts.length;
+  const todayGoalQ = 30;
+  const todayGoalFlash = 20;
+
+  // Subject performance
   const byTag = new Map<string, { total: number; correct: number }>();
   for (const row of attemptRows) {
     for (const tag of row.questions?.tags ?? []) {
@@ -60,297 +98,441 @@ export default async function DashboardPage() {
     }
   }
 
-  const weakest = [...byTag.entries()]
+  const subjectPerf = [...byTag.entries()]
     .map(([tag, value]) => ({
       tag,
       accuracy: value.total ? Math.round((value.correct / value.total) * 100) : 0,
       total: value.total,
     }))
-    .sort((a, b) => a.accuracy - b.accuracy || b.total - a.total)
+    .sort((a, b) => b.total - a.total)
     .slice(0, 5);
 
-  const recommendation = weakest[0]?.tag || "Question Bank";
-  const completionFiles = (noteCount ?? 0) + (flashCount ?? 0);
+  const weakest = [...subjectPerf].sort((a, b) => a.accuracy - b.accuracy).slice(0, 3);
+  const recommended = weakest[0]?.tag || "Question Bank";
+
+  const lessonsData = (recentLessons ?? []) as LessonRow[];
+
+  const greetingHour = today.getHours();
+  const greeting = greetingHour < 12 ? "Good morning" : greetingHour < 17 ? "Good afternoon" : "Good evening";
 
   return (
-    <div className="page-shell">
-      {/* Hero */}
+    <div className="page-shell space-y-5">
+
+      {/* ── WELCOME BACK ── */}
       <section
-        className="mt-4 rounded-3xl border p-6 overflow-hidden"
+        className="rounded-3xl border p-6 overflow-hidden relative"
         style={{
-          background: "linear-gradient(135deg, rgba(37,99,235,0.10) 0%, rgba(5,150,105,0.07) 100%)",
-          borderColor: "var(--c-border)",
+          background: "linear-gradient(135deg, rgba(52,211,153,0.08) 0%, rgba(96,165,250,0.06) 50%, rgba(167,139,250,0.04) 100%)",
+          borderColor: "rgba(52,211,153,0.20)",
           boxShadow: "var(--shadow-card)",
         }}
       >
-        <div
-          className="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
-          style={{ color: "var(--c-blue)", background: "var(--c-blue-bg)", borderColor: "var(--c-blue-border)" }}
-        >
-          Student Dashboard
-        </div>
-        <h1
-          className="mt-4 text-3xl font-bold tracking-tight"
-          style={{ color: "var(--c-text-1)" }}
-        >
-          Welcome back, <span style={{ color: "var(--c-brand)" }}>{firstName}</span>
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-7" style={{ color: "var(--c-text-3)" }}>
-          Pick up where you left off, review your performance, and jump back into your study materials.
-        </p>
-      </section>
+        {/* Glow */}
+        <div className="pointer-events-none absolute inset-0 rounded-3xl"
+          style={{ background: "radial-gradient(ellipse 60% 50% at 80% 0%, rgba(52,211,153,0.06) 0%, transparent 70%)" }} />
 
-      {/* Metrics */}
-      <section className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <MetricCard
-          icon={<Target className="h-5 w-5" />}
-          label="Completion"
-          value={`${completionFiles}`}
-          subValue={`/${Math.max((documentCount ?? 0) + (videoCount ?? 0), 1)} files`}
-          accentColor="var(--c-blue)"
-        />
-        <MetricCard
-          icon={<Sparkles className="h-5 w-5" />}
-          label="Average Score"
-          value={totalAttempts ? `${accuracy}%` : "N/A"}
-          subValue={totalAttempts ? `${correct}/${totalAttempts} correct` : "No attempts yet"}
-          accentColor="#a855f7"
-        />
-        <MetricCard
-          icon={<BarChart2 className="h-5 w-5" />}
-          label="Overall Progress"
-          value={`${accuracy}%`}
-          subValue="Live performance tracking"
-          accentColor="var(--c-brand)"
-          progress={accuracy}
-        />
-      </section>
+        <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="text-sm mb-1" style={{ color: "var(--c-text-4)" }}>{greeting} 👋</div>
+            <h1 className="text-3xl font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>
+              Welcome back, <span style={{ color: "var(--c-brand)" }}>{firstName}</span>
+            </h1>
+            <p className="mt-1.5 text-sm" style={{ color: "var(--c-text-3)" }}>
+              {totalAttempts > 0
+                ? `You've answered ${totalAttempts} questions with ${accuracy}% accuracy. Keep going!`
+                : "Start your first practice session to track your progress."}
+            </p>
+          </div>
 
-      {/* Quick Start */}
-      <section className="mt-8">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold" style={{ color: "var(--c-text-1)" }}>Quick Start</h2>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <QuickCard href="/qbank" icon={<BookOpen className="h-6 w-6" />} badge="Adaptive" title="Practice Questions" desc="Adaptive quiz session" accentColor="var(--c-blue)" />
-          <QuickCard href="/self-assessment" icon={<ClipboardCheck className="h-6 w-6" />} badge="NBME" title="Self Assessment" desc="CMS, NBME & blocks" accentColor="#a855f7" />
-          <QuickCard href="/videos" icon={<PlaySquare className="h-6 w-6" />} title="Watch Videos" desc="Curated lectures" accentColor="var(--c-brand)" />
-          <QuickCard href="/flashcards" icon={<Layers className="h-6 w-6" />} badge="SRS" title="Flashcards" desc="Spaced repetition" accentColor="#f59e0b" />
-        </div>
-      </section>
-
-      {/* Performance by Subject */}
-      <section
-        className="mt-8 rounded-3xl border p-5"
-        style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold" style={{ color: "var(--c-text-1)" }}>Performance by Subject</h2>
-          <Link href="/progress" className="text-sm font-medium" style={{ color: "var(--c-brand)" }}>
-            View Full Analytics
-          </Link>
-        </div>
-
-        <div className="mt-5 space-y-4">
-          {(weakest.length ? weakest : [
-            { tag: "Cardiology", accuracy: 0, total: 0 },
-            { tag: "Respiratory", accuracy: 0, total: 0 },
-            { tag: "Neurology", accuracy: 0, total: 0 },
-            { tag: "Gastroenterology", accuracy: 0, total: 0 },
-            { tag: "Pharmacology", accuracy: 0, total: 0 },
-          ]).map((row) => (
-            <div key={row.tag} className="grid grid-cols-[1fr_90px_48px] items-center gap-4">
-              <div className="truncate text-sm" style={{ color: "var(--c-text-2)" }}>{row.tag}</div>
-              <div className="h-2 rounded-full" style={{ background: "var(--c-elevated)" }}>
-                <div
-                  className="h-2 rounded-full transition-all duration-500"
-                  style={{
-                    width: `${row.accuracy}%`,
-                    background: "linear-gradient(90deg, var(--c-blue), var(--c-brand))",
-                  }}
-                />
+          {/* Streak badge */}
+          {streak > 0 && (
+            <div className="flex items-center gap-2 rounded-2xl border px-5 py-3 shrink-0"
+              style={{ borderColor: "rgba(251,146,60,0.30)", background: "rgba(251,146,60,0.08)" }}>
+              <Flame className="h-5 w-5 text-orange-400" />
+              <div>
+                <div className="text-xl font-bold text-orange-400">{streak}</div>
+                <div className="text-xs text-orange-300/70">Day streak</div>
               </div>
-              <div className="text-right text-sm" style={{ color: "var(--c-text-3)" }}>{row.accuracy}%</div>
+            </div>
+          )}
+        </div>
+
+        {/* Quick stats row */}
+        <div className="relative mt-5 grid grid-cols-3 gap-3">
+          {[
+            { label: "Questions", value: totalAttempts, icon: <BookOpen className="h-4 w-4" />, color: "#60a5fa" },
+            { label: "Accuracy", value: `${accuracy}%`, icon: <Target className="h-4 w-4" />, color: "#34d399" },
+            { label: "Correct", value: correct, icon: <Sparkles className="h-4 w-4" />, color: "#a78bfa" },
+          ].map((s) => (
+            <div key={s.label} className="rounded-2xl p-3 text-center"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="flex justify-center mb-1" style={{ color: s.color }}>{s.icon}</div>
+              <div className="text-xl font-bold" style={{ color: s.color }}>{s.value}</div>
+              <div className="text-[11px] mt-0.5" style={{ color: "var(--c-text-4)" }}>{s.label}</div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Daily Goals */}
-      <section
-        className="mt-6 rounded-3xl border p-5"
-        style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}
-      >
-        <h2 className="text-lg font-bold" style={{ color: "var(--c-text-1)" }}>Daily Goals</h2>
-        <div className="mt-5 space-y-3">
-          <GoalRow label="30 questions" done={totalAttempts >= 30} />
-          <GoalRow label="1 video lesson" done={(videoCount ?? 0) > 0} />
-          <GoalRow label="20 flashcards" done={(flashCount ?? 0) >= 20} />
+      {/* ── TODAY'S GOAL ── */}
+      <section className="rounded-3xl border p-5"
+        style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="grid h-8 w-8 place-items-center rounded-xl" style={{ background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>
+            <Target className="h-4 w-4" />
+          </div>
+          <h2 className="text-base font-bold" style={{ color: "var(--c-text-1)" }}>Today's Goal</h2>
+          <span className="ml-auto text-xs" style={{ color: "var(--c-text-4)" }}>{today.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</span>
+        </div>
+
+        <div className="space-y-3">
+          {[
+            { label: "Practice Questions", done: todayTotal, goal: todayGoalQ, unit: "questions", icon: <BookOpen className="h-3.5 w-3.5" />, color: "#60a5fa" },
+            { label: "Flashcard Review", done: Math.min(flashCount ?? 0, todayGoalFlash), goal: todayGoalFlash, unit: "cards", icon: <Layers className="h-3.5 w-3.5" />, color: "#f59e0b" },
+            { label: "Watch a Video Lesson", done: (videoCount ?? 0) > 0 ? 1 : 0, goal: 1, unit: "video", icon: <PlaySquare className="h-3.5 w-3.5" />, color: "#34d399" },
+          ].map((g) => {
+            const pct = g.goal > 0 ? Math.min(100, Math.round((g.done / g.goal) * 100)) : 0;
+            return (
+              <div key={g.label}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2 text-sm" style={{ color: "var(--c-text-2)" }}>
+                    <span style={{ color: g.color }}>{g.icon}</span>
+                    {g.label}
+                  </div>
+                  <span className="text-xs font-semibold" style={{ color: pct >= 100 ? "#34d399" : "var(--c-text-4)" }}>
+                    {g.done}/{g.goal} {g.unit}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full" style={{ background: "var(--c-elevated)" }}>
+                  <div className="h-1.5 rounded-full transition-all duration-700"
+                    style={{ width: `${pct}%`, background: pct >= 100 ? "#34d399" : g.color }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
-      {/* Smart Recommendation */}
-      <section
-        className="mt-6 rounded-3xl border p-5"
+      {/* ── CONTINUE STUDYING ── */}
+      {lessonsData.length > 0 && (
+        <section className="rounded-3xl border p-5"
+          style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="grid h-8 w-8 place-items-center rounded-xl" style={{ background: "rgba(96,165,250,0.12)", color: "#60a5fa" }}>
+                <PlaySquare className="h-4 w-4" />
+              </div>
+              <h2 className="text-base font-bold" style={{ color: "var(--c-text-1)" }}>Continue Studying</h2>
+            </div>
+            <Link href="/courses" className="text-xs font-medium" style={{ color: "var(--c-brand)" }}>View all</Link>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            {lessonsData.slice(0, 4).map((lesson) => (
+              <Link key={lesson.id} href={`/lesson/${lesson.id}`}
+                className="flex items-center gap-3 rounded-2xl p-3.5 border transition hover:-translate-y-0.5 hover:shadow-md"
+                style={{ background: "var(--c-elevated)", borderColor: "var(--c-border)" }}>
+                <div className="grid h-9 w-9 place-items-center rounded-xl shrink-0"
+                  style={{ background: "rgba(96,165,250,0.12)", color: "#60a5fa" }}>
+                  {lesson.kind === "video" ? <PlaySquare className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium truncate" style={{ color: "var(--c-text-1)" }}>{lesson.title}</div>
+                  <div className="text-xs capitalize" style={{ color: "var(--c-text-4)" }}>{lesson.kind}</div>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0" style={{ color: "var(--c-text-4)" }} />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── QUICK ACCESS ── */}
+      <section>
+        <h2 className="text-base font-bold mb-3" style={{ color: "var(--c-text-1)" }}>Quick Access</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { href: "/qbank", icon: <BookOpen className="h-6 w-6" />, badge: "Adaptive", title: "Practice Questions", desc: "Start a quiz session", color: "#60a5fa", bg: "rgba(96,165,250,0.10)" },
+            { href: "/self-assessment", icon: <ClipboardCheck className="h-6 w-6" />, badge: "NBME", title: "Self Assessment", desc: "CMS & NBME blocks", color: "#a78bfa", bg: "rgba(167,139,250,0.10)" },
+            { href: "/flashcards", icon: <Layers className="h-6 w-6" />, badge: "SRS", title: "Flashcards", desc: "Spaced repetition", color: "#f59e0b", bg: "rgba(245,158,11,0.10)" },
+            { href: "/courses", icon: <PlaySquare className="h-6 w-6" />, title: "Video Courses", desc: "Curated lectures", color: "#34d399", bg: "rgba(52,211,153,0.10)" },
+          ].map((c) => (
+            <Link key={c.href} href={c.href}
+              className="card rounded-3xl p-5 block hover:-translate-y-0.5 transition-all"
+              style={{ background: "var(--c-card)" }}>
+              <div className="flex items-start justify-between gap-2 mb-4">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl" style={{ background: c.bg, color: c.color }}>
+                  {c.icon}
+                </div>
+                {c.badge && (
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                    style={{ background: c.bg, color: c.color }}>
+                    {c.badge}
+                  </span>
+                )}
+              </div>
+              <div className="text-sm font-bold leading-tight mb-1" style={{ color: "var(--c-text-1)" }}>{c.title}</div>
+              <div className="text-xs" style={{ color: "var(--c-text-3)" }}>{c.desc}</div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* ── RECENT ACTIVITY + PERFORMANCE SUMMARY (side by side on large screens) ── */}
+      <div className="grid lg:grid-cols-2 gap-5">
+
+        {/* Recent Activity */}
+        <section className="rounded-3xl border p-5"
+          style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="grid h-8 w-8 place-items-center rounded-xl" style={{ background: "rgba(52,211,153,0.12)", color: "#34d399" }}>
+              <Zap className="h-4 w-4" />
+            </div>
+            <h2 className="text-base font-bold" style={{ color: "var(--c-text-1)" }}>Recent Activity</h2>
+          </div>
+
+          {todayTotal > 0 ? (
+            <div className="space-y-3">
+              <div className="rounded-2xl p-4 border"
+                style={{ background: "var(--c-elevated)", borderColor: "var(--c-border)" }}>
+                <div className="text-xs mb-2 font-semibold uppercase tracking-wide" style={{ color: "var(--c-text-4)" }}>Today</div>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm" style={{ color: "var(--c-text-2)" }}>{todayTotal} questions attempted</div>
+                  <div className="text-sm font-bold" style={{ color: todayCorrect / todayTotal > 0.7 ? "#34d399" : "#f59e0b" }}>
+                    {todayTotal ? Math.round((todayCorrect / todayTotal) * 100) : 0}%
+                  </div>
+                </div>
+                <div className="mt-2 h-1.5 rounded-full" style={{ background: "var(--c-border)" }}>
+                  <div className="h-1.5 rounded-full"
+                    style={{ width: `${todayTotal ? Math.round((todayCorrect / todayTotal) * 100) : 0}%`, background: "#34d399" }} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl p-3 text-center" style={{ background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.15)" }}>
+                  <div className="text-xl font-bold" style={{ color: "#34d399" }}>{todayCorrect}</div>
+                  <div className="text-xs" style={{ color: "var(--c-text-4)" }}>Correct</div>
+                </div>
+                <div className="rounded-2xl p-3 text-center" style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.15)" }}>
+                  <div className="text-xl font-bold text-red-400">{todayTotal - todayCorrect}</div>
+                  <div className="text-xs" style={{ color: "var(--c-text-4)" }}>Incorrect</div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl p-6 text-center" style={{ background: "var(--c-elevated)" }}>
+              <BookOpen className="h-8 w-8 mx-auto mb-3" style={{ color: "var(--c-text-4)" }} />
+              <div className="text-sm font-medium mb-1" style={{ color: "var(--c-text-2)" }}>No activity today</div>
+              <div className="text-xs mb-4" style={{ color: "var(--c-text-4)" }}>Start a session to track your progress</div>
+              <Link href="/qbank" className="btn-primary text-sm px-4 py-2">Start Session</Link>
+            </div>
+          )}
+        </section>
+
+        {/* Performance Summary */}
+        <section className="rounded-3xl border p-5"
+          style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="grid h-8 w-8 place-items-center rounded-xl" style={{ background: "rgba(167,139,250,0.12)", color: "#a78bfa" }}>
+                <BarChart2 className="h-4 w-4" />
+              </div>
+              <h2 className="text-base font-bold" style={{ color: "var(--c-text-1)" }}>Performance Summary</h2>
+            </div>
+            <Link href="/progress" className="text-xs font-medium" style={{ color: "var(--c-brand)" }}>Full report</Link>
+          </div>
+
+          <div className="space-y-3">
+            {(subjectPerf.length ? subjectPerf : [
+              { tag: "Cardiology", accuracy: 0, total: 0 },
+              { tag: "Pharmacology", accuracy: 0, total: 0 },
+              { tag: "Neurology", accuracy: 0, total: 0 },
+              { tag: "Respiratory", accuracy: 0, total: 0 },
+              { tag: "Gastroenterology", accuracy: 0, total: 0 },
+            ]).map((row) => {
+              const barColor = row.accuracy >= 80 ? "#34d399" : row.accuracy >= 60 ? "#f59e0b" : "#f87171";
+              return (
+                <div key={row.tag} className="grid grid-cols-[1fr_80px_44px] items-center gap-3">
+                  <div className="truncate text-sm" style={{ color: "var(--c-text-2)" }}>{row.tag}</div>
+                  <div className="h-1.5 rounded-full" style={{ background: "var(--c-elevated)" }}>
+                    <div className="h-1.5 rounded-full transition-all duration-700"
+                      style={{ width: `${row.accuracy}%`, background: barColor }} />
+                  </div>
+                  <div className="text-right text-xs font-semibold" style={{ color: barColor }}>
+                    {row.accuracy}%
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Overall score */}
+          <div className="mt-4 rounded-2xl p-3 flex items-center justify-between"
+            style={{ background: "var(--c-elevated)" }}>
+            <div className="flex items-center gap-2 text-sm" style={{ color: "var(--c-text-3)" }}>
+              <TrendingUp className="h-4 w-4" style={{ color: "var(--c-brand)" }} />
+              Overall Accuracy
+            </div>
+            <div className="text-base font-bold" style={{ color: "var(--c-brand)" }}>{accuracy}%</div>
+          </div>
+        </section>
+      </div>
+
+      {/* ── DAILY STREAK ── */}
+      <section className="rounded-3xl border p-5"
+        style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="grid h-8 w-8 place-items-center rounded-xl" style={{ background: "rgba(251,146,60,0.12)", color: "#fb923c" }}>
+            <Flame className="h-4 w-4" />
+          </div>
+          <h2 className="text-base font-bold" style={{ color: "var(--c-text-1)" }}>Daily Streak</h2>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+          <div className="text-center sm:text-left">
+            <div className="text-5xl font-bold text-orange-400">{streak}</div>
+            <div className="text-sm mt-1" style={{ color: "var(--c-text-3)" }}>
+              {streak === 0 ? "Start your streak today!" : streak === 1 ? "1 day — great start!" : `${streak} days in a row`}
+            </div>
+          </div>
+
+          <div className="flex gap-1.5 flex-wrap">
+            {Array.from({ length: 7 }).map((_, i) => {
+              const d = new Date();
+              d.setDate(d.getDate() - (6 - i));
+              const dayStr = d.toISOString().split("T")[0];
+              const active = uniqueDays.has(dayStr);
+              const isToday = dayStr === todayStr;
+              return (
+                <div key={i} className="flex flex-col items-center gap-1">
+                  <div className="text-[10px]" style={{ color: "var(--c-text-4)" }}>
+                    {d.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 1)}
+                  </div>
+                  <div className="h-8 w-8 rounded-xl flex items-center justify-center border transition"
+                    style={{
+                      background: active ? "rgba(251,146,60,0.20)" : "var(--c-elevated)",
+                      borderColor: isToday ? "#fb923c" : active ? "rgba(251,146,60,0.30)" : "var(--c-border)",
+                    }}>
+                    {active ? <Flame className="h-3.5 w-3.5 text-orange-400" /> : <div className="h-2 w-2 rounded-full" style={{ background: "var(--c-border)" }} />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="sm:ml-auto">
+            <Link href="/qbank" className="btn-primary text-sm px-5 py-2.5 rounded-2xl">
+              {streak === 0 ? "Start Today" : "Keep Going"} <Flame className="h-3.5 w-3.5 inline ml-1 text-orange-300" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── UPCOMING EXAMS (placeholder / info) ── */}
+      <section className="rounded-3xl border p-5"
+        style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="grid h-8 w-8 place-items-center rounded-xl" style={{ background: "rgba(96,165,250,0.12)", color: "#60a5fa" }}>
+            <Clock className="h-4 w-4" />
+          </div>
+          <h2 className="text-base font-bold" style={{ color: "var(--c-text-1)" }}>Upcoming Exams</h2>
+        </div>
+
+        <div className="grid sm:grid-cols-3 gap-3">
+          {[
+            { title: "USMLE Step 1", date: "Scheduled by you", icon: <Star className="h-4 w-4" />, color: "#60a5fa", bg: "rgba(96,165,250,0.10)", href: "/self-assessment" },
+            { title: "IFOM CSE Simulator", date: "Full-length mock exam", icon: <Trophy className="h-4 w-4" />, color: "#a78bfa", bg: "rgba(167,139,250,0.10)", href: "/self-assessment" },
+            { title: "Subject Assessment", date: "Track your readiness", icon: <Brain className="h-4 w-4" />, color: "#34d399", bg: "rgba(52,211,153,0.10)", href: "/qbank" },
+          ].map((exam) => (
+            <Link key={exam.title} href={exam.href}
+              className="rounded-2xl p-4 flex items-center gap-3 border transition hover:-translate-y-0.5"
+              style={{ background: exam.bg, borderColor: "rgba(255,255,255,0.06)" }}>
+              <div className="grid h-9 w-9 place-items-center rounded-xl shrink-0"
+                style={{ background: "rgba(255,255,255,0.08)", color: exam.color }}>
+                {exam.icon}
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold truncate" style={{ color: "var(--c-text-1)" }}>{exam.title}</div>
+                <div className="text-xs" style={{ color: "var(--c-text-4)" }}>{exam.date}</div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* ── RECOMMENDED SUBJECTS ── */}
+      <section className="rounded-3xl border p-5"
         style={{
-          background: "linear-gradient(135deg, rgba(124,58,237,0.10), rgba(37,99,235,0.07))",
-          borderColor: "var(--c-border)",
+          background: "linear-gradient(135deg, rgba(124,58,237,0.08), rgba(37,99,235,0.06))",
+          borderColor: "rgba(167,139,250,0.25)",
           boxShadow: "var(--shadow-card)",
-        }}
-      >
-        <h2 className="text-lg font-bold" style={{ color: "var(--c-text-1)" }}>Smart Study Recommendation</h2>
-        <p className="mt-3 text-sm leading-7" style={{ color: "var(--c-text-2)" }}>
+        }}>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="grid h-8 w-8 place-items-center rounded-xl" style={{ background: "rgba(167,139,250,0.15)", color: "#a78bfa" }}>
+            <Brain className="h-4 w-4" />
+          </div>
+          <h2 className="text-base font-bold" style={{ color: "var(--c-text-1)" }}>Recommended Subjects</h2>
+        </div>
+
+        <p className="text-sm mb-5" style={{ color: "var(--c-text-3)" }}>
           {totalAttempts === 0
-            ? "Start with the Question Bank to establish your baseline performance, then let the platform personalize your study path."
-            : `Your current weakest tracked area is ${recommendation}. Start there to improve your score faster.`}
+            ? "Start with the Q-Bank to build your baseline. We'll recommend study areas based on your performance."
+            : `Focus on ${recommended} to boost your overall score. Here are your priority areas:`}
         </p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <Link
-            href="/qbank"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition"
-            style={{ background: "linear-gradient(90deg, #7c3aed, #2563eb)" }}
-          >
-            Start Session <ChevronRight className="h-4 w-4" />
-          </Link>
-          <Link href="/self-assessment" className="btn-ghost text-sm">
-            Open Self Assessment
-          </Link>
-        </div>
-      </section>
 
-      {/* Mini Stats */}
-      <section className="mt-6 grid grid-cols-2 gap-4">
-        <MiniStat label="Q-Banks" value={qCount ?? 0} icon={<BookOpen className="h-4 w-4" />} />
-        <MiniStat label="Study Files" value={documentCount ?? 0} icon={<FileText className="h-4 w-4" />} />
-        <MiniStat label="Videos" value={videoCount ?? 0} icon={<PlaySquare className="h-4 w-4" />} />
-        <MiniStat label="Flashcards" value={flashCount ?? 0} icon={<Layers className="h-4 w-4" />} />
-      </section>
-    </div>
-  );
-}
-
-function MetricCard({
-  icon,
-  label,
-  value,
-  subValue,
-  accentColor,
-  progress,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string | number;
-  subValue: string;
-  accentColor: string;
-  progress?: number;
-}) {
-  return (
-    <div
-      className="rounded-3xl border p-5"
-      style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}
-    >
-      <div
-        className="grid h-11 w-11 place-items-center rounded-2xl"
-        style={{ background: "var(--c-elevated)", color: accentColor }}
-      >
-        {icon}
-      </div>
-      <div className="mt-4 text-sm" style={{ color: "var(--c-text-3)" }}>{label}</div>
-      <div className="mt-1 text-3xl font-bold" style={{ color: accentColor }}>{value}</div>
-      <div className="mt-1 text-xs" style={{ color: "var(--c-text-4)" }}>{subValue}</div>
-      {typeof progress === "number" ? (
-        <div
-          className="mt-4 h-1.5 rounded-full"
-          style={{ background: "var(--c-elevated)" }}
-        >
-          <div
-            className="h-full rounded-full transition-all duration-700"
-            style={{
-              width: `${progress}%`,
-              background: "linear-gradient(90deg, var(--c-blue), var(--c-brand))",
-            }}
-          />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function QuickCard({
-  href,
-  icon,
-  badge,
-  title,
-  desc,
-  accentColor,
-}: {
-  href: string;
-  icon: React.ReactNode;
-  badge?: string;
-  title: string;
-  desc: string;
-  accentColor: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="rounded-3xl border p-5 block transition-all hover:shadow-lg hover:-translate-y-0.5"
-      style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div
-          className="grid h-11 w-11 place-items-center rounded-2xl"
-          style={{ background: "var(--c-elevated)", color: accentColor }}
-        >
-          {icon}
-        </div>
-        {badge ? (
-          <span
-            className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
-            style={{ background: "var(--c-elevated)", color: "var(--c-text-3)" }}
-          >
-            {badge}
-          </span>
+        {weakest.length > 0 ? (
+          <div className="grid sm:grid-cols-3 gap-3 mb-5">
+            {weakest.map((w, i) => (
+              <Link key={w.tag} href={`/qbank?subject=${encodeURIComponent(w.tag)}`}
+                className="rounded-2xl p-4 border transition hover:-translate-y-0.5"
+                style={{ background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.08)" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="h-5 w-5 rounded-full grid place-items-center text-[10px] font-bold"
+                    style={{ background: "rgba(167,139,250,0.20)", color: "#a78bfa" }}>
+                    {i + 1}
+                  </span>
+                  <span className="text-xs font-bold uppercase tracking-wide" style={{ color: "#f87171" }}>Focus area</span>
+                </div>
+                <div className="text-sm font-semibold truncate mb-1" style={{ color: "var(--c-text-1)" }}>{w.tag}</div>
+                <div className="text-xs" style={{ color: "#f87171" }}>{w.accuracy}% accuracy · {w.total} questions</div>
+              </Link>
+            ))}
+          </div>
         ) : null}
-      </div>
-      <div className="mt-4 text-base font-bold leading-tight" style={{ color: "var(--c-text-1)" }}>{title}</div>
-      <div className="mt-1 text-xs" style={{ color: "var(--c-text-3)" }}>{desc}</div>
-    </Link>
-  );
-}
 
-function GoalRow({ label, done }: { label: string; done: boolean }) {
-  return (
-    <div className="flex items-center gap-3">
-      <div
-        className="h-5 w-5 rounded-full border-2 flex items-center justify-center transition"
-        style={{
-          borderColor: done ? "var(--c-brand)" : "var(--c-border)",
-          background: done ? "var(--c-brand-bg)" : "transparent",
-        }}
-      >
-        {done && (
-          <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
-            <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--c-brand)" }} />
-          </svg>
-        )}
-      </div>
-      <div className="text-sm" style={{ color: done ? "var(--c-text-2)" : "var(--c-text-3)" }}>{label}</div>
-    </div>
-  );
-}
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Link href="/qbank"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+            style={{ background: "linear-gradient(90deg, #7c3aed, #2563eb)" }}>
+            Start Recommended Session <ArrowRight className="h-4 w-4" />
+          </Link>
+          <Link href="/progress" className="btn-ghost text-sm rounded-2xl">
+            View Full Analytics <ChevronRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </section>
 
-function MiniStat({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
-  return (
-    <div
-      className="rounded-2xl border p-4"
-      style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}
-    >
-      <div className="flex items-center gap-2" style={{ color: "var(--c-text-3)" }}>
-        {icon}
-        <span className="text-sm">{label}</span>
-      </div>
-      <div className="mt-3 text-2xl font-bold" style={{ color: "var(--c-text-1)" }}>{value}</div>
+      {/* ── RESOURCES MINI STATS ── */}
+      <section>
+        <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--c-text-3)" }}>Platform Resources</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: "Q-Bank Questions", value: qCount ?? 0, icon: <BookOpen className="h-4 w-4" /> },
+            { label: "Study Files", value: documentCount ?? 0, icon: <FileText className="h-4 w-4" /> },
+            { label: "Video Lessons", value: videoCount ?? 0, icon: <PlaySquare className="h-4 w-4" /> },
+            { label: "Flashcards", value: flashCount ?? 0, icon: <Layers className="h-4 w-4" /> },
+          ].map((s) => (
+            <div key={s.label} className="rounded-2xl border p-4"
+              style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}>
+              <div className="flex items-center gap-2 mb-2" style={{ color: "var(--c-text-4)" }}>
+                {s.icon}
+                <span className="text-xs">{s.label}</span>
+              </div>
+              <div className="text-2xl font-bold" style={{ color: "var(--c-text-1)" }}>{s.value.toLocaleString()}</div>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
