@@ -16,66 +16,216 @@ type LessonMeta = {
   document_name?: string;
   document_mime?: string;
   url?: string;
+  telegram_links?: unknown;
+  quality_links?: unknown;
+  qualities?: unknown;
+  downloads?: unknown;
+  materials?: unknown;
+  attachments?: unknown;
+  files?: unknown;
+  clinical_images?: unknown;
 } | null;
+
+type PlaylistItem = { id: string; title: string; active: boolean };
+type TelegramLink = { label: string; url: string; resolution?: string | null; size?: string | null };
+type MaterialItem = { label: string; url: string; kind: string; mime?: string | null };
 
 function assetHref(path: string) {
   return `/api/assets/${path.split("/").map(encodeURIComponent).join("/")}`;
 }
 
-function AttachmentPreview({ meta, isVideo }: { meta: LessonMeta; isVideo: boolean }) {
-  if (!meta?.document_path) return null;
-  const href = assetHref(meta.document_path);
-  const mime = meta.document_mime || "";
-  const name = meta.document_name || "Attached file";
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
-  return (
-    <section className="card protected-view mt-6 overflow-hidden border-ink-800 bg-ink-900">
-      <div className="border-b border-ink-800 px-5 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
-              {isVideo ? "Study file below the video" : "Attached study file"}
-            </div>
-            <h2 className="mt-2 text-xl font-semibold text-white">{name}</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              The file is shown fully inside the platform directly under the session.
-            </p>
-          </div>
-          <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-300">
-            Full in-app view
-          </div>
-        </div>
-      </div>
+function pickString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
 
-      {mime.startsWith("image/") ? (
-        <img
-          src={href}
-          alt={name}
-          className="block w-full bg-ink-950 select-none"
-          draggable={false}
-        />
-      ) : mime === "application/pdf" ? (
-        <div
-          className="relative select-none"
-          onContextMenu={(e) => e.preventDefault()}
-          onDragStart={(e) => e.preventDefault()}
-        >
-          <iframe
-            src={`${href}#toolbar=0&navpanes=0&statusbar=0&scrollbar=0&view=FitH`}
-            className="block min-h-[105vh] w-full bg-white"
-            title={name}
-            sandbox="allow-same-origin allow-scripts"
-          />
-        </div>
-      ) : (
-        <iframe
-          src={href}
-          className="block min-h-[95vh] w-full bg-white"
-          title={name}
-        />
-      )}
-    </section>
-  );
+function normalizeUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^(https?:\/\/|tg:\/\/|mailto:|tel:)/i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("/api/")) return trimmed;
+  return assetHref(trimmed.replace(/^\/+/, ""));
+}
+
+function inferResolution(label: string | null, url: string): string | null {
+  const text = `${label ?? ""} ${url}`;
+  const match = text.match(/\b(360|480|540|720|1080|1440|2160)p\b/i);
+  return match ? `${match[1]}p` : null;
+}
+
+function extractTelegramLinks(meta: LessonMeta, provider: string, rawUrl: string): TelegramLink[] {
+  const results: TelegramLink[] = [];
+  const seen = new Set<string>();
+
+  const pushLink = (labelHint: string | null, raw: unknown) => {
+    if (typeof raw === "string") {
+      const url = normalizeUrl(raw);
+      if (!url) return;
+      const label = labelHint?.trim() || inferResolution(null, url) || "Telegram";
+      const key = `${label}|${url}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      results.push({ label, url, resolution: inferResolution(label, url), size: null });
+      return;
+    }
+
+    if (Array.isArray(raw)) {
+      raw.forEach((item) => pushLink(labelHint, item));
+      return;
+    }
+
+    if (isRecord(raw)) {
+      const directUrl = normalizeUrl(raw.url ?? raw.href ?? raw.link ?? raw.telegram_url);
+      if (directUrl) {
+        const label = pickString(raw.label, raw.quality, raw.resolution, labelHint) ?? inferResolution(labelHint, directUrl) ?? "Telegram";
+        const key = `${label}|${directUrl}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push({
+            label,
+            url: directUrl,
+            resolution: pickString(raw.resolution, raw.quality) ?? inferResolution(label, directUrl),
+            size: pickString(raw.size, raw.file_size, raw.estimated_size),
+          });
+        }
+        return;
+      }
+      Object.entries(raw).forEach(([key, value]) => pushLink(key, value));
+    }
+  };
+
+  [meta?.telegram_links, meta?.quality_links, meta?.qualities, meta?.downloads].forEach((source) => pushLink(null, source));
+
+  if (results.length === 0 && provider === "telegram") {
+    const fallback = normalizeUrl(rawUrl);
+    if (fallback) {
+      results.push({
+        label: inferResolution("Telegram", fallback) ?? "Telegram",
+        url: fallback,
+        resolution: inferResolution("Telegram", fallback),
+        size: null,
+      });
+    }
+  }
+
+  return results;
+}
+
+function extractMaterials(meta: LessonMeta): MaterialItem[] {
+  const results: MaterialItem[] = [];
+  const seen = new Set<string>();
+
+  const pushMaterial = (labelHint: string | null, raw: unknown, kindHint = "Material") => {
+    if (typeof raw === "string") {
+      const url = normalizeUrl(raw);
+      if (!url) return;
+      const label = labelHint?.trim() || kindHint;
+      const key = `${label}|${url}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      results.push({ label, url, kind: kindHint, mime: null });
+      return;
+    }
+
+    if (Array.isArray(raw)) {
+      raw.forEach((item) => pushMaterial(labelHint, item, kindHint));
+      return;
+    }
+
+    if (isRecord(raw)) {
+      const directUrl = normalizeUrl(raw.url ?? raw.href ?? raw.link ?? raw.path ?? raw.document_path);
+      if (directUrl) {
+        const label = pickString(raw.label, raw.name, raw.title, labelHint) ?? kindHint;
+        const kind = pickString(raw.kind, raw.type, raw.category) ?? kindHint;
+        const key = `${label}|${directUrl}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push({ label, url: directUrl, kind, mime: pickString(raw.mime, raw.content_type) });
+        }
+        return;
+      }
+      Object.entries(raw).forEach(([key, value]) => pushMaterial(key, value, kindHint));
+    }
+  };
+
+  if (meta?.document_path) {
+    pushMaterial(meta.document_name ?? "Lecture attachment", meta.document_path, "Lecture Material");
+  }
+  pushMaterial(null, meta?.materials, "Lecture Material");
+  pushMaterial(null, meta?.attachments, "Attachment");
+  pushMaterial(null, meta?.files, "Additional File");
+  pushMaterial("Clinical Image", meta?.clinical_images, "Clinical Image");
+
+  return results;
+}
+
+function parseYouTubeId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+function parseVimeoId(url: string): string | null {
+  const match = url.match(/vimeo\.com\/(\d+)/);
+  return match ? match[1] : null;
+}
+
+function resolveVideoSource(meta: LessonMeta) {
+  const rawUrl = typeof meta?.url === "string" ? meta.url.trim() : "";
+  const ytId = rawUrl ? parseYouTubeId(rawUrl) : null;
+  const vimeoId = rawUrl ? parseVimeoId(rawUrl) : null;
+
+  if (ytId) {
+    return {
+      sessionUrl: rawUrl,
+      sessionEmbedUrl: `https://www.youtube.com/embed/${ytId}?rel=0&modestbranding=1`,
+      videoType: "youtube" as const,
+    };
+  }
+
+  if (vimeoId) {
+    return {
+      sessionUrl: rawUrl,
+      sessionEmbedUrl: `https://player.vimeo.com/video/${vimeoId}?color=10b981&title=0&byline=0`,
+      videoType: "vimeo" as const,
+    };
+  }
+
+  if (rawUrl) {
+    return {
+      sessionUrl: rawUrl,
+      sessionEmbedUrl: rawUrl,
+      videoType: "direct" as const,
+    };
+  }
+
+  if (meta?.document_path && (meta.document_mime || "").startsWith("video/")) {
+    const href = assetHref(meta.document_path);
+    return {
+      sessionUrl: href,
+      sessionEmbedUrl: href,
+      videoType: "direct" as const,
+    };
+  }
+
+  return {
+    sessionUrl: rawUrl || null,
+    sessionEmbedUrl: null,
+    videoType: "none" as const,
+  };
 }
 
 export default async function LessonPage({ params }: { params: Promise<{ id: string }> }) {
@@ -90,8 +240,25 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
 
   const meta = (lesson.meta ?? null) as LessonMeta;
   const isVideo = meta?.type === "video";
-  const externalUrl = typeof meta?.url === "string" ? meta.url : "";
   const provider = typeof meta?.provider === "string" ? meta.provider : "";
+  const { sessionUrl, sessionEmbedUrl, videoType } = resolveVideoSource(meta);
+  const telegramLinks = extractTelegramLinks(meta, provider, sessionUrl ?? "");
+  const materials = extractMaterials(meta);
+
+  let playlist: PlaylistItem[] = [];
+  if (isVideo && lesson.course_id) {
+    const { data } = await db
+      .from("lessons")
+      .select("id, title, kind, meta")
+      .eq("course_id", lesson.course_id)
+      .eq("visible", true)
+      .order("position", { ascending: true })
+      .limit(60);
+
+    playlist = ((data ?? []) as { id: string; title: string; kind: string; meta: unknown }[])
+      .filter((row) => row.meta && typeof row.meta === "object" && (row.meta as Record<string, unknown>).type === "video")
+      .map((row) => ({ id: row.id, title: row.title, active: row.id === lesson.id }));
+  }
 
   return (
     <div className="page-shell max-w-5xl pb-10">
@@ -126,8 +293,8 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
               <h1 className="mt-4 text-2xl font-bold text-white sm:text-3xl">{lesson.title}</h1>
 
               <div className="mt-4 flex flex-wrap gap-3">
-                {externalUrl ? (
-                  <Link href={externalUrl} target="_blank" rel="noreferrer" className="btn-primary text-sm">
+                {sessionUrl ? (
+                  <Link href={sessionUrl} target="_blank" rel="noreferrer" className="btn-primary text-sm">
                     <ExternalLink className="h-4 w-4" /> {provider === "telegram" ? "Open in Telegram" : "Open external session"}
                   </Link>
                 ) : null}
@@ -155,10 +322,16 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
             mime: meta.document_mime || "",
             name: meta.document_name || "Attached file",
           } : null}
-          sessionUrl={externalUrl || null}
+          sessionUrl={sessionUrl || null}
+          sessionEmbedUrl={sessionEmbedUrl}
+          videoType={videoType}
+          provider={provider || null}
+          telegramLinks={telegramLinks}
+          materials={materials}
+          playlist={playlist}
+          playlistScopeKey={lesson.course_id ?? lesson.id}
         />
       </section>
-
     </div>
   );
 }
