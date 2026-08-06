@@ -1,4 +1,4 @@
-import { Activity, Beaker, BookOpen, Brain, Dna, HeartPulse, Microscope, MoonStar, Sigma, Stethoscope, Utensils } from "lucide-react";
+import { Activity, Beaker, BookOpen, Brain, Dna, HeartPulse, Microscope, MoonStar, Sigma, Stethoscope } from "lucide-react";
 import { detectIfomSubject, IFOM_CSE_SUBJECTS } from "@/lib/ai/ifom";
 
 export type SubjectMeta = {
@@ -272,7 +272,7 @@ export function getSubjectIconName(subject: string) {
     case "Infectious Diseases":
       return Beaker;
     case "Gastrointestinal System":
-      return Utensils;
+      return Activity;
     case "Obstetrics":
       return Stethoscope;
     case "Gynecology":
