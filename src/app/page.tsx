@@ -21,6 +21,7 @@ import {
   PlaySquare,
   MessageCircle,
   Mail,
+  TrendingUp,
 } from "lucide-react";
 
 /* ─────────────────────────────────────────────────────────
@@ -57,6 +58,23 @@ const plans = [
     ],
     href: "/sign-up",
     highlight: true,
+  },
+  {
+    name: "6 Months",
+    price: "$40",
+    period: "/ 6 months",
+    perDay: "$0.22/day",
+    badge: "Max Savings",
+    features: [
+      "Everything in 3 Months",
+      "Unlimited mock exams",
+      "1-on-1 study sessions",
+      "Early access to new features",
+      "Dedicated support channel",
+    ],
+    href: "/sign-up",
+    highlight: false,
+    premium: true,
   },
 ];
 
@@ -204,11 +222,11 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 function DashboardMockup() {
   return (
     <div
-      className="relative w-full max-w-2xl mx-auto rounded-2xl overflow-hidden border"
+      className="relative w-full max-w-3xl mx-auto rounded-2xl overflow-hidden border"
       style={{
         background: "#0f1929",
         borderColor: "rgba(255,255,255,0.10)",
-        boxShadow: "0 32px 80px rgba(0,0,0,0.60), 0 0 0 1px rgba(255,255,255,0.06)",
+        boxShadow: "0 40px 100px rgba(0,0,0,0.70), 0 0 0 1px rgba(255,255,255,0.06), 0 0 60px rgba(52,211,153,0.08)",
         animation: "float 4s ease-in-out infinite",
       }}
     >
@@ -218,6 +236,10 @@ function DashboardMockup() {
         <div className="h-3 w-3 rounded-full bg-amber-400/70" />
         <div className="h-3 w-3 rounded-full bg-emerald-400/70" />
         <div className="ml-3 text-xs text-slate-500 font-medium">Darwish MedBBC — Dashboard</div>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/70 animate-pulse" />
+          <span className="text-[10px] text-emerald-400/70">Live</span>
+        </div>
       </div>
 
       {/* Dashboard content */}
@@ -246,28 +268,41 @@ function DashboardMockup() {
               <div className="mt-2 h-1 rounded-full bg-slate-800">
                 <div
                   className="h-1 rounded-full"
-                  style={{ width: `${s.bar}%`, background: s.color, opacity: 0.7, transition: "width 1.2s ease" }}
+                  style={{ width: `${s.bar}%`, background: s.color, opacity: 0.7 }}
                 />
               </div>
             </div>
           ))}
         </div>
 
-        {/* Recent questions */}
+        {/* Horizontal lesson carousel preview */}
         <div className="rounded-xl p-4" style={{ background: "#172032" }}>
-          <div className="text-xs font-semibold text-slate-300 mb-3">Recent Performance</div>
-          <div className="space-y-2">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs font-semibold text-slate-300">Continue Studying</div>
+            <div className="text-[10px] text-slate-500">← swipe →</div>
+          </div>
+          <div className="flex gap-3 overflow-hidden">
             {[
-              { subject: "Cardiology", q: 24, acc: 88, color: "#f87171" },
-              { subject: "Pharmacology", q: 18, acc: 72, color: "#f59e0b" },
-              { subject: "Neurology", q: 30, acc: 91, color: "#60a5fa" },
+              { title: "Cardiology", q: "25 Qs", pct: 80, color: "#f87171", new: false },
+              { title: "Pharmacology", q: "30 Qs", pct: 40, color: "#f59e0b", new: false },
+              { title: "Neurology", q: "20 Qs", pct: 0, color: "#60a5fa", new: true },
             ].map((r) => (
-              <div key={r.subject} className="flex items-center gap-3">
-                <div className="text-[11px] text-slate-400 w-24 truncate">{r.subject}</div>
-                <div className="flex-1 h-1.5 rounded-full bg-slate-800">
-                  <div className="h-1.5 rounded-full" style={{ width: `${r.acc}%`, background: r.color }} />
+              <div key={r.title} className="flex-shrink-0 rounded-xl p-3 flex flex-col gap-2" style={{ width: "120px", background: "#0f1929", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <div className="text-[11px] font-semibold text-white truncate">{r.title}</div>
+                <div className="text-[10px] text-slate-400">{r.q}</div>
+                {r.new ? (
+                  <span className="text-[10px] font-bold" style={{ color: r.color }}>✦ New</span>
+                ) : (
+                  <>
+                    <div className="h-1 rounded-full bg-slate-800">
+                      <div className="h-1 rounded-full" style={{ width: `${r.pct}%`, background: r.color }} />
+                    </div>
+                    <div className="text-[10px] font-semibold" style={{ color: r.color }}>{r.pct}%</div>
+                  </>
+                )}
+                <div className="text-[10px] font-semibold mt-auto flex items-center gap-1" style={{ color: r.color }}>
+                  {r.new ? "Start" : "Continue"} →
                 </div>
-                <div className="text-[11px] font-semibold" style={{ color: r.color }}>{r.acc}%</div>
               </div>
             ))}
           </div>
@@ -279,12 +314,12 @@ function DashboardMockup() {
           style={{ background: "linear-gradient(135deg, rgba(52,211,153,0.15), rgba(96,165,250,0.10))", border: "1px solid rgba(52,211,153,0.20)" }}
         >
           <div>
-            <div className="text-[10px] text-slate-400 mb-0.5">Continue studying</div>
-            <div className="text-sm font-semibold text-white">Cardiology — Heart Failure</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Lesson 4 of 12 · 64% complete</div>
+            <div className="text-[10px] text-slate-400 mb-0.5">Performance</div>
+            <div className="text-sm font-semibold text-white">Overall Score: 84%</div>
+            <div className="text-[11px] text-slate-400 mt-0.5">Top 15% of all students</div>
           </div>
           <div className="h-8 w-8 rounded-full flex items-center justify-center" style={{ background: "rgba(52,211,153,0.20)" }}>
-            <ArrowRight className="h-4 w-4" style={{ color: "#34d399" }} />
+            <TrendingUp className="h-4 w-4" style={{ color: "#34d399" }} />
           </div>
         </div>
       </div>
@@ -309,21 +344,25 @@ export default function Home() {
       <style>{`
         @keyframes float {
           0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-10px); }
+          50% { transform: translateY(-12px); }
         }
         @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(24px); }
+          from { opacity: 0; transform: translateY(28px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        @keyframes pulse-slow {
-          0%, 100% { opacity: 0.5; }
-          50% { opacity: 1; }
+        @keyframes scoreIn {
+          from { opacity: 0; transform: scale(0.8) translateY(10px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
         }
         .anim-fade-up { animation: fadeInUp 0.6s ease both; }
         .anim-delay-1 { animation-delay: 0.1s; }
         .anim-delay-2 { animation-delay: 0.2s; }
         .anim-delay-3 { animation-delay: 0.35s; }
         .anim-delay-4 { animation-delay: 0.5s; }
+        .anim-delay-5 { animation-delay: 0.65s; }
+        .score-card { animation: scoreIn 0.5s ease both; }
+        .score-delay-1 { animation-delay: 0.7s; }
+        .score-delay-2 { animation-delay: 0.85s; }
       `}</style>
 
       {/* ── STICKY NAVBAR ── */}
@@ -345,7 +384,7 @@ export default function Home() {
             </span>
           </div>
 
-          {/* Nav links — hidden on small screens */}
+          {/* Nav links */}
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium" style={{ color: "var(--c-text-3)" }}>
             <a href="#features" className="hover:text-white transition-colors">Features</a>
             <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
@@ -366,12 +405,12 @@ export default function Home() {
       <main className="min-h-screen" style={{ background: "var(--c-bg)" }}>
 
         {/* ── HERO ── */}
-        <section className="relative overflow-hidden px-4 pt-20 pb-16 text-center">
+        <section className="relative overflow-hidden px-4 pt-24 pb-20 text-center">
           {/* Background glow */}
           <div
             className="pointer-events-none absolute inset-0"
             style={{
-              background: "radial-gradient(ellipse 80% 60% at 50% -10%, rgba(52,211,153,0.12) 0%, transparent 65%), radial-gradient(ellipse 60% 40% at 80% 20%, rgba(96,165,250,0.08) 0%, transparent 55%)",
+              background: "radial-gradient(ellipse 90% 70% at 50% -10%, rgba(52,211,153,0.14) 0%, transparent 65%), radial-gradient(ellipse 60% 40% at 80% 20%, rgba(96,165,250,0.09) 0%, transparent 55%), radial-gradient(ellipse 40% 30% at 15% 30%, rgba(167,139,250,0.06) 0%, transparent 50%)",
             }}
           />
 
@@ -384,7 +423,7 @@ export default function Home() {
             </div>
 
             {/* Headline */}
-            <h1 className="anim-fade-up anim-delay-1 text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-tight"
+            <h1 className="anim-fade-up anim-delay-1 text-5xl sm:text-6xl lg:text-8xl font-bold tracking-tight leading-tight"
               style={{ color: "var(--c-text-1)" }}>
               Ace Your Medical{" "}
               <span style={{ background: "linear-gradient(135deg, #34d399, #60a5fa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
@@ -392,19 +431,19 @@ export default function Home() {
               </span>
             </h1>
 
-            <p className="anim-fade-up anim-delay-2 mt-5 max-w-xl mx-auto text-base leading-7 sm:text-lg"
+            <p className="anim-fade-up anim-delay-2 mt-6 max-w-xl mx-auto text-base leading-8 sm:text-xl"
               style={{ color: "var(--c-text-3)" }}>
               The all-in-one Q-Bank, flashcards, and video platform for USMLE &amp; MBBS students. Built by doctors, for doctors.
             </p>
 
             {/* Trust badge */}
-            <div className="anim-fade-up anim-delay-3 mt-6 inline-flex items-center gap-3 rounded-full border px-5 py-2.5"
+            <div className="anim-fade-up anim-delay-3 mt-8 inline-flex items-center gap-3 rounded-full border px-5 py-2.5"
               style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)" }}>
               <div className="flex -space-x-2">
-                {["AM","SK","RH","JD"].map((init, i) => (
+                {["RY","MJ","AM","SK"].map((init, i) => (
                   <div key={i}
                     className="h-7 w-7 rounded-full border-2 grid place-items-center text-[10px] font-bold text-white"
-                    style={{ borderColor: "var(--c-bg)", background: ["#60a5fa","#34d399","#a78bfa","#f59e0b"][i] }}>
+                    style={{ borderColor: "var(--c-bg)", background: ["#34d399","#a78bfa","#60a5fa","#f59e0b"][i] }}>
                     {init}
                   </div>
                 ))}
@@ -417,25 +456,56 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Doctor Score Badges */}
+            <div className="anim-fade-up anim-delay-4 mt-5 flex flex-wrap items-center justify-center gap-3">
+              <div className="score-card score-delay-1 inline-flex items-center gap-2.5 rounded-2xl border px-4 py-2.5"
+                style={{ borderColor: "rgba(52,211,153,0.25)", background: "rgba(52,211,153,0.08)" }}>
+                <div className="h-8 w-8 rounded-full grid place-items-center text-xs font-bold text-white shrink-0"
+                  style={{ background: "linear-gradient(135deg, #34d399, #10b981)" }}>
+                  RY
+                </div>
+                <div className="text-left">
+                  <div className="text-xs font-bold" style={{ color: "var(--c-text-1)" }}>Dr. Rayyan</div>
+                  <div className="text-[11px]" style={{ color: "var(--c-text-4)" }}>Scored</div>
+                </div>
+                <div className="text-xl font-bold" style={{ color: "#34d399" }}>91%</div>
+                <TrendingUp className="h-4 w-4" style={{ color: "#34d399" }} />
+              </div>
+
+              <div className="score-card score-delay-2 inline-flex items-center gap-2.5 rounded-2xl border px-4 py-2.5"
+                style={{ borderColor: "rgba(96,165,250,0.25)", background: "rgba(96,165,250,0.08)" }}>
+                <div className="h-8 w-8 rounded-full grid place-items-center text-xs font-bold text-white shrink-0"
+                  style={{ background: "linear-gradient(135deg, #60a5fa, #3b82f6)" }}>
+                  MJ
+                </div>
+                <div className="text-left">
+                  <div className="text-xs font-bold" style={{ color: "var(--c-text-1)" }}>Dr. Majd</div>
+                  <div className="text-[11px]" style={{ color: "var(--c-text-4)" }}>Scored</div>
+                </div>
+                <div className="text-xl font-bold" style={{ color: "#60a5fa" }}>83%</div>
+                <TrendingUp className="h-4 w-4" style={{ color: "#60a5fa" }} />
+              </div>
+            </div>
+
             {/* CTA buttons */}
-            <div className="anim-fade-up anim-delay-4 mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+            <div className="anim-fade-up anim-delay-5 mt-10 flex flex-col sm:flex-row gap-3 justify-center">
               <Link href="/sign-up"
-                className="inline-flex items-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-semibold text-white transition hover:-translate-y-0.5"
-                style={{ background: "linear-gradient(135deg, #34d399, #10b981)", boxShadow: "0 8px 24px rgba(52,211,153,0.35)" }}>
-                Start 2-Day Free Trial <ArrowRight className="h-4 w-4" />
+                className="inline-flex items-center gap-2 rounded-2xl px-8 py-4 text-base font-semibold text-white transition hover:-translate-y-0.5"
+                style={{ background: "linear-gradient(135deg, #34d399, #10b981)", boxShadow: "0 8px 32px rgba(52,211,153,0.40)" }}>
+                Start 2-Day Free Trial <ArrowRight className="h-5 w-5" />
               </Link>
-              <Link href="/sign-in" className="btn-ghost text-sm px-6 py-3.5 rounded-2xl">
+              <Link href="/sign-in" className="btn-ghost text-base px-8 py-4 rounded-2xl">
                 Sign In to Your Account
               </Link>
             </div>
 
-            <div className="mt-3 flex items-center justify-center gap-2 text-xs" style={{ color: "var(--c-text-4)" }}>
+            <div className="mt-4 flex items-center justify-center gap-2 text-xs" style={{ color: "var(--c-text-4)" }}>
               <Clock className="h-3.5 w-3.5" />
               2-day free trial — no credit card required
             </div>
 
             {/* Animated dashboard mockup */}
-            <div className="anim-fade-up anim-delay-4 mt-14">
+            <div className="mt-16">
               <DashboardMockup />
             </div>
           </div>
@@ -460,7 +530,7 @@ export default function Home() {
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {features.map((f) => (
                 <div key={f.title}
-                  className="card p-6 rounded-3xl group"
+                  className="card p-6 rounded-3xl group hover:-translate-y-1 transition-all duration-200"
                   style={{ background: "var(--c-card)" }}>
                   <div className="grid h-12 w-12 place-items-center rounded-2xl mb-4 transition-transform group-hover:scale-110"
                     style={{ background: f.bg, color: f.color }}>
@@ -510,7 +580,7 @@ export default function Home() {
 
             <div className="grid sm:grid-cols-3 gap-4">
               {testimonials.map((t) => (
-                <div key={t.name} className="card p-6 rounded-3xl flex flex-col gap-4"
+                <div key={t.name} className="card p-6 rounded-3xl flex flex-col gap-4 hover:-translate-y-1 transition-all duration-200"
                   style={{ background: "var(--c-card)" }}>
                   <StarRow count={t.stars} />
                   <p className="text-sm leading-7 flex-1" style={{ color: "var(--c-text-2)" }}>"{t.text}"</p>
@@ -532,7 +602,7 @@ export default function Home() {
 
         {/* ── PRICING ── */}
         <section id="pricing" className="px-4 py-20">
-          <div className="mx-auto max-w-4xl">
+          <div className="mx-auto max-w-5xl">
             <div className="text-center mb-12">
               <div className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-widest mb-4"
                 style={{ borderColor: "rgba(167,139,250,0.30)", background: "rgba(167,139,250,0.08)", color: "#a78bfa" }}>
@@ -546,19 +616,29 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-5 max-w-2xl mx-auto">
+            <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
               {plans.map((plan) => (
-                <div key={plan.name} className="relative rounded-3xl border p-7 flex flex-col"
+                <div key={plan.name} className="relative rounded-3xl border p-7 flex flex-col group hover:-translate-y-1 transition-all duration-200"
                   style={{
                     background: plan.highlight
-                      ? "linear-gradient(135deg, rgba(52,211,153,0.08), rgba(96,165,250,0.06))"
-                      : "var(--c-card)",
-                    borderColor: plan.highlight ? "rgba(52,211,153,0.40)" : "var(--c-border)",
-                    boxShadow: plan.highlight ? "0 0 40px rgba(52,211,153,0.10)" : "var(--shadow-card)",
+                      ? "linear-gradient(135deg, rgba(52,211,153,0.10), rgba(96,165,250,0.07))"
+                      : plan.premium
+                        ? "linear-gradient(135deg, rgba(167,139,250,0.08), rgba(96,165,250,0.06))"
+                        : "var(--c-card)",
+                    borderColor: plan.highlight
+                      ? "rgba(52,211,153,0.45)"
+                      : plan.premium
+                        ? "rgba(167,139,250,0.35)"
+                        : "var(--c-border)",
+                    boxShadow: plan.highlight
+                      ? "0 0 50px rgba(52,211,153,0.12)"
+                      : plan.premium
+                        ? "0 0 40px rgba(167,139,250,0.08)"
+                        : "var(--shadow-card)",
                   }}>
                   {plan.badge && (
                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full px-4 py-1 text-xs font-bold uppercase tracking-wide text-white"
-                      style={{ background: "linear-gradient(90deg, #34d399, #10b981)" }}>
+                      style={{ background: plan.highlight ? "linear-gradient(90deg, #34d399, #10b981)" : "linear-gradient(90deg, #a78bfa, #7c3aed)" }}>
                       {plan.badge}
                     </div>
                   )}
@@ -568,14 +648,16 @@ export default function Home() {
                     <span className="text-5xl font-bold" style={{ color: "var(--c-text-1)" }}>{plan.price}</span>
                     <span className="mb-2 text-sm" style={{ color: "var(--c-text-4)" }}>{plan.period}</span>
                   </div>
-                  <div className="text-xs mb-6" style={{ color: "var(--c-brand)" }}>≈ {plan.perDay}</div>
+                  <div className="text-xs mb-6 font-semibold" style={{ color: plan.highlight ? "#34d399" : plan.premium ? "#a78bfa" : "var(--c-brand)" }}>
+                    ≈ {plan.perDay}
+                  </div>
 
                   <ul className="space-y-3 flex-1">
                     {plan.features.map((f) => (
                       <li key={f} className="flex items-center gap-2.5 text-sm" style={{ color: "var(--c-text-2)" }}>
                         <div className="h-5 w-5 rounded-full grid place-items-center shrink-0"
-                          style={{ background: "rgba(52,211,153,0.15)" }}>
-                          <Check className="h-3 w-3" style={{ color: "var(--c-brand)" }} />
+                          style={{ background: plan.highlight ? "rgba(52,211,153,0.15)" : plan.premium ? "rgba(167,139,250,0.15)" : "rgba(52,211,153,0.15)" }}>
+                          <Check className="h-3 w-3" style={{ color: plan.highlight ? "var(--c-brand)" : plan.premium ? "#a78bfa" : "var(--c-brand)" }} />
                         </div>
                         {f}
                       </li>
@@ -583,11 +665,15 @@ export default function Home() {
                   </ul>
 
                   <Link href={plan.href}
-                    className="mt-7 block w-full rounded-2xl py-3 text-center text-sm font-bold transition hover:-translate-y-0.5"
+                    className="mt-7 block w-full rounded-2xl py-3.5 text-center text-sm font-bold transition hover:-translate-y-0.5"
                     style={plan.highlight ? {
                       background: "linear-gradient(135deg, #34d399, #10b981)",
                       color: "#fff",
-                      boxShadow: "0 6px 20px rgba(52,211,153,0.30)",
+                      boxShadow: "0 6px 24px rgba(52,211,153,0.35)",
+                    } : plan.premium ? {
+                      background: "linear-gradient(135deg, #a78bfa, #7c3aed)",
+                      color: "#fff",
+                      boxShadow: "0 6px 24px rgba(167,139,250,0.30)",
                     } : {
                       border: "1px solid var(--c-border)",
                       background: "var(--c-elevated)",
@@ -626,20 +712,20 @@ export default function Home() {
 
         {/* ── CTA BANNER ── */}
         <section className="px-4 pb-20">
-          <div className="mx-auto max-w-3xl rounded-3xl p-10 text-center"
+          <div className="mx-auto max-w-3xl rounded-3xl p-10 sm:p-14 text-center"
             style={{
               background: "linear-gradient(135deg, rgba(52,211,153,0.12), rgba(96,165,250,0.10))",
               border: "1px solid rgba(52,211,153,0.25)",
             }}>
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4" style={{ color: "var(--c-text-1)" }}>
+            <h2 className="text-3xl sm:text-5xl font-bold mb-4" style={{ color: "var(--c-text-1)" }}>
               Ready to ace your exams?
             </h2>
             <p className="mb-8 text-sm sm:text-base" style={{ color: "var(--c-text-3)" }}>
               Join 100+ students who are already studying smarter.
             </p>
             <Link href="/sign-up"
-              className="inline-flex items-center gap-2 rounded-2xl px-8 py-4 text-base font-bold text-white transition hover:-translate-y-0.5"
-              style={{ background: "linear-gradient(135deg, #34d399, #10b981)", boxShadow: "0 8px 28px rgba(52,211,153,0.35)" }}>
+              className="inline-flex items-center gap-2 rounded-2xl px-10 py-4 text-base font-bold text-white transition hover:-translate-y-0.5"
+              style={{ background: "linear-gradient(135deg, #34d399, #10b981)", boxShadow: "0 8px 32px rgba(52,211,153,0.40)" }}>
               Start Your Free Trial <ArrowRight className="h-5 w-5" />
             </Link>
             <div className="mt-4 text-xs" style={{ color: "var(--c-text-4)" }}>No credit card required · 2 days free</div>
@@ -670,18 +756,19 @@ export default function Home() {
                 <Link href="/sign-up" className="hover:text-white transition-colors">Create Account</Link>
                 <a href="#features" className="hover:text-white transition-colors">Features</a>
                 <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
+                <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
               </div>
 
               {/* Social */}
               <div className="flex items-center gap-3">
                 <a href="https://m.me/61591842446810" target="_blank" rel="noopener noreferrer"
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border transition hover:-translate-y-0.5"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border transition hover:-translate-y-0.5 hover:border-blue-400/40"
                   style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)" }}
                   title="Messenger">
                   <MessageCircle className="h-4 w-4" style={{ color: "#60a5fa" }} />
                 </a>
                 <a href="https://t.me/+JDqV-8P07Ec1MmE0" target="_blank" rel="noopener noreferrer"
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border transition hover:-translate-y-0.5"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border transition hover:-translate-y-0.5 hover:border-sky-400/40"
                   style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)" }}
                   title="Telegram">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#229ED9">
@@ -689,7 +776,7 @@ export default function Home() {
                   </svg>
                 </a>
                 <a href="mailto:support@darwishmedbbc.com"
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border transition hover:-translate-y-0.5"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border transition hover:-translate-y-0.5 hover:border-slate-400/40"
                   style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)" }}
                   title="Email">
                   <Mail className="h-4 w-4" style={{ color: "var(--c-text-3)" }} />

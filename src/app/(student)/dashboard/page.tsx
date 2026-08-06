@@ -19,6 +19,7 @@ import {
   Star,
   ArrowRight,
 } from "lucide-react";
+import { ContinueStudyingCarousel } from "./ContinueStudyingCarousel";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,7 @@ export default async function DashboardPage() {
       .eq("user_id", ctx!.user.id)
       .order("created_at", { ascending: false })
       .limit(400),
-    s.from("lessons").select("id,title,kind,course_id").eq("visible", true).limit(6),
+    s.from("lessons").select("id,title,kind,course_id").eq("visible", true).limit(12),
   ]);
 
   const firstName = (ctx?.profile?.full_name || ctx?.profile?.email || "Doctor").split(" ")[0];
@@ -213,37 +214,22 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      {/* ── CONTINUE STUDYING ── */}
+      {/* ── CONTINUE STUDYING — Horizontal Carousel ── */}
       {lessonsData.length > 0 && (
         <section className="rounded-3xl border p-5"
           style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
               <div className="grid h-8 w-8 place-items-center rounded-xl" style={{ background: "rgba(96,165,250,0.12)", color: "#60a5fa" }}>
                 <PlaySquare className="h-4 w-4" />
               </div>
               <h2 className="text-base font-bold" style={{ color: "var(--c-text-1)" }}>Continue Studying</h2>
             </div>
-            <Link href="/courses" className="text-xs font-medium" style={{ color: "var(--c-brand)" }}>View all</Link>
+            <Link href="/courses" className="text-xs font-medium" style={{ color: "var(--c-brand)" }}>View all →</Link>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-3">
-            {lessonsData.slice(0, 4).map((lesson) => (
-              <Link key={lesson.id} href={`/lesson/${lesson.id}`}
-                className="flex items-center gap-3 rounded-2xl p-3.5 border transition hover:-translate-y-0.5 hover:shadow-md"
-                style={{ background: "var(--c-elevated)", borderColor: "var(--c-border)" }}>
-                <div className="grid h-9 w-9 place-items-center rounded-xl shrink-0"
-                  style={{ background: "rgba(96,165,250,0.12)", color: "#60a5fa" }}>
-                  {lesson.kind === "video" ? <PlaySquare className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium truncate" style={{ color: "var(--c-text-1)" }}>{lesson.title}</div>
-                  <div className="text-xs capitalize" style={{ color: "var(--c-text-4)" }}>{lesson.kind}</div>
-                </div>
-                <ChevronRight className="h-4 w-4 shrink-0" style={{ color: "var(--c-text-4)" }} />
-              </Link>
-            ))}
-          </div>
+          {/* Horizontal scrollable carousel */}
+          <ContinueStudyingCarousel lessons={lessonsData} />
         </section>
       )}
 
@@ -428,7 +414,7 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      {/* ── UPCOMING EXAMS (placeholder / info) ── */}
+      {/* ── UPCOMING EXAMS ── */}
       <section className="rounded-3xl border p-5"
         style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}>
         <div className="flex items-center gap-2 mb-4">
