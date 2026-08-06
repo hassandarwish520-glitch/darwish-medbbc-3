@@ -9,7 +9,6 @@ import {
   Copy,
   Download,
   Expand,
-  ExternalLink,
   FileText,
   Gauge,
   HardDriveDownload,
@@ -25,7 +24,6 @@ import {
   RefreshCw,
   Save,
   Send,
-  Share2,
   SplitSquareVertical,
   TimerReset,
   Trash2,
@@ -566,24 +564,6 @@ export default function StudyWorkspace({
     }
   }
 
-  async function shareLecture() {
-    const payload = {
-      title: lessonTitle,
-      text: `Study session: ${lessonTitle}`,
-      url: window.location.href,
-    };
-    try {
-      if (navigator.share) {
-        await navigator.share(payload);
-      } else {
-        await navigator.clipboard.writeText(payload.url);
-      }
-      setStatus("Lecture link shared");
-    } catch {
-      setStatus("Share cancelled");
-    }
-  }
-
   function toggleOfflineQueue() {
     const next = !offlineQueued;
     setOfflineQueued(next);
@@ -686,20 +666,11 @@ export default function StudyWorkspace({
                       </div>
                       <h2 className="mt-3 text-xl font-bold text-white md:text-2xl">{lessonTitle}</h2>
                       <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-                        Larger responsive player, preserved external session flow, and better organization for downloads, notes, progress, and playlist.
+                        Larger responsive player, cleaner study layout, and better organization for notes, progress, and playlist.
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {sessionUrl ? (
-                        <a href={sessionUrl} target="_blank" rel="noreferrer" className="btn-primary text-sm">
-                          <ExternalLink className="h-4 w-4" /> Open external session
-                        </a>
-                      ) : null}
-                      {externalAttachment ? (
-                        <a href={externalAttachment.href} target="_blank" rel="noreferrer" className="btn-ghost text-sm">
-                          <Download className="h-4 w-4" /> File included below
-                        </a>
-                      ) : null}
+                    <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-xs leading-6 text-emerald-100">
+                      Internal viewing only. External opening, sharing, and downloading are disabled for this lesson.
                     </div>
                   </div>
                 </div>
@@ -723,7 +694,7 @@ export default function StudyWorkspace({
                           <iframe
                             src={sessionEmbedUrl}
                             className="h-full w-full border-0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
                             allowFullScreen
                             title={lessonTitle}
                           />
@@ -823,10 +794,7 @@ export default function StudyWorkspace({
                   <TimerReset className="h-4 w-4" />
                   <span>Copy timestamp</span>
                 </button>
-                <button type="button" className="subject-tab w-full justify-center" onClick={() => void shareLecture()}>
-                  <Share2 className="h-4 w-4" />
-                  <span>Share</span>
-                </button>
+
               </div>
             </section>
 
@@ -850,23 +818,22 @@ export default function StudyWorkspace({
                 <div className="flex items-center gap-2">
                   <div className="rounded-2xl bg-sky-500/10 p-2 text-sky-300"><Send className="h-4 w-4" /></div>
                   <div>
-                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Telegram Downloads</div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Telegram Links</div>
                     <div className="mt-1 text-sm font-semibold text-white">Quality links preserved</div>
                   </div>
                 </div>
                 <div className="mt-4 space-y-2">
                   {effectiveTelegramLinks.map((link) => (
-                    <a key={`${link.label}-${link.url}`} href={link.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3 transition hover:border-sky-400/40">
+                    <div key={`${link.label}-${link.url}`} className="flex items-center gap-3 rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-500/10 text-sky-300"><Send className="h-4 w-4" /></div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-semibold text-white">{link.resolution || link.label}</span>
                           {link.size ? <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">{link.size}</span> : null}
                         </div>
-                        <div className="mt-1 text-xs break-all text-slate-500">{link.label}</div>
+                        <div className="mt-1 text-xs break-all text-slate-500">Internal reference only</div>
                       </div>
-                      <ExternalLink className="h-4 w-4 text-slate-400" />
-                    </a>
+                    </div>
                   ))}
                 </div>
               </section>
@@ -882,14 +849,13 @@ export default function StudyWorkspace({
               </div>
               <div className="mt-4 space-y-2">
                 {totalMaterialItems.length ? totalMaterialItems.map((item) => (
-                  <a key={`${item.label}-${item.url}`} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3 transition hover:border-slate-400/30">
+                  <div key={`${item.label}-${item.url}`} className="flex items-center gap-3 rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-500/10 text-slate-300">{isImageMaterial(item) ? <Library className="h-4 w-4" /> : <FileText className="h-4 w-4" />}</div>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-semibold text-white">{item.label}</div>
                       <div className="mt-1 text-xs text-slate-500">{item.kind}{item.mime ? ` • ${item.mime}` : ""}</div>
                     </div>
-                    <ExternalLink className="h-4 w-4 text-slate-400" />
-                  </a>
+                  </div>
                 )) : (
                   <div className="rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-5 text-sm text-slate-500">No lecture materials are attached yet.</div>
                 )}
@@ -918,10 +884,8 @@ export default function StudyWorkspace({
                   <div className="mt-2 text-lg font-bold text-white">{formatBytes(storageEstimate.quota)}</div>
                 </div>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button type="button" className="subject-tab" onClick={toggleOfflineQueue}>
-                  <Download className="h-4 w-4" /> <span>{offlineQueued ? "Remove offline" : "Queue offline"}</span>
-                </button>
+              <div className="mt-4 rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3 text-xs leading-6 text-slate-400">
+                Offline download actions are disabled in this web view.
               </div>
             </section>
 

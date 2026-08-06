@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ExternalLink, ChevronLeft, FileText, PlaySquare } from "lucide-react";
+import { ChevronLeft, FileText, PlaySquare } from "lucide-react";
 import BookmarkButton from "@/components/BookmarkButton";
 import StudyWorkspace from "@/components/StudyWorkspace";
 import { createAdminClient, createClient, isAdminProfile, requireActive } from "@/lib/supabase/server";
@@ -293,14 +293,9 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
               <h1 className="mt-4 text-2xl font-bold text-white sm:text-3xl">{lesson.title}</h1>
 
               <div className="mt-4 flex flex-wrap gap-3">
-                {sessionUrl ? (
-                  <Link href={sessionUrl} target="_blank" rel="noreferrer" className="btn-primary text-sm">
-                    <ExternalLink className="h-4 w-4" /> {provider === "telegram" ? "Open in Telegram" : "Open external session"}
-                  </Link>
-                ) : null}
                 <div className="btn-ghost text-sm">
                   {isVideo ? <PlaySquare className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-                  {meta?.document_path ? "File included below" : "Internal lesson view"}
+                  Internal lesson view only
                 </div>
               </div>
             </div>
