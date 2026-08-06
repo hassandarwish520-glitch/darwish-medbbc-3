@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
-  ChevronLeft, PlaySquare, List, PictureInPicture2, Download,
+  ChevronLeft, PlaySquare, List, PictureInPicture2,
   Bookmark, FileText, AlignLeft, Gauge, X, ChevronRight,
   ChevronDown, Volume2, Maximize2, BookmarkCheck,
 } from "lucide-react";
@@ -33,7 +33,7 @@ export default function VideoPlayerClient({
   attachmentName: string | null;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [bottomTab, setBottomTab] = useState<"notes" | "transcript" | "downloads" | "bookmarks">("notes");
+  const [bottomTab, setBottomTab] = useState<"notes" | "transcript" | "materials" | "bookmarks">("notes");
   const [playlistOpen, setPlaylistOpen] = useState(true);
   const [notes, setNotes] = useState(initialNotes);
   const [notesSaved, setNotesSaved] = useState(false);
@@ -167,15 +167,23 @@ export default function VideoPlayerClient({
                   ref={videoRef}
                   src={embedUrl}
                   controls
+                  controlsList="nodownload nofullscreen noremoteplayback"
+                  disablePictureInPicture
+                  playsInline
+                  preload="metadata"
+                  crossOrigin="anonymous"
                   className="w-full h-full"
-                  style={{ maxHeight: "60vh" }}
+                  style={{ maxHeight: "60vh", WebkitUserSelect: "none", userSelect: "none" }}
+                  onContextMenu={(event) => event.preventDefault()}
+                  onDragStart={(event) => event.preventDefault()}
                   onEnded={() => setPipActive(false)}
                 />
               ) : (
                 <iframe
                   src={embedUrl}
                   className="w-full h-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  sandbox="allow-scripts allow-same-origin allow-presentation"
+                  allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
                   allowFullScreen
                   title={lesson.title}
                 />
@@ -193,11 +201,11 @@ export default function VideoPlayerClient({
             className="flex border-b shrink-0"
             style={{ background: "var(--c-surface)", borderColor: "var(--c-border)" }}
           >
-            {(["notes", "transcript", "downloads", "bookmarks"] as const).map(tab => {
+            {(["notes", "transcript", "materials", "bookmarks"] as const).map(tab => {
               const icons = {
                 notes: <FileText className="h-3.5 w-3.5" />,
                 transcript: <AlignLeft className="h-3.5 w-3.5" />,
-                downloads: <Download className="h-3.5 w-3.5" />,
+                materials: <FileText className="h-3.5 w-3.5" />,
                 bookmarks: <Bookmark className="h-3.5 w-3.5" />,
               };
               return (
@@ -305,42 +313,21 @@ export default function VideoPlayerClient({
               </div>
             )}
 
-            {/* DOWNLOADS */}
-            {bottomTab === "downloads" && (
+            {/* MATERIALS */}
+            {bottomTab === "materials" && (
               <div className="max-w-3xl mx-auto">
-                <h2 className="text-sm font-bold mb-4" style={{ color: "var(--c-text-1)" }}>Downloads</h2>
-                {attachmentUrl ? (
-                  <a
-                    href={attachmentUrl}
-                    download={attachmentName ?? "study-file"}
-                    className="flex items-center gap-4 rounded-xl border p-4 transition hover:border-brand/40 group"
-                    style={{ background: "var(--c-card)", borderColor: "var(--c-border)" }}
-                  >
-                    <div
-                      className="flex h-12 w-12 items-center justify-center rounded-xl shrink-0"
-                      style={{ background: "var(--c-brand-bg)", color: "var(--c-brand)" }}
-                    >
-                      <Download className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold" style={{ color: "var(--c-text-1)" }}>
-                        {attachmentName ?? "Study File"}
-                      </div>
-                      <div className="text-xs mt-0.5" style={{ color: "var(--c-text-4)" }}>
-                        Click to download
-                      </div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 shrink-0 group-hover:translate-x-0.5 transition" style={{ color: "var(--c-text-3)" }} />
-                  </a>
-                ) : (
-                  <div
-                    className="flex flex-col items-center justify-center py-16 rounded-xl border"
-                    style={{ borderColor: "var(--c-border)", background: "var(--c-card)" }}
-                  >
-                    <Download className="h-10 w-10 opacity-20 mb-3" style={{ color: "var(--c-text-3)" }} />
-                    <p className="text-sm" style={{ color: "var(--c-text-4)" }}>No files available for download.</p>
+                <h2 className="text-sm font-bold mb-4" style={{ color: "var(--c-text-1)" }}>Online Materials</h2>
+                <div
+                  className="rounded-xl border p-5"
+                  style={{ background: "var(--c-card)", borderColor: "var(--c-border)" }}
+                >
+                  <div className="text-sm font-semibold" style={{ color: "var(--c-text-1)" }}>
+                    {attachmentName ?? "Study material"}
                   </div>
-                )}
+                  <div className="text-xs mt-1" style={{ color: "var(--c-text-4)" }}>
+                    Available for online viewing only. Downloading and sharing are disabled.
+                  </div>
+                </div>
               </div>
             )}
 
