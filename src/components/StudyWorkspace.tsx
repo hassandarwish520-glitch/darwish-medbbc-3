@@ -10,6 +10,7 @@ import {
   Download,
   Expand,
   ExternalLink,
+  FileText,
   Gauge,
   HardDriveDownload,
   Highlighter,
@@ -873,7 +874,7 @@ export default function StudyWorkspace({
 
             <section className="rounded-[24px] border border-ink-800 bg-ink-900/70 p-4">
               <div className="flex items-center gap-2">
-                <div className="rounded-2xl bg-amber-500/10 p-2 text-amber-300">{totalMaterialItems.some(isImageMaterial) ? <Library className="h-4 w-4" /> : <Download className="h-4 w-4" />}</div>
+                <div className="rounded-2xl bg-slate-500/10 p-2 text-slate-300">{totalMaterialItems.some(isImageMaterial) ? <Library className="h-4 w-4" /> : <FileText className="h-4 w-4" />}</div>
                 <div>
                   <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Lecture Materials</div>
                   <div className="mt-1 text-sm font-semibold text-white">Files, notes, and clinical images</div>
@@ -881,8 +882,8 @@ export default function StudyWorkspace({
               </div>
               <div className="mt-4 space-y-2">
                 {totalMaterialItems.length ? totalMaterialItems.map((item) => (
-                  <a key={`${item.label}-${item.url}`} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3 transition hover:border-amber-400/30">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-300">{isImageMaterial(item) ? <Library className="h-4 w-4" /> : <Download className="h-4 w-4" />}</div>
+                  <a key={`${item.label}-${item.url}`} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3 transition hover:border-slate-400/30">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-500/10 text-slate-300">{isImageMaterial(item) ? <Library className="h-4 w-4" /> : <FileText className="h-4 w-4" />}</div>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-semibold text-white">{item.label}</div>
                       <div className="mt-1 text-xs text-slate-500">{item.kind}{item.mime ? ` • ${item.mime}` : ""}</div>
