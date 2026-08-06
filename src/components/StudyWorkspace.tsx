@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BookmarkButton from "@/components/BookmarkButton";
 import LessonViewer from "@/components/LessonViewer";
+import { getOfflinePackage, upsertOfflinePackage, type OfflinePackageAsset } from "@/lib/offline-downloads";
 import {
   CheckCircle2,
   Clipboard,
@@ -252,7 +253,9 @@ export default function StudyWorkspace({
   const [storedProgress, setStoredProgress] = useState<StoredProgress | null>(null);
   const [completionMap, setCompletionMap] = useState<Record<string, boolean>>({});
   const [offlineQueued, setOfflineQueued] = useState(false);
-  const [storageEstimate, setStorageEstimate] = useState<{ used: number | null; quota: number | null }>({ used: null, quota: null });
+  const [offlineSyncing, setOfflineSyncing] = useState(false);
+  const [offlineCachedCount, setOfflineCachedCount] = useState(0);
+  const [offlinePackageState, setOfflinePackageState] = useState<"ready" | "partial" | "queued" | null>(null);
   const [playlistOpen, setPlaylistOpen] = useState(true);
   const [noteTimestamp, setNoteTimestamp] = useState(0);
 
@@ -269,7 +272,6 @@ export default function StudyWorkspace({
   const playlistScope = playlistScopeKey ?? lessonId;
   const progressStorageKey = `lesson-video-progress:${lessonId}`;
   const completionStorageKey = `lesson-playlist-completion:${playlistScope}`;
-  const offlineStorageKey = `lesson-video-offline:${lessonId}`;
   const autoNextStorageKey = `lesson-video-autonext:${playlistScope}`;
   const activeIndex = scopedPlaylist.findIndex((item) => item.active);
   const nextLecture = activeIndex >= 0 ? scopedPlaylist[activeIndex + 1] ?? null : null;
@@ -326,21 +328,13 @@ export default function StudyWorkspace({
       setCurrentTime(savedProgressState.position || 0);
       setDuration(savedProgressState.duration || 0);
     }
-    setOfflineQueued(localStorage.getItem(offlineStorageKey) === "1");
+
+    const savedOfflinePackage = getOfflinePackage(lessonId);
+    setOfflineQueued(Boolean(savedOfflinePackage));
+    setOfflineCachedCount(savedOfflinePackage?.cachedAssetIds.length ?? 0);
+    setOfflinePackageState(savedOfflinePackage?.status ?? null);
     setAutoNext(localStorage.getItem(autoNextStorageKey) === "1");
-
-    let mounted = true;
-    if (typeof navigator !== "undefined" && navigator.storage?.estimate) {
-      navigator.storage.estimate().then((estimate) => {
-        if (!mounted) return;
-        setStorageEstimate({ used: estimate.usage ?? null, quota: estimate.quota ?? null });
-      }).catch(() => undefined);
-    }
-
-    return () => {
-      mounted = false;
-    };
-  }, [autoNextStorageKey, completionStorageKey, offlineStorageKey, progressStorageKey]);
+  }, [autoNextStorageKey, completionStorageKey, lessonId, progressStorageKey]);
 
   useEffect(() => {
     if (!status) return;
@@ -391,6 +385,30 @@ export default function StudyWorkspace({
     }
     return items;
   }, [externalAttachment, materials]);
+  const offlineAssets = useMemo<OfflinePackageAsset[]>(() => {
+    const assets = totalMaterialItems.map((item, index) => ({
+      id: `material:${index}:${item.label}`,
+      url: item.url,
+      label: item.label,
+      kind: item.kind,
+      mime: item.mime ?? null,
+      cacheable: item.url.startsWith("/"),
+    }));
+
+    if (canControlVideo && sessionEmbedUrl) {
+      assets.unshift({
+        id: "video:primary",
+        url: sessionEmbedUrl,
+        label: `${lessonTitle} video`,
+        kind: "Video",
+        mime: "video/*",
+        cacheable: sessionEmbedUrl.startsWith("/"),
+      });
+    }
+
+    return assets;
+  }, [canControlVideo, lessonTitle, sessionEmbedUrl, totalMaterialItems]);
+  const offlineCacheableCount = offlineAssets.filter((asset) => asset.cacheable).length;
   const effectiveTelegramLinks = telegramLinks ?? [];
   const showAttachmentInsideWorkspace = Boolean(externalAttachment && viewMode === "split");
   const immersiveMode = viewMode === "focus" || isFullscreen;
@@ -564,11 +582,35 @@ export default function StudyWorkspace({
     }
   }
 
-  function toggleOfflineQueue() {
-    const next = !offlineQueued;
-    setOfflineQueued(next);
-    localStorage.setItem(offlineStorageKey, next ? "1" : "0");
-    setStatus(next ? "Lecture added to offline queue" : "Offline lecture removed");
+  async function toggleOfflineQueue() {
+    setOfflineSyncing(true);
+    try {
+      const nextPackage = await upsertOfflinePackage({
+        lessonId,
+        lessonTitle,
+        provider,
+        assets: offlineAssets,
+        notesCount: noteCount,
+        progress: {
+          position: Math.floor(currentTime),
+          duration: Math.floor(duration),
+          watchedSeconds: Math.floor(storedProgress?.watchedSeconds ?? currentTime),
+          completed: currentLessonCompleted,
+        },
+        warnings: [
+          effectiveVideoType !== "direct" ? "External Telegram or YouTube streams remain provider-controlled in the current web build." : "",
+          offlineCacheableCount === 0 ? "The lecture package is registered for in-app access, but no cacheable internal file was exposed from this lesson page." : "",
+        ],
+      });
+      setOfflineQueued(true);
+      setOfflineCachedCount(nextPackage.cachedAssetIds.length);
+      setOfflinePackageState(nextPackage.status);
+      setStatus(nextPackage.status === "ready" ? "Lecture package added to Downloads" : "Lecture package saved for in-app Downloads");
+    } catch {
+      setStatus("Could not prepare the lecture package right now.");
+    } finally {
+      setOfflineSyncing(false);
+    }
   }
 
   function toggleCompleted() {
@@ -867,25 +909,33 @@ export default function StudyWorkspace({
                 <div className="rounded-2xl bg-fuchsia-500/10 p-2 text-fuchsia-300"><HardDriveDownload className="h-4 w-4" /></div>
                 <div>
                   <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Offline Mode</div>
-                  <div className="mt-1 text-sm font-semibold text-white">App-only secure viewing</div>
+                  <div className="mt-1 text-sm font-semibold text-white">In-app downloads</div>
                 </div>
               </div>
               <div className="mt-3 rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/10 px-4 py-3 text-xs leading-6 text-fuchsia-100">
-                <span className="inline-flex items-center gap-2 font-semibold"><Lock className="h-3.5 w-3.5" /> UI prepared without replacing current web behavior.</span>
-                <div className="mt-2">Encrypted storage, subscription validation, and in-app-only playback need native app or backend support. This layout keeps the experience ready while preserving all current features.</div>
+                <span className="inline-flex items-center gap-2 font-semibold"><Lock className="h-3.5 w-3.5" /> Lecture Materials stay here on the lesson page.</span>
+                <div className="mt-2">The offline action only saves this lecture package into the app workflow and the Downloads page. It does not replace the attachment viewer and does not push the student to an external browser.</div>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Storage used</div>
-                  <div className="mt-2 text-lg font-bold text-white">{formatBytes(storageEstimate.used)}</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Package items</div>
+                  <div className="mt-2 text-lg font-bold text-white">{offlineAssets.length}</div>
                 </div>
                 <div className="rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Storage quota</div>
-                  <div className="mt-2 text-lg font-bold text-white">{formatBytes(storageEstimate.quota)}</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Cached now</div>
+                  <div className="mt-2 text-lg font-bold text-white">{offlineCachedCount}/{offlineCacheableCount}</div>
                 </div>
               </div>
-              <div className="mt-4 rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3 text-xs leading-6 text-slate-400">
-                Offline download actions are disabled in this web view.
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button type="button" className="btn-primary text-sm" disabled={offlineSyncing} onClick={() => void toggleOfflineQueue()}>
+                  <HardDriveDownload className="h-4 w-4" /> {offlineSyncing ? "Preparing…" : offlineQueued ? "Update Downloads" : "Add to Downloads"}
+                </button>
+                <a href="/downloads" className="subject-tab">
+                  <Download className="h-4 w-4" /> <span>Open Downloads</span>
+                </a>
+              </div>
+              <div className="mt-3 text-xs leading-6 text-slate-500">
+                Status: {offlinePackageState === "ready" ? "cached inside the app session" : offlinePackageState === "partial" ? "partially cached" : offlineQueued ? "saved for in-app downloads" : "not added yet"}.
               </div>
             </section>
 

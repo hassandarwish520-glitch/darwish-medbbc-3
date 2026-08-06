@@ -13,6 +13,7 @@ import {
   FileText,
   FlaskConical,
   GraduationCap,
+  HardDriveDownload,
   Layers,
   LayoutDashboard,
   Library,
@@ -34,6 +35,7 @@ const NAV = [
   { href: "/collections", label: "Collections", icon: Package },
   { href: "/courses", label: "Courses", icon: GraduationCap },
   { href: "/videos", label: "Videos", icon: PlaySquare },
+  { href: "/downloads", label: "Downloads", icon: HardDriveDownload },
   { href: "/notes", label: "Notes", icon: FileText },
   { href: "/knowledge", label: "Library", icon: Library },
   { href: "/flashcards", label: "Flashcards", icon: Layers },
@@ -49,6 +51,7 @@ const MOBILE_NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/qbank", label: "Q-Bank", icon: BookOpen },
   { href: "/videos", label: "Videos", icon: PlaySquare },
+  { href: "/downloads", label: "Downloads", icon: HardDriveDownload },
   { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/notes", label: "Notes", icon: FileText },
   { href: "/knowledge", label: "Library", icon: Library },
@@ -300,7 +303,7 @@ export default function AppShell({
         className={`fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-xl md:hidden ${isQbankSession ? "hidden" : ""}`}
         style={{ background: "var(--c-nav-bg)", borderColor: "var(--c-border)" }}
       >
-        <div className="grid h-16 grid-cols-6">
+        <div className="grid h-16 grid-cols-7">
           {MOBILE_NAV.map((item) => {
             const Icon = item.icon;
             const active = isActive(path, item.href);
