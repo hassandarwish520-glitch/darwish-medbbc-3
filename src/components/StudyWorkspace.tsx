@@ -188,7 +188,16 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
   const drawingRef = useRef(false);
   const currentStrokeRef = useRef<AnnotationStroke | null>(null);
   const saveAnnotationsTimerRef = useRef<number | null>(null);
+  // Keep strokes accessible via ref so redrawOverlay/resizeOverlay don't need
+  // strokes in their dependency arrays — this prevents resizeOverlay from
+  // running (and clearing the canvas) on every single stroke addition.
+  const strokesRef = useRef<AnnotationStroke[]>([]);
   const palette = ["#fde047", "#86efac", "#f9a8d4", "#60a5fa", "#a78bfa", "#fdba74"];
+
+  // Sync ref with state (declared first so it runs before redrawOverlay's effect)
+  useEffect(() => {
+    strokesRef.current = strokes;
+  }, [strokes]);
 
   const renderStroke = useCallback((ctx: CanvasRenderingContext2D, stroke: AnnotationStroke) => {
     if (!stroke || !Array.isArray(stroke.points)) return;
@@ -230,17 +239,19 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
     }
   }, []);
 
+  // redrawOverlay no longer lists `strokes` in deps — it reads from strokesRef instead.
+  // This breaks the strokes → redrawOverlay → resizeOverlay → useEffect chain that
+  // was causing the canvas to be cleared and redrawn on every stroke addition.
   const redrawOverlay = useCallback(() => {
     const canvas = overlayRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
-    try {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      strokes.forEach((stroke) => renderStroke(ctx, stroke));
-    } catch {
-      // Ignore canvas redraw errors — the overlay will be cleared on the next stroke
+    try { ctx.clearRect(0, 0, canvas.width, canvas.height); } catch { return; }
+    // Draw each stroke individually so one bad stroke can't blank the entire canvas
+    for (const stroke of strokesRef.current) {
+      renderStroke(ctx, stroke);
     }
-  }, [renderStroke, strokes]);
+  }, [renderStroke]); // ← no longer depends on strokes
 
   const resizeOverlay = useCallback(() => {
     const canvas = overlayRef.current;
@@ -254,7 +265,7 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
     } catch {
       // Ignore resize errors (e.g. detached element during navigation on Android)
     }
-  }, [redrawOverlay]);
+  }, [redrawOverlay]); // ← resizeOverlay no longer changes when strokes changes
 
   useEffect(() => {
     let active = true;
@@ -287,9 +298,10 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
     };
   }, [attachment.href, lessonId]);
 
+  // Trigger redraw whenever strokes changes (strokesRef is already synced above)
   useEffect(() => {
     redrawOverlay();
-  }, [redrawOverlay, strokes]);
+  }, [redrawOverlay, strokes]); // strokes in deps ensures this re-runs when strokes changes
 
   useEffect(() => {
     if (!annotationReady) return;
@@ -401,16 +413,33 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
   }
 
   function finishStroke(event: React.PointerEvent<HTMLCanvasElement>) {
+    // Release pointer capture FIRST — before any early-return guards.
+    // If capture is not released, all subsequent pointer events on the page go to
+    // the canvas, freezing every button and scroll gesture until the page is refreshed.
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* ignore */ }
+
     if (!drawingRef.current || !currentStrokeRef.current) return;
     drawingRef.current = false;
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {}
-    if (currentStrokeRef.current.points.length > 1) {
-      setStrokes((prev) => [...prev, currentStrokeRef.current as AnnotationStroke]);
-      setRedoStack([]);
-    }
+    const stroke = currentStrokeRef.current;
     currentStrokeRef.current = null;
+
+    if (stroke.points.length > 1) {
+      setStrokes((prev) => [...prev, stroke]);
+      setRedoStack([]);
+    } else {
+      // Only 1 point (a tap, not a drag) — discard and clear the ghost preview
+      redrawOverlay();
+    }
+  }
+
+  // Separate handler for onPointerCancel (Android scroll/gesture takeover).
+  // Per spec, pointer capture is automatically released on pointercancel, but we
+  // still reset all drawing state and clear the in-progress ghost stroke.
+  function cancelStroke(event: React.PointerEvent<HTMLCanvasElement>) {
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* ignore */ }
+    drawingRef.current = false;
+    currentStrokeRef.current = null;
+    redrawOverlay(); // remove the ghost stroke the user started before the cancel
   }
 
   function undoAnnotation() {
@@ -542,7 +571,7 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
           onPointerMove={drawStroke}
           onPointerUp={finishStroke}
           onPointerLeave={finishStroke}
-          onPointerCancel={finishStroke}
+          onPointerCancel={cancelStroke}
         />
         <button type="button" className="absolute bottom-5 right-5 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#4f7cff] text-white shadow-[0_10px_30px_rgba(79,124,255,0.45)]">
           <PencilLine className="h-5 w-5" />
