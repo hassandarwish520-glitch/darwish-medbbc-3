@@ -108,6 +108,22 @@ function safeParse<T>(raw: string | null): T | null {
   }
 }
 
+function safeStorageGet(key: string) {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageSet(key: string, value: string) {
+  try {
+    if (typeof window !== "undefined") window.localStorage.setItem(key, value);
+  } catch {
+    // ignore restricted-browser storage failures
+  }
+}
+
 function isHtmlAttachment(attachment: NonNullable<Attachment>) {
   const lower = attachment.name.toLowerCase();
   return attachment.mime.includes("html") || lower.endsWith(".html") || lower.endsWith(".htm");
@@ -118,7 +134,7 @@ function isImageMaterial(item: MaterialItem) {
   return item.kind.toLowerCase().includes("image") || item.mime?.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test(lower);
 }
 
-function AttachmentPanel({ attachment }: { attachment: NonNullable<Attachment> }) {
+function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: NonNullable<Attachment>; lessonId: string; subjectSlug?: string | null }) {
   type AnnotationTool = "pen" | "highlighter" | "eraser";
   type AnnotationStroke = {
     tool: AnnotationTool;
@@ -138,11 +154,13 @@ function AttachmentPanel({ attachment }: { attachment: NonNullable<Attachment> }
   const [annotationSize, setAnnotationSize] = useState(4);
   const [strokes, setStrokes] = useState<AnnotationStroke[]>([]);
   const [redoStack, setRedoStack] = useState<AnnotationStroke[]>([]);
+  const [annotationEntryId, setAnnotationEntryId] = useState<string | null>(null);
+  const [annotationReady, setAnnotationReady] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
   const currentStrokeRef = useRef<AnnotationStroke | null>(null);
-  const annotationStorageKey = `attachment-annotations:${attachment.href}`;
+  const saveAnnotationsTimerRef = useRef<number | null>(null);
   const palette = ["#fde047", "#86efac", "#f9a8d4", "#60a5fa", "#a78bfa", "#fdba74"];
 
   const renderStroke = useCallback((ctx: CanvasRenderingContext2D, stroke: AnnotationStroke) => {
@@ -194,15 +212,77 @@ function AttachmentPanel({ attachment }: { attachment: NonNullable<Attachment> }
   }, [redrawOverlay]);
 
   useEffect(() => {
-    const saved = safeParse<AnnotationStroke[]>(localStorage.getItem(annotationStorageKey));
-    setStrokes(saved ?? []);
-    setRedoStack([]);
-  }, [annotationStorageKey]);
+    let active = true;
+    setAnnotationReady(false);
+    setAnnotationEntryId(null);
+
+    fetch(`/api/medical-library?lesson_id=${encodeURIComponent(lessonId)}&entry_type=attachment&limit=100`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("annotation-load-failed");
+        const payload = await response.json().catch(() => ({ entries: [] }));
+        if (!active) return;
+        const match = (Array.isArray(payload.entries) ? payload.entries : []).find((entry: LibraryEntry) => {
+          const data = entry.data as Record<string, unknown> | null;
+          return entry.entry_type === "attachment" && data?.kind === "annotation" && data?.attachment_href === attachment.href;
+        }) as LibraryEntry | undefined;
+        setAnnotationEntryId(match?.id ?? null);
+        setStrokes(Array.isArray(match?.data?.strokes) ? (match?.data?.strokes as AnnotationStroke[]) : []);
+        setRedoStack([]);
+        setAnnotationReady(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setStrokes([]);
+        setRedoStack([]);
+        setAnnotationReady(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [attachment.href, lessonId]);
 
   useEffect(() => {
-    localStorage.setItem(annotationStorageKey, JSON.stringify(strokes));
     redrawOverlay();
-  }, [annotationStorageKey, redrawOverlay, strokes]);
+  }, [redrawOverlay, strokes]);
+
+  useEffect(() => {
+    if (!annotationReady) return;
+    if (saveAnnotationsTimerRef.current) window.clearTimeout(saveAnnotationsTimerRef.current);
+    saveAnnotationsTimerRef.current = window.setTimeout(async () => {
+      try {
+        const response = await fetch("/api/medical-library", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: annotationEntryId ?? undefined,
+            lesson_id: lessonId,
+            subject_slug: subjectSlug || null,
+            entry_type: "attachment",
+            title: `${attachment.name} annotations`,
+            color: annotationColor,
+            data: {
+              kind: "annotation",
+              attachment_href: attachment.href,
+              attachment_name: attachment.name,
+              strokes,
+              updatedAt: new Date().toISOString(),
+            },
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok && typeof payload?.entry?.id === "string") {
+          setAnnotationEntryId(payload.entry.id);
+        }
+      } catch {
+        // keep the current overlay even if saving fails
+      }
+    }, 450);
+
+    return () => {
+      if (saveAnnotationsTimerRef.current) window.clearTimeout(saveAnnotationsTimerRef.current);
+    };
+  }, [annotationColor, annotationEntryId, annotationReady, attachment.href, attachment.name, lessonId, strokes, subjectSlug]);
 
   useEffect(() => {
     resizeOverlay();
@@ -338,7 +418,7 @@ function AttachmentPanel({ attachment }: { attachment: NonNullable<Attachment> }
           </button>
           <button type="button" className="subject-tab" onClick={clearAnnotations}>
             <MoreHorizontal className="h-4 w-4" />
-            <span>Demark</span>
+            <span>Clear</span>
           </button>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {palette.map((color) => (
@@ -518,9 +598,9 @@ export default function StudyWorkspace({
   }, []);
 
   useEffect(() => {
-    const completionState = safeParse<Record<string, boolean>>(localStorage.getItem(completionStorageKey)) ?? {};
+    const completionState = safeParse<Record<string, boolean>>(safeStorageGet(completionStorageKey)) ?? {};
     setCompletionMap(completionState);
-    const savedProgressState = safeParse<StoredProgress>(localStorage.getItem(progressStorageKey));
+    const savedProgressState = safeParse<StoredProgress>(safeStorageGet(progressStorageKey));
     if (savedProgressState) {
       setStoredProgress(savedProgressState);
       setCurrentTime(savedProgressState.position || 0);
@@ -531,7 +611,7 @@ export default function StudyWorkspace({
     setOfflineQueued(Boolean(savedOfflinePackage));
     setOfflineCachedCount(savedOfflinePackage?.cachedAssetIds.length ?? 0);
     setOfflinePackageState(savedOfflinePackage?.status ?? null);
-    setAutoNext(localStorage.getItem(autoNextStorageKey) === "1");
+    setAutoNext(safeStorageGet(autoNextStorageKey) === "1");
   }, [autoNextStorageKey, completionStorageKey, lessonId, progressStorageKey]);
 
   useEffect(() => {
@@ -547,7 +627,7 @@ export default function StudyWorkspace({
 
   const writeCompletionMap = useCallback((nextMap: Record<string, boolean>) => {
     setCompletionMap(nextMap);
-    localStorage.setItem(completionStorageKey, JSON.stringify(nextMap));
+    safeStorageSet(completionStorageKey, JSON.stringify(nextMap));
   }, [completionStorageKey]);
 
   const persistProgress = useCallback((position: number, totalDuration: number) => {
@@ -560,7 +640,7 @@ export default function StudyWorkspace({
       completed,
     };
     setStoredProgress(nextState);
-    localStorage.setItem(progressStorageKey, JSON.stringify(nextState));
+    safeStorageSet(progressStorageKey, JSON.stringify(nextState));
     if (completed) {
       writeCompletionMap({ ...completionMap, [lessonId]: true });
     }
@@ -962,7 +1042,7 @@ export default function StudyWorkspace({
                       <div className="flex flex-wrap gap-2">
                         <button type="button" className="subject-tab" onClick={() => setAutoNext((value) => {
                           const next = !value;
-                          localStorage.setItem(autoNextStorageKey, next ? "1" : "0");
+                          safeStorageSet(autoNextStorageKey, next ? "1" : "0");
                           return next;
                         })}>
                           <PlaySquare className="h-4 w-4" /> <span>{autoNext ? "Auto next on" : "Auto next off"}</span>
@@ -1017,7 +1097,7 @@ export default function StudyWorkspace({
               <LessonViewer id={lessonId} kind={lessonKind} fileType={typeof lessonMeta?.file_type === "string" ? lessonMeta.file_type : undefined} />
             )}
 
-            {showAttachmentInsideWorkspace && externalAttachment ? <AttachmentPanel attachment={externalAttachment} /> : null}
+            {showAttachmentInsideWorkspace && externalAttachment ? <AttachmentPanel attachment={externalAttachment} lessonId={lessonId} subjectSlug={subjectSlug} /> : null}
           </div>
         </div>
 
@@ -1088,12 +1168,9 @@ export default function StudyWorkspace({
             ) : null}
 
             <section className="rounded-[24px] border border-ink-800 bg-ink-900/70 p-4">
-              <div className="flex items-center gap-2">
-                <div className="rounded-2xl bg-slate-500/10 p-2 text-slate-300">{totalMaterialItems.some(isImageMaterial) ? <Library className="h-4 w-4" /> : <FileText className="h-4 w-4" />}</div>
-                <div>
-                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Lecture Materials</div>
-                  <div className="mt-1 text-sm font-semibold text-white">Files, notes, and clinical images</div>
-                </div>
+              <div>
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Lecture Materials</div>
+                <div className="mt-1 text-sm font-semibold text-white">Files, notes, and clinical images</div>
               </div>
               <div className="mt-4 space-y-2">
                 {totalMaterialItems.length ? totalMaterialItems.map((item) => (
