@@ -9,6 +9,7 @@ import {
   Clipboard,
   Copy,
   Download,
+  Eraser,
   Expand,
   FileText,
   Gauge,
@@ -19,15 +20,18 @@ import {
   Lock,
   Maximize2,
   Minimize2,
+  MoreHorizontal,
   PencilLine,
   PictureInPicture2,
   PlaySquare,
+  Redo2,
   RefreshCw,
   Save,
   Send,
   SplitSquareVertical,
   TimerReset,
   Trash2,
+  Undo2,
   X,
 } from "lucide-react";
 
@@ -115,12 +119,96 @@ function isImageMaterial(item: MaterialItem) {
 }
 
 function AttachmentPanel({ attachment }: { attachment: NonNullable<Attachment> }) {
+  type AnnotationTool = "pen" | "highlighter" | "eraser";
+  type AnnotationStroke = {
+    tool: AnnotationTool;
+    color: string;
+    size: number;
+    points: { x: number; y: number }[];
+  };
+
   const isPdf = attachment.mime === "application/pdf" || attachment.name.toLowerCase().endsWith(".pdf");
   const isImage = attachment.mime.startsWith("image/");
   const isHtml = isHtmlAttachment(attachment);
   const [htmlSource, setHtmlSource] = useState("");
   const [loadingHtml, setLoadingHtml] = useState(isHtml);
   const [failedHtml, setFailedHtml] = useState(false);
+  const [tool, setTool] = useState<AnnotationTool>("highlighter");
+  const [annotationColor, setAnnotationColor] = useState("#fde047");
+  const [annotationSize, setAnnotationSize] = useState(4);
+  const [strokes, setStrokes] = useState<AnnotationStroke[]>([]);
+  const [redoStack, setRedoStack] = useState<AnnotationStroke[]>([]);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const overlayRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingRef = useRef(false);
+  const currentStrokeRef = useRef<AnnotationStroke | null>(null);
+  const annotationStorageKey = `attachment-annotations:${attachment.href}`;
+  const palette = ["#fde047", "#86efac", "#f9a8d4", "#60a5fa", "#a78bfa", "#fdba74"];
+
+  const renderStroke = useCallback((ctx: CanvasRenderingContext2D, stroke: AnnotationStroke) => {
+    if (stroke.points.length < 2) return;
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    if (stroke.tool === "eraser") {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.lineWidth = Math.max(12, stroke.size * 3);
+      ctx.strokeStyle = "rgba(0,0,0,1)";
+      ctx.globalAlpha = 1;
+    } else if (stroke.tool === "highlighter") {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.lineWidth = Math.max(14, stroke.size * 3.5);
+      ctx.strokeStyle = stroke.color;
+      ctx.globalAlpha = 0.35;
+    } else {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.lineWidth = Math.max(2, stroke.size);
+      ctx.strokeStyle = stroke.color;
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+    stroke.points.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
+    ctx.stroke();
+    ctx.restore();
+  }, []);
+
+  const redrawOverlay = useCallback(() => {
+    const canvas = overlayRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    strokes.forEach((stroke) => renderStroke(ctx, stroke));
+  }, [renderStroke, strokes]);
+
+  const resizeOverlay = useCallback(() => {
+    const canvas = overlayRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+    const rect = container.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.floor(rect.width));
+    canvas.height = Math.max(1, Math.floor(rect.height));
+    redrawOverlay();
+  }, [redrawOverlay]);
+
+  useEffect(() => {
+    const saved = safeParse<AnnotationStroke[]>(localStorage.getItem(annotationStorageKey));
+    setStrokes(saved ?? []);
+    setRedoStack([]);
+  }, [annotationStorageKey]);
+
+  useEffect(() => {
+    localStorage.setItem(annotationStorageKey, JSON.stringify(strokes));
+    redrawOverlay();
+  }, [annotationStorageKey, redrawOverlay, strokes]);
+
+  useEffect(() => {
+    resizeOverlay();
+    window.addEventListener("resize", resizeOverlay);
+    return () => window.removeEventListener("resize", resizeOverlay);
+  }, [resizeOverlay]);
 
   useEffect(() => {
     if (!isHtml) {
@@ -153,49 +241,158 @@ function AttachmentPanel({ attachment }: { attachment: NonNullable<Attachment> }
     };
   }, [attachment.href, isHtml]);
 
+  function getPoint(event: React.PointerEvent<HTMLCanvasElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+
+  function startStroke(event: React.PointerEvent<HTMLCanvasElement>) {
+    drawingRef.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    currentStrokeRef.current = {
+      tool,
+      color: annotationColor,
+      size: annotationSize,
+      points: [getPoint(event)],
+    };
+  }
+
+  function drawStroke(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current || !currentStrokeRef.current) return;
+    currentStrokeRef.current.points.push(getPoint(event));
+    redrawOverlay();
+    const canvas = overlayRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (ctx) renderStroke(ctx, currentStrokeRef.current);
+  }
+
+  function finishStroke(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current || !currentStrokeRef.current) return;
+    drawingRef.current = false;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {}
+    if (currentStrokeRef.current.points.length > 1) {
+      setStrokes((prev) => [...prev, currentStrokeRef.current as AnnotationStroke]);
+      setRedoStack([]);
+    }
+    currentStrokeRef.current = null;
+  }
+
+  function undoAnnotation() {
+    setStrokes((prev) => {
+      if (!prev.length) return prev;
+      const next = [...prev];
+      const removed = next.pop() as AnnotationStroke;
+      setRedoStack((redo) => [...redo, removed]);
+      return next;
+    });
+  }
+
+  function redoAnnotation() {
+    setRedoStack((prev) => {
+      if (!prev.length) return prev;
+      const next = [...prev];
+      const restored = next.pop() as AnnotationStroke;
+      setStrokes((current) => [...current, restored]);
+      return next;
+    });
+  }
+
+  function clearAnnotations() {
+    setStrokes([]);
+    setRedoStack([]);
+  }
+
   return (
-    <div className="flex h-full min-h-[60vh] flex-col border-t border-ink-800 bg-[#08111d] lg:min-h-[72vh] xl:min-h-[84vh] xl:border-l xl:border-t-0">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-800 px-4 py-3">
-        <div>
-          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Attached study file</div>
-          <div className="mt-1 text-sm font-semibold text-white">{attachment.name}</div>
+    <div className="overflow-hidden rounded-[28px] border border-ink-800 bg-ink-950/90 shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-800 px-4 py-4 md:px-5">
+        <div className="min-w-0">
+          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Lecture attachment</div>
+          <div className="mt-2 truncate text-base font-semibold text-white md:text-lg">{attachment.name}</div>
+        </div>
+        <div className="rounded-2xl border border-ink-700 bg-ink-900/80 px-3 py-2 text-xs text-slate-400">Internal viewer only</div>
+      </div>
+
+      <div className="border-b border-ink-800 px-4 py-3 md:px-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className={tool === "pen" ? "subject-tab active" : "subject-tab"} onClick={() => setTool("pen")}>
+            <PencilLine className="h-4 w-4" />
+            <span>Pen</span>
+          </button>
+          <button type="button" className={tool === "highlighter" ? "subject-tab active" : "subject-tab"} onClick={() => setTool("highlighter")}>
+            <Highlighter className="h-4 w-4" />
+            <span>Highlight</span>
+          </button>
+          <button type="button" className={tool === "eraser" ? "subject-tab active" : "subject-tab"} onClick={() => setTool("eraser")}>
+            <Eraser className="h-4 w-4" />
+            <span>Eraser</span>
+          </button>
+          <button type="button" className="subject-tab" disabled={!strokes.length} onClick={undoAnnotation}>
+            <Undo2 className="h-4 w-4" />
+            <span>Undo</span>
+          </button>
+          <button type="button" className="subject-tab" disabled={!redoStack.length} onClick={redoAnnotation}>
+            <Redo2 className="h-4 w-4" />
+            <span>Redo</span>
+          </button>
+          <button type="button" className="subject-tab" onClick={clearAnnotations}>
+            <MoreHorizontal className="h-4 w-4" />
+            <span>Demark</span>
+          </button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {palette.map((color) => (
+              <button
+                key={color}
+                type="button"
+                onClick={() => setAnnotationColor(color)}
+                className={`h-7 w-7 rounded-full border-2 transition ${annotationColor === color ? "scale-110 border-white" : "border-transparent"}`}
+                style={{ backgroundColor: color }}
+                aria-label={`Select ${color}`}
+              />
+            ))}
+            <input type="range" min={2} max={12} value={annotationSize} onChange={(event) => setAnnotationSize(Number(event.target.value))} className="w-24 accent-brand" />
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden bg-white">
+      <div ref={containerRef} className="relative min-h-[640px] overflow-hidden bg-white" onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>
         {isImage ? (
           <img src={attachment.href} alt={attachment.name} className="block h-full w-full object-contain" draggable={false} />
         ) : isPdf ? (
-          <div
-            className="relative h-full min-h-[60vh] select-none lg:min-h-[72vh] xl:min-h-[84vh]"
-            onContextMenu={(e) => e.preventDefault()}
-            onDragStart={(e) => e.preventDefault()}
-          >
-            <iframe
-              src={`${attachment.href}#toolbar=0&navpanes=0&statusbar=0&scrollbar=0&view=FitH`}
-              className="block h-full min-h-[60vh] w-full bg-white lg:min-h-[72vh] xl:min-h-[84vh]"
-              title={attachment.name}
-              sandbox="allow-same-origin allow-scripts"
-            />
-          </div>
+          <iframe
+            src={`${attachment.href}#toolbar=0&navpanes=0&statusbar=0&scrollbar=0&view=FitH`}
+            className="block h-[640px] w-full bg-white"
+            title={attachment.name}
+            sandbox="allow-same-origin allow-scripts"
+          />
         ) : isHtml ? (
           loadingHtml ? (
-            <div className="grid h-full min-h-[60vh] place-items-center px-6 text-center text-sm text-slate-500 lg:min-h-[72vh] xl:min-h-[84vh]">Loading document…</div>
+            <div className="grid h-[640px] place-items-center px-6 text-center text-sm text-slate-500">Loading document…</div>
           ) : failedHtml ? (
-            <div className="grid h-full min-h-[60vh] place-items-center px-6 text-center text-sm text-red-400 lg:min-h-[72vh] xl:min-h-[84vh]">
+            <div className="grid h-[640px] place-items-center px-6 text-center text-sm text-red-400">
               Unable to render this HTML document inside the workspace. Please try refreshing the page.
             </div>
           ) : (
             <iframe
               srcDoc={htmlSource}
               sandbox="allow-same-origin allow-scripts allow-forms"
-              className="block h-full min-h-[60vh] w-full bg-white lg:min-h-[72vh] xl:min-h-[84vh]"
+              className="block h-[640px] w-full bg-white"
               title={attachment.name}
             />
           )
         ) : (
-          <iframe src={attachment.href} className="block h-full min-h-[60vh] w-full bg-white lg:min-h-[72vh] xl:min-h-[84vh]" title={attachment.name} />
+          <iframe src={attachment.href} className="block h-[640px] w-full bg-white" title={attachment.name} />
         )}
+
+        <canvas
+          ref={overlayRef}
+          className="absolute inset-0 h-full w-full touch-none"
+          onPointerDown={startStroke}
+          onPointerMove={drawStroke}
+          onPointerUp={finishStroke}
+          onPointerLeave={finishStroke}
+        />
       </div>
     </div>
   );
@@ -234,6 +431,7 @@ export default function StudyWorkspace({
 }) {
   const [viewMode, setViewMode] = useState<"split" | "focus">("split");
   const [panel, setPanel] = useState<PanelKey>("notes");
+  const [workspaceVisible, setWorkspaceVisible] = useState(false);
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
   const [noteTitle, setNoteTitle] = useState(lessonTitle);
   const [noteBody, setNoteBody] = useState("");
@@ -620,6 +818,7 @@ export default function StudyWorkspace({
   }
 
   function editNote(entry: LibraryEntry) {
+    setWorkspaceVisible(true);
     setPanel("notes");
     setEditingNoteId(entry.id);
     setNoteTitle(entry.title || lessonTitle);
@@ -682,6 +881,10 @@ export default function StudyWorkspace({
             {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             <span>{isFullscreen ? "Exit full screen" : "Full screen"}</span>
           </button>
+          <button type="button" className={workspaceVisible ? "subject-tab active" : "subject-tab"} onClick={() => setWorkspaceVisible((value) => !value)}>
+            <Library className="h-4 w-4" />
+            <span>{workspaceVisible ? "Hide workspace" : "Show workspace"}</span>
+          </button>
           <button type="button" className="subject-tab" onClick={() => void loadWorkspace()}>
             <RefreshCw className="h-4 w-4" />
             <span>Refresh</span>
@@ -693,7 +896,7 @@ export default function StudyWorkspace({
         <div className="border-b border-ink-800 bg-brand/10 px-4 py-2 text-sm text-emerald-200">{status}</div>
       ) : null}
 
-      <div className={`grid gap-0 ${viewMode === "split" ? "xl:grid-cols-[minmax(0,1.45fr)_minmax(350px,0.95fr)]" : "grid-cols-1"}`}>
+      <div className={`grid gap-0 ${viewMode === "split" ? "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-cols-1"}`}>
         <div className="min-w-0 border-b border-ink-800 xl:border-b-0 xl:border-r">
           <div className="space-y-4 p-4" ref={viewerSectionRef}>
             {isVideoLesson ? (
@@ -828,9 +1031,12 @@ export default function StudyWorkspace({
                   <CheckCircle2 className="h-4 w-4" />
                   <span>{currentLessonCompleted ? "Completed" : "Mark completed"}</span>
                 </button>
-                <button type="button" className="subject-tab w-full justify-center" onClick={() => setPanel("notes")}>
+                <button type="button" className="subject-tab w-full justify-center" onClick={() => {
+                  setWorkspaceVisible(true);
+                  setPanel("notes");
+                }}>
                   <PencilLine className="h-4 w-4" />
-                  <span>Personal notes</span>
+                  <span>Open workspace</span>
                 </button>
                 <button type="button" className="subject-tab w-full justify-center" onClick={() => void copyTimestamp()}>
                   <TimerReset className="h-4 w-4" />
@@ -891,10 +1097,9 @@ export default function StudyWorkspace({
               </div>
               <div className="mt-4 space-y-2">
                 {totalMaterialItems.length ? totalMaterialItems.map((item) => (
-                  <div key={`${item.label}-${item.url}`} className="flex items-center gap-3 rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-500/10 text-slate-300">{isImageMaterial(item) ? <Library className="h-4 w-4" /> : <FileText className="h-4 w-4" />}</div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold text-white">{item.label}</div>
+                  <div key={`${item.label}-${item.url}`} className="rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-white md:text-[15px]">{item.label}</div>
                       <div className="mt-1 text-xs text-slate-500">{item.kind}{item.mime ? ` • ${item.mime}` : ""}</div>
                     </div>
                   </div>
@@ -939,6 +1144,7 @@ export default function StudyWorkspace({
               </div>
             </section>
 
+            {workspaceVisible ? (
             <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-ink-900/70">
               <div className="flex flex-wrap items-center gap-2 border-b border-ink-800 px-4 py-3">
                 {[
@@ -1110,6 +1316,7 @@ export default function StudyWorkspace({
                 </div>
               )}
             </section>
+            ) : null}
 
             {playlistOpen ? (
               <section className="rounded-[24px] border border-ink-800 bg-ink-900/70 p-4">
