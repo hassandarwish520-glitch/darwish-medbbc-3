@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BookmarkButton from "@/components/BookmarkButton";
 import LessonViewer from "@/components/LessonViewer";
 import { getOfflinePackage, upsertOfflinePackage, type OfflinePackageAsset } from "@/lib/offline-downloads";
@@ -134,6 +134,33 @@ function isImageMaterial(item: MaterialItem) {
   return item.kind.toLowerCase().includes("image") || item.mime?.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test(lower);
 }
 
+class AttachmentErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  override render() {
+    if (this.state.hasError) {
+      return (
+        <div className="overflow-hidden rounded-[28px] border border-ink-800 bg-ink-950/90 p-8 text-center">
+          <div className="text-sm text-red-400">The attachment viewer encountered an error. Please refresh to try again.</div>
+          <button
+            type="button"
+            className="mt-4 rounded-xl border border-ink-700 bg-ink-900/80 px-4 py-2 text-sm text-slate-300"
+            onClick={() => this.setState({ hasError: false })}
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: NonNullable<Attachment>; lessonId: string; subjectSlug?: string | null }) {
   type AnnotationTool = "pen" | "highlighter" | "eraser";
   type AnnotationStroke = {
@@ -164,51 +191,69 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
   const palette = ["#fde047", "#86efac", "#f9a8d4", "#60a5fa", "#a78bfa", "#fdba74"];
 
   const renderStroke = useCallback((ctx: CanvasRenderingContext2D, stroke: AnnotationStroke) => {
-    if (stroke.points.length < 2) return;
-    ctx.save();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    if (!stroke || !Array.isArray(stroke.points)) return;
+    // Filter out any NaN/invalid points that can arrive from cancelled touch events on Android
+    const validPoints = stroke.points.filter(
+      (p) => p && typeof p.x === "number" && typeof p.y === "number" && isFinite(p.x) && isFinite(p.y),
+    );
+    if (validPoints.length < 2) return;
+    try {
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
 
-    if (stroke.tool === "eraser") {
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.lineWidth = Math.max(12, stroke.size * 3);
-      ctx.strokeStyle = "rgba(0,0,0,1)";
-      ctx.globalAlpha = 1;
-    } else if (stroke.tool === "highlighter") {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.lineWidth = Math.max(14, stroke.size * 3.5);
-      ctx.strokeStyle = stroke.color;
-      ctx.globalAlpha = 0.35;
-    } else {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.lineWidth = Math.max(2, stroke.size);
-      ctx.strokeStyle = stroke.color;
-      ctx.globalAlpha = 1;
+      if (stroke.tool === "eraser") {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.lineWidth = Math.max(12, stroke.size * 3);
+        ctx.strokeStyle = "rgba(0,0,0,1)";
+        ctx.globalAlpha = 1;
+      } else if (stroke.tool === "highlighter") {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.lineWidth = Math.max(14, stroke.size * 3.5);
+        ctx.strokeStyle = stroke.color;
+        ctx.globalAlpha = 0.35;
+      } else {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.lineWidth = Math.max(2, stroke.size);
+        ctx.strokeStyle = stroke.color;
+        ctx.globalAlpha = 1;
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(validPoints[0].x, validPoints[0].y);
+      validPoints.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
+      ctx.stroke();
+      ctx.restore();
+    } catch {
+      // Silently discard canvas errors for this stroke (e.g. invalid composite op on some Android WebViews)
+      try { ctx.restore(); } catch { /* ignore */ }
     }
-
-    ctx.beginPath();
-    ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-    stroke.points.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
-    ctx.stroke();
-    ctx.restore();
   }, []);
 
   const redrawOverlay = useCallback(() => {
     const canvas = overlayRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    strokes.forEach((stroke) => renderStroke(ctx, stroke));
+    try {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      strokes.forEach((stroke) => renderStroke(ctx, stroke));
+    } catch {
+      // Ignore canvas redraw errors — the overlay will be cleared on the next stroke
+    }
   }, [renderStroke, strokes]);
 
   const resizeOverlay = useCallback(() => {
     const canvas = overlayRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
-    const rect = container.getBoundingClientRect();
-    canvas.width = Math.max(1, Math.floor(rect.width));
-    canvas.height = Math.max(1, Math.floor(rect.height));
-    redrawOverlay();
+    try {
+      const rect = container.getBoundingClientRect();
+      canvas.width = Math.max(1, Math.floor(rect.width));
+      canvas.height = Math.max(1, Math.floor(rect.height));
+      redrawOverlay();
+    } catch {
+      // Ignore resize errors (e.g. detached element during navigation on Android)
+    }
   }, [redrawOverlay]);
 
   useEffect(() => {
@@ -325,7 +370,10 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
     const target = event.currentTarget;
     if (!target) return { x: 0, y: 0 };
     const rect = target.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    // Guard against NaN from cancelled touch events on Android
+    return { x: isFinite(x) ? x : 0, y: isFinite(y) ? y : 0 };
   }
 
   function startStroke(event: React.PointerEvent<HTMLCanvasElement>) {
@@ -494,6 +542,7 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
           onPointerMove={drawStroke}
           onPointerUp={finishStroke}
           onPointerLeave={finishStroke}
+          onPointerCancel={finishStroke}
         />
         <button type="button" className="absolute bottom-5 right-5 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#4f7cff] text-white shadow-[0_10px_30px_rgba(79,124,255,0.45)]">
           <PencilLine className="h-5 w-5" />
@@ -1191,7 +1240,9 @@ export default function StudyWorkspace({
 
         <div className={`${viewMode === "focus" ? "hidden" : "block"} min-w-0`}>
           {showAttachmentInsideWorkspace && externalAttachment ? (
-            <AttachmentPanel attachment={externalAttachment} lessonId={lessonId} subjectSlug={subjectSlug} />
+            <AttachmentErrorBoundary>
+              <AttachmentPanel attachment={externalAttachment} lessonId={lessonId} subjectSlug={subjectSlug} />
+            </AttachmentErrorBoundary>
           ) : (
             <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-[#08111d] p-5 text-sm text-slate-400">
               No attachment is linked to this lesson.
