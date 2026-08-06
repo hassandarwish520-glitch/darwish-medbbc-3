@@ -322,13 +322,19 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
   }, [attachment.href, isHtml]);
 
   function getPoint(event: React.PointerEvent<HTMLCanvasElement>) {
-    const rect = event.currentTarget.getBoundingClientRect();
+    const target = event.currentTarget;
+    if (!target) return { x: 0, y: 0 };
+    const rect = target.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 
   function startStroke(event: React.PointerEvent<HTMLCanvasElement>) {
     drawingRef.current = true;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // setPointerCapture can throw if the pointer is no longer active (e.g. quick tap on mobile)
+    }
     currentStrokeRef.current = {
       tool,
       color: annotationColor,
@@ -983,7 +989,7 @@ export default function StudyWorkspace({
         <div className="border-b border-ink-800 bg-brand/10 px-4 py-2 text-sm text-emerald-200">{status}</div>
       ) : null}
 
-      <div className={`grid gap-3 p-3 md:p-4 ${viewMode === "split" ? "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-cols-1"}`}>
+      <div className={`grid gap-3 p-3 md:p-4 ${viewMode === "split" ? "md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-cols-1"}`}>
         <div className="space-y-3">
           {isVideoLesson ? (
             <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-[#08111d] shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
