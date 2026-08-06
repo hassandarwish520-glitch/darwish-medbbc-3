@@ -37,14 +37,24 @@ export default async function VideoPlayerPage({
   const canPreviewHidden = isAdminProfile(ctx.profile);
   const db = canPreviewHidden ? createAdminClient() : await createClient();
 
-  const { data: lesson } = await db
+  const { data: rawLesson } = await db
     .from("lessons")
     .select("id, title, kind, meta, course_id, visible")
     .eq("id", id)
     .single();
 
-  const lessonVisible = (lesson as typeof lesson & { visible?: boolean | null });
-  if (!lessonVisible || (!lessonVisible.visible && !canPreviewHidden)) notFound();
+  type LessonRow = {
+    id: string;
+    title: string;
+    kind: string;
+    meta: unknown;
+    course_id: string | null;
+    visible: boolean | null;
+  };
+
+  const lesson = rawLesson as LessonRow | null;
+
+  if (!lesson || (!lesson.visible && !canPreviewHidden)) notFound();
 
   const meta = (lesson.meta ?? null) as {
     type?: string;
@@ -88,8 +98,8 @@ export default async function VideoPlayerPage({
       .eq("visible", true)
       .order("position", { ascending: true })
       .limit(30);
-    playlist = (data ?? []).filter((l) =>
-      l.meta && typeof l.meta === "object" && (l.meta as Record<string, unknown>).type === "video"
+    playlist = ((data ?? []) as { id: string; title: string; kind: string; meta: unknown }[]).filter(
+      (l) => l.meta && typeof l.meta === "object" && (l.meta as Record<string, unknown>).type === "video"
     );
   }
 
@@ -102,7 +112,7 @@ export default async function VideoPlayerPage({
       .contains("meta", { type: "video" })
       .order("created_at", { ascending: false })
       .limit(15);
-    playlist = data ?? [];
+    playlist = (data ?? []) as { id: string; title: string; kind: string; meta: unknown }[];
   }
 
   const notes = typeof meta?.notes === "string" ? meta.notes : "";

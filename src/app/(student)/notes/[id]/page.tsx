@@ -20,14 +20,24 @@ export default async function NotesViewerPage({
   const canPreviewHidden = isAdminProfile(ctx.profile);
   const db = canPreviewHidden ? createAdminClient() : await createClient();
 
-  const { data: lesson } = await db
+  const { data: rawLesson } = await db
     .from("lessons")
     .select("id, title, kind, meta, course_id, visible")
     .eq("id", id)
     .single();
 
-  const lessonVisible = (lesson as typeof lesson & { visible?: boolean | null });
-  if (!lessonVisible || (!lessonVisible.visible && !canPreviewHidden)) notFound();
+  type LessonRow = {
+    id: string;
+    title: string;
+    kind: string;
+    meta: unknown;
+    course_id: string | null;
+    visible: boolean | null;
+  };
+
+  const lesson = rawLesson as LessonRow | null;
+
+  if (!lesson || (!lesson.visible && !canPreviewHidden)) notFound();
 
   const meta = (lesson.meta ?? null) as {
     document_path?: string;
@@ -49,7 +59,7 @@ export default async function NotesViewerPage({
       .eq("visible", true)
       .order("position", { ascending: true })
       .limit(20);
-    siblingLessons = data ?? [];
+    siblingLessons = (data ?? []) as { id: string; title: string; kind: string }[];
   }
 
   return (
