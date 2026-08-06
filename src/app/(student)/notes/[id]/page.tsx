@@ -26,7 +26,8 @@ export default async function NotesViewerPage({
     .eq("id", id)
     .single();
 
-  if (!lesson || (!lesson.visible && !canPreviewHidden)) notFound();
+  const lessonVisible = (lesson as typeof lesson & { visible?: boolean | null });
+  if (!lessonVisible || (!lessonVisible.visible && !canPreviewHidden)) notFound();
 
   const meta = (lesson.meta ?? null) as {
     document_path?: string;
