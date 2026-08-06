@@ -386,12 +386,28 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
 
   return (
     <div className="overflow-hidden rounded-[28px] border border-ink-800 bg-ink-950/90 shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-800 px-4 py-4 md:px-5">
-        <div className="min-w-0">
-          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Lecture attachment</div>
-          <div className="mt-2 truncate text-base font-semibold text-white md:text-lg">{attachment.name}</div>
+      <div className="border-b border-ink-800 px-4 pt-3 md:px-5">
+        <div className="flex items-center gap-6 text-sm">
+          <button type="button" className="border-b-2 border-[#4f7cff] pb-2 font-medium text-[#78a6ff]">Attachment</button>
+          <button type="button" className="border-b-2 border-transparent pb-2 text-slate-400">Details</button>
         </div>
-        <div className="rounded-2xl border border-ink-700 bg-ink-900/80 px-3 py-2 text-xs text-slate-400">Internal viewer only</div>
+      </div>
+
+      <div className="border-b border-ink-800 px-4 py-3 md:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="truncate text-base font-semibold text-white md:text-lg">{attachment.name}</div>
+            <div className="mt-1 text-xs text-slate-500">In-app secure attachment view</div>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-300">
+            <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-ink-700 bg-ink-900/80">−</button>
+            <span className="rounded-xl border border-ink-700 bg-ink-900/80 px-3 py-1.5">100%</span>
+            <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-ink-700 bg-ink-900/80">+</button>
+            <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-ink-700 bg-ink-900/80">
+              <Expand className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="border-b border-ink-800 px-4 py-3 md:px-5">
@@ -473,6 +489,9 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
           onPointerUp={finishStroke}
           onPointerLeave={finishStroke}
         />
+        <button type="button" className="absolute bottom-5 right-5 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#4f7cff] text-white shadow-[0_10px_30px_rgba(79,124,255,0.45)]">
+          <PencilLine className="h-5 w-5" />
+        </button>
       </div>
     </div>
   );
@@ -511,7 +530,7 @@ export default function StudyWorkspace({
 }) {
   const [viewMode, setViewMode] = useState<"split" | "focus">("split");
   const [panel, setPanel] = useState<PanelKey>("notes");
-  const [workspaceVisible, setWorkspaceVisible] = useState(false);
+  const [workspaceVisible, setWorkspaceVisible] = useState(true);
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
   const [noteTitle, setNoteTitle] = useState(lessonTitle);
   const [noteBody, setNoteBody] = useState("");
@@ -939,35 +958,23 @@ export default function StudyWorkspace({
   return (
     <div
       ref={workspaceRef}
-      className={immersiveMode ? "fixed inset-0 z-[90] overflow-auto bg-[#040a12] pt-[calc(env(safe-area-inset-top)+0.85rem)] md:pt-4" : "card overflow-hidden border-ink-800 bg-ink-950/70"}
+      className={immersiveMode ? "fixed inset-0 z-[90] overflow-auto bg-[#050b14] pt-[calc(env(safe-area-inset-top)+0.65rem)] md:pt-4" : "card overflow-hidden border border-ink-800 bg-[#07101b]"}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-800 px-4 py-3">
-        <div>
-          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Study workspace</div>
-          <div className="mt-1 text-sm text-slate-300">
-            Cleaner video-first layout with the same study workflow, improved organization, and preserved actions.
-          </div>
+      <div className="flex items-center justify-between gap-3 border-b border-ink-800 px-4 py-3 md:px-5">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-white md:text-base">{lessonTitle}</div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className={viewMode === "split" ? "subject-tab active" : "subject-tab"} onClick={() => setViewMode("split")}>
-            <SplitSquareVertical className="h-4 w-4" />
-            <span>Split</span>
+        <div className="flex items-center gap-2 text-xs">
+          <button type="button" className="subject-tab" onClick={toggleCompleted}>
+            <CheckCircle2 className="h-4 w-4" />
+            <span>{currentLessonCompleted ? "Completed" : "Mark complete"}</span>
           </button>
-          <button type="button" className={viewMode === "focus" ? "subject-tab active" : "subject-tab"} onClick={() => setViewMode((value) => (value === "focus" ? "split" : "focus"))}>
-            <Expand className="h-4 w-4" />
-            <span>{viewMode === "focus" ? "Exit focus" : "Focus"}</span>
+          <button type="button" className="subject-tab" onClick={() => void copyTimestamp()}>
+            <Copy className="h-4 w-4" />
+            <span>Copy timestamp</span>
           </button>
           <button type="button" className="subject-tab" onClick={() => void toggleFullscreen()}>
             {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            <span>{isFullscreen ? "Exit full screen" : "Full screen"}</span>
-          </button>
-          <button type="button" className={workspaceVisible ? "subject-tab active" : "subject-tab"} onClick={() => setWorkspaceVisible((value) => !value)}>
-            <Library className="h-4 w-4" />
-            <span>{workspaceVisible ? "Hide workspace" : "Show workspace"}</span>
-          </button>
-          <button type="button" className="subject-tab" onClick={() => void loadWorkspace()}>
-            <RefreshCw className="h-4 w-4" />
-            <span>Refresh</span>
           </button>
         </div>
       </div>
@@ -976,473 +983,236 @@ export default function StudyWorkspace({
         <div className="border-b border-ink-800 bg-brand/10 px-4 py-2 text-sm text-emerald-200">{status}</div>
       ) : null}
 
-      <div className={`grid gap-0 ${viewMode === "split" ? "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-cols-1"}`}>
-        <div className="min-w-0 border-b border-ink-800 xl:border-b-0 xl:border-r">
-          <div className="space-y-4 p-4" ref={viewerSectionRef}>
-            {isVideoLesson ? (
-              <section className="overflow-hidden rounded-[28px] border border-ink-800 bg-ink-950/90 shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
-                <div className="border-b border-ink-800 px-4 py-4 md:px-5">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border border-ink-700 bg-ink-900/80 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-400">Video session</span>
-                        {provider ? <span className="rounded-full border border-ink-700 bg-ink-900/80 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-400">{provider}</span> : null}
-                        {storedProgress?.position ? <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold text-emerald-300">Resume from {formatTime(storedProgress.position)}</span> : null}
-                      </div>
-                      <h2 className="mt-3 text-xl font-bold text-white md:text-2xl">{lessonTitle}</h2>
-                      <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-                        Larger responsive player, cleaner study layout, and better organization for notes, progress, and playlist.
-                      </p>
-                    </div>
-                    <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-xs leading-6 text-emerald-100">
-                      Internal viewing only. External opening, sharing, and downloading are disabled for this lesson.
-                    </div>
-                  </div>
-                </div>
-
-                <div className="px-4 pb-4 pt-4 md:px-5">
-                  <div className="overflow-hidden rounded-[24px] border border-ink-800 bg-black">
-                    <div className="aspect-video w-full bg-black">
-                      {sessionEmbedUrl && effectiveVideoType !== "none" ? (
-                        canControlVideo ? (
-                          <video
-                            ref={videoRef}
-                            src={sessionEmbedUrl}
-                            controls
-                            playsInline
-                            className="h-full w-full"
-                            onLoadedMetadata={handleLoadedMetadata}
-                            onTimeUpdate={handleTimeUpdate}
-                            onEnded={handleVideoEnded}
-                          />
-                        ) : (
-                          <iframe
-                            src={sessionEmbedUrl}
-                            className="h-full w-full border-0"
-                            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                            allowFullScreen
-                            title={lessonTitle}
-                          />
-                        )
-                      ) : (
-                        <div className="grid h-full place-items-center px-6 text-center text-sm text-slate-500">
-                          No playable video source is attached to this lesson yet.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-col gap-4 rounded-[24px] border border-ink-800 bg-ink-900/70 px-4 py-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
-                        <span className="inline-flex items-center gap-2"><Clipboard className="h-4 w-4 text-brand" /> {formatTime(currentTime)} current</span>
-                        <span>{duration ? `${formatTime(duration)} total` : "Waiting for metadata"}</span>
-                        <span>{watchTimeLabel} watch time</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button type="button" className="subject-tab" onClick={() => setAutoNext((value) => {
-                          const next = !value;
-                          safeStorageSet(autoNextStorageKey, next ? "1" : "0");
-                          return next;
-                        })}>
-                          <PlaySquare className="h-4 w-4" /> <span>{autoNext ? "Auto next on" : "Auto next off"}</span>
-                        </button>
-                        <button type="button" className="subject-tab" onClick={() => setPlaylistOpen((value) => !value)}>
-                          <ListOrdered className="h-4 w-4" /> <span>{playlistOpen ? "Hide playlist" : "Show playlist"}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-                      <div className="h-2 rounded-full bg-gradient-to-r from-brand via-cyan-400 to-fuchsia-500 transition-all" style={{ width: `${lessonCompletionPct}%` }} />
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="flex flex-wrap gap-2">
-                        {SPEEDS.map((value) => (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() => setSpeed(value)}
-                            className="rounded-full border px-3 py-1.5 text-xs font-semibold transition"
-                            style={{
-                              borderColor: speed === value ? "rgba(16,185,129,0.4)" : "rgba(71,85,105,0.6)",
-                              background: speed === value ? "rgba(16,185,129,0.12)" : "rgba(15,23,42,0.8)",
-                              color: speed === value ? "#6ee7b7" : "#cbd5e1",
-                            }}
-                          >
-                            <span className="inline-flex items-center gap-1.5"><Gauge className="h-3.5 w-3.5" /> {value}×</span>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="ml-auto flex flex-wrap gap-2">
-                        <button type="button" className="subject-tab" onClick={() => void copyTimestamp()}>
-                          <Copy className="h-4 w-4" /> <span>Copy timestamp</span>
-                        </button>
-                        <button type="button" className="subject-tab" disabled={!canControlVideo} onClick={() => void togglePiP()}>
-                          <PictureInPicture2 className="h-4 w-4" /> <span>PiP</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {!canControlVideo ? (
-                      <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-xs leading-6 text-cyan-100">
-                        External providers keep their own native playback controls. The improved layout preserves that behavior without replacing the current session flow.
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </section>
-            ) : (
-              <LessonViewer id={lessonId} kind={lessonKind} fileType={typeof lessonMeta?.file_type === "string" ? lessonMeta.file_type : undefined} />
-            )}
-
-            {showAttachmentInsideWorkspace && externalAttachment ? <AttachmentPanel attachment={externalAttachment} lessonId={lessonId} subjectSlug={subjectSlug} /> : null}
-          </div>
-        </div>
-
-        <aside className={`${viewMode === "focus" ? "hidden" : "block"} min-w-0 bg-[#08111d]`}>
-          <div className="space-y-4 p-4">
-            <section className="rounded-[24px] border border-ink-800 bg-ink-900/70 p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Study tools</div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="col-span-2"><BookmarkButton lessonId={lessonId} /></div>
-                <button type="button" className="subject-tab w-full justify-center" onClick={toggleCompleted}>
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>{currentLessonCompleted ? "Completed" : "Mark completed"}</span>
-                </button>
-                <button type="button" className="subject-tab w-full justify-center" onClick={() => {
-                  setWorkspaceVisible(true);
-                  setPanel("notes");
-                }}>
-                  <PencilLine className="h-4 w-4" />
-                  <span>Open workspace</span>
-                </button>
-                <button type="button" className="subject-tab w-full justify-center" onClick={() => void copyTimestamp()}>
-                  <TimerReset className="h-4 w-4" />
-                  <span>Copy timestamp</span>
-                </button>
-
-              </div>
-            </section>
-
-            <section className="grid grid-cols-2 gap-3">
-              {[
-                { label: "Course Progress", value: `${courseProgressPct}%`, hint: `${completedCount}/${scopedPlaylist.length || 1} complete` },
-                { label: "Current Subject", value: `${courseProgressPct}%`, hint: provider ? provider.toUpperCase() : "Lesson" },
-                { label: "Lecture Completion", value: `${lessonCompletionPct}%`, hint: storedProgress?.position ? `Resume ${formatTime(storedProgress.position)}` : "Auto tracked" },
-                { label: "Watch Time", value: watchTimeLabel, hint: duration ? `${formatTime(duration)} total` : "—" },
-              ].map((item) => (
-                <div key={item.label} className="rounded-[24px] border border-ink-800 bg-ink-900/70 px-4 py-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
-                  <div className="mt-2 text-xl font-bold text-white">{item.value}</div>
-                  <div className="mt-1 text-xs text-slate-500">{item.hint}</div>
-                </div>
-              ))}
-            </section>
-
-            {effectiveTelegramLinks.length ? (
-              <section className="rounded-[24px] border border-ink-800 bg-ink-900/70 p-4">
-                <div className="flex items-center gap-2">
-                  <div className="rounded-2xl bg-sky-500/10 p-2 text-sky-300"><Send className="h-4 w-4" /></div>
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Telegram Links</div>
-                    <div className="mt-1 text-sm font-semibold text-white">Quality links preserved</div>
-                  </div>
-                </div>
-                <div className="mt-4 space-y-2">
-                  {effectiveTelegramLinks.map((link) => (
-                    <div key={`${link.label}-${link.url}`} className="flex items-center gap-3 rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-500/10 text-sky-300"><Send className="h-4 w-4" /></div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-semibold text-white">{link.resolution || link.label}</span>
-                          {link.size ? <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">{link.size}</span> : null}
-                        </div>
-                        <div className="mt-1 text-xs break-all text-slate-500">Internal reference only</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            <section className="rounded-[24px] border border-ink-800 bg-ink-900/70 p-4">
-              <div>
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Lecture Materials</div>
-                <div className="mt-1 text-sm font-semibold text-white">Files, notes, and clinical images</div>
-              </div>
-              <div className="mt-4 space-y-2">
-                {totalMaterialItems.length ? totalMaterialItems.map((item) => (
-                  <div key={`${item.label}-${item.url}`} className="rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-white md:text-[15px]">{item.label}</div>
-                      <div className="mt-1 text-xs text-slate-500">{item.kind}{item.mime ? ` • ${item.mime}` : ""}</div>
-                    </div>
-                  </div>
-                )) : (
-                  <div className="rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-5 text-sm text-slate-500">No lecture materials are attached yet.</div>
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-[24px] border border-ink-800 bg-ink-900/70 p-4">
-              <div className="flex items-center gap-2">
-                <div className="rounded-2xl bg-fuchsia-500/10 p-2 text-fuchsia-300"><HardDriveDownload className="h-4 w-4" /></div>
-                <div>
-                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Offline Mode</div>
-                  <div className="mt-1 text-sm font-semibold text-white">In-app downloads</div>
-                </div>
-              </div>
-              <div className="mt-3 rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/10 px-4 py-3 text-xs leading-6 text-fuchsia-100">
-                <span className="inline-flex items-center gap-2 font-semibold"><Lock className="h-3.5 w-3.5" /> Lecture Materials stay here on the lesson page.</span>
-                <div className="mt-2">The offline action only saves this lecture package into the app workflow and the Downloads page. It does not replace the attachment viewer and does not push the student to an external browser.</div>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Package items</div>
-                  <div className="mt-2 text-lg font-bold text-white">{offlineAssets.length}</div>
-                </div>
-                <div className="rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Cached now</div>
-                  <div className="mt-2 text-lg font-bold text-white">{offlineCachedCount}/{offlineCacheableCount}</div>
-                </div>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button type="button" className="btn-primary text-sm" disabled={offlineSyncing} onClick={() => void toggleOfflineQueue()}>
-                  <HardDriveDownload className="h-4 w-4" /> {offlineSyncing ? "Preparing…" : offlineQueued ? "Update Downloads" : "Add to Downloads"}
-                </button>
-                <a href="/downloads" className="subject-tab">
-                  <Download className="h-4 w-4" /> <span>Open Downloads</span>
-                </a>
-              </div>
-              <div className="mt-3 text-xs leading-6 text-slate-500">
-                Status: {offlinePackageState === "ready" ? "cached inside the app session" : offlinePackageState === "partial" ? "partially cached" : offlineQueued ? "saved for in-app downloads" : "not added yet"}.
-              </div>
-            </section>
-
-            {workspaceVisible ? (
-            <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-ink-900/70">
-              <div className="flex flex-wrap items-center gap-2 border-b border-ink-800 px-4 py-3">
-                {[
-                  { key: "notes", label: "Notes", Icon: PencilLine },
-                  { key: "whiteboard", label: "Whiteboard", Icon: Highlighter },
-                  { key: "library", label: "Library", Icon: Library },
-                ].map(({ key, label, Icon }) => (
-                  <button key={key} type="button" className={panel === key ? "subject-tab active" : "subject-tab"} onClick={() => setPanel(key as PanelKey)}>
-                    <Icon className="h-4 w-4" />
-                    <span>{label}</span>
-                  </button>
-                ))}
-              </div>
-
-              {panel === "notes" && (
-                <div className="space-y-4 p-4">
-                  <div className="rounded-2xl border border-ink-800 bg-ink-900/60 px-4 py-3 text-sm leading-6 text-slate-400">
-                    Notes stay linked to this lesson. The video-first layout stays clean while your personal notes remain one tap away.
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                    <input className="input" value={noteTitle} onChange={(event) => setNoteTitle(event.target.value)} placeholder="Note title" />
-                    <button type="button" className="subject-tab justify-center" onClick={() => setNoteTimestamp(currentTime)}>
-                      <TimerReset className="h-4 w-4" /> <span>{formatTime(noteTimestamp || currentTime)}</span>
-                    </button>
-                  </div>
-                  <textarea className="input min-h-[240px]" value={noteBody} onChange={(event) => setNoteBody(event.target.value)} placeholder="Write concise high-yield bullet notes here..." />
-                  {saveError && (
-                    <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-                      {saveError}
+      <div className={`grid gap-3 p-3 md:p-4 ${viewMode === "split" ? "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-cols-1"}`}>
+        <div className="space-y-3">
+          {isVideoLesson ? (
+            <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-[#08111d] shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
+              <div className="overflow-hidden rounded-[20px] border-b border-ink-800 bg-black">
+                <div className="aspect-video w-full bg-black">
+                  {sessionEmbedUrl && effectiveVideoType !== "none" ? (
+                    canControlVideo ? (
+                      <video
+                        ref={videoRef}
+                        src={sessionEmbedUrl}
+                        controls
+                        playsInline
+                        className="h-full w-full"
+                        onLoadedMetadata={handleLoadedMetadata}
+                        onTimeUpdate={handleTimeUpdate}
+                        onEnded={handleVideoEnded}
+                      />
+                    ) : (
+                      <iframe
+                        src={sessionEmbedUrl}
+                        className="h-full w-full border-0"
+                        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                        allowFullScreen
+                        title={lessonTitle}
+                      />
+                    )
+                  ) : (
+                    <div className="grid h-full place-items-center px-6 text-center text-sm text-slate-500">
+                      No playable video source is attached to this lesson yet.
                     </div>
                   )}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs text-slate-500">Notes remain saved in the medical library and can include the current lecture timestamp.</div>
-                    <div className="flex flex-wrap gap-2">
-                      {editingNoteId ? (
-                        <button type="button" className="subject-tab" onClick={() => {
-                          setEditingNoteId(null);
-                          setNoteTitle(lessonTitle);
-                          setNoteBody("");
-                        }}>
-                          <X className="h-4 w-4" /> <span>Cancel</span>
-                        </button>
-                      ) : null}
-                      <button type="button" className="btn-primary text-sm" disabled={saving || !noteBody.trim()} onClick={() => void saveNote()}>
-                        <Save className="h-4 w-4" /> {saving ? "Saving…" : editingNoteId ? "Update note" : "Save note"}
+                </div>
+              </div>
+
+              <div className="space-y-3 px-3 pb-3 pt-2">
+                <div className="flex items-center gap-3 text-xs text-slate-400">
+                  <button type="button" className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-ink-700 bg-ink-900/80 text-slate-300" disabled>
+                    <PlaySquare className="h-3.5 w-3.5" />
+                  </button>
+                  <span>{formatTime(currentTime)} / {duration ? formatTime(duration) : "00:00"}</span>
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
+                    <div className="h-full rounded-full bg-[#4f7cff] transition-all" style={{ width: `${lessonCompletionPct}%` }} />
+                  </div>
+                  <button type="button" className="rounded-full border border-ink-700 bg-ink-900/80 px-2.5 py-1 text-[11px] font-semibold text-slate-300" onClick={() => setSpeed((value) => {
+                    const index = SPEEDS.indexOf(value);
+                    return SPEEDS[(index + 1) % SPEEDS.length] ?? 1;
+                  })}>
+                    {speed}x
+                  </button>
+                  <button type="button" className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-ink-700 bg-ink-900/80 text-slate-300" disabled={!canControlVideo} onClick={() => void togglePiP()}>
+                    <Expand className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="overflow-hidden rounded-[22px] border border-ink-800 bg-[#07101a]">
+                  <div className="flex items-center gap-2 border-b border-ink-800 px-3 pt-2">
+                    {[
+                      { key: "notes", label: "Notes" },
+                      { key: "whiteboard", label: "Whiteboard" },
+                      { key: "library", label: "Library" },
+                    ].map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        className={`border-b-2 px-3 py-2 text-sm transition ${panel === item.key ? "border-[#4f7cff] text-[#78a6ff]" : "border-transparent text-slate-400 hover:text-slate-200"}`}
+                        onClick={() => {
+                          setWorkspaceVisible(true);
+                          setPanel(item.key as PanelKey);
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                    <div className="ml-auto">
+                      <button type="button" className="subject-tab text-xs" onClick={() => setWorkspaceVisible((value) => !value)}>
+                        <span>{workspaceVisible ? "Hide" : "Show"}</span>
                       </button>
                     </div>
                   </div>
-                  {noteCount ? (
-                    <div className="space-y-3">
-                      {notes.slice(0, 8).map((entry) => {
-                        const timeLabel = typeof entry.data?.timeLabel === "string" ? entry.data.timeLabel : null;
-                        const timestamp = typeof entry.data?.timestamp === "number" ? entry.data.timestamp : null;
-                        return (
-                          <div key={entry.id} className="rounded-2xl border border-ink-800 bg-ink-900/70 p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <div className="font-semibold text-white">{entry.title || "Quick note"}</div>
-                                  {timeLabel ? (
-                                    <button type="button" className="rounded-full border border-brand/20 bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand disabled:opacity-50" disabled={!canControlVideo || timestamp === null} onClick={() => timestamp !== null && jumpToTimestamp(timestamp)}>
-                                      {timeLabel}
-                                    </button>
-                                  ) : null}
+
+                  {workspaceVisible ? (
+                    <div className="p-3">
+                      {panel === "notes" ? (
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center gap-2 text-slate-300">
+                            <button type="button" className="subject-tab px-2 text-xs" onClick={() => setNoteBody((value) => `${value}
+• `)}>↶</button>
+                            <button type="button" className="subject-tab px-2 text-xs" onClick={() => setNoteBody((value) => `${value}
+`)}>↷</button>
+                            <button type="button" className="subject-tab px-2 text-xs font-bold" onClick={() => setNoteBody((value) => `${value}**bold**`)}>B</button>
+                            <button type="button" className="subject-tab px-2 text-xs italic" onClick={() => setNoteBody((value) => `${value}_italic_`)}>I</button>
+                            <button type="button" className="subject-tab px-2 text-xs underline" onClick={() => setNoteBody((value) => `${value}__underline__`)}>U</button>
+                            <button type="button" className="subject-tab px-2 text-xs" onClick={() => setNoteBody((value) => `${value}
+• `)}>•</button>
+                            <button type="button" className="subject-tab px-2 text-xs" onClick={() => setNoteBody((value) => `${value}
+1. `)}>1.</button>
+                            <button type="button" className="subject-tab px-2 text-xs" onClick={() => setNoteTimestamp(currentTime)}>⏱</button>
+                            <div className="ml-auto flex items-center gap-2">
+                              {["#fde047", "#86efac", "#f9a8d4"].map((color) => (
+                                <button key={color} type="button" className="h-4 w-4 rounded-full border border-white/20" style={{ backgroundColor: color }} onClick={() => setBrushColor(color)} />
+                              ))}
+                              <button type="button" className="subject-tab px-2 text-xs">⋮</button>
+                            </div>
+                          </div>
+
+                          <input
+                            className="input border-ink-700 bg-[#08111d] text-white placeholder:text-slate-500"
+                            value={noteTitle}
+                            onChange={(event) => setNoteTitle(event.target.value)}
+                            placeholder="Note title"
+                          />
+
+                          <textarea
+                            className="min-h-[340px] w-full rounded-[18px] border border-ink-800 bg-[#08111d] px-4 py-4 text-sm leading-8 text-slate-200 outline-none placeholder:text-slate-500"
+                            value={noteBody}
+                            onChange={(event) => setNoteBody(event.target.value)}
+                            placeholder="Psoriasis – key points
+
+• Chronic immune-mediated inflammatory disease."
+                          />
+
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-xs text-slate-500">Saved {new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</div>
+                            <button type="button" className="btn-primary text-sm" disabled={saving || !noteBody.trim()} onClick={() => void saveNote()}>
+                              <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save note"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : panel === "whiteboard" ? (
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <label className="text-xs uppercase tracking-[0.16em] text-slate-500">Pen color</label>
+                            <input type="color" value={brushColor} onChange={(event) => setBrushColor(event.target.value)} className="h-10 w-14 rounded-xl border border-ink-700 bg-transparent p-1" />
+                            <label className="text-xs uppercase tracking-[0.16em] text-slate-500">Size</label>
+                            <input type="range" min={1} max={10} value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} />
+                            <button type="button" className="btn-ghost text-xs" onClick={clearCanvas}>Clear</button>
+                            <button type="button" className="btn-primary text-xs" disabled={saving} onClick={() => void saveCanvas()}>
+                              <Save className="h-3.5 w-3.5" /> Save whiteboard
+                            </button>
+                          </div>
+                          <div className="rounded-[22px] border border-ink-800 bg-slate-100 p-3">
+                            <canvas
+                              ref={canvasRef}
+                              className="study-canvas block w-full rounded-[18px] bg-white"
+                              onPointerDown={startDrawing}
+                              onPointerMove={draw}
+                              onPointerUp={stopDrawing}
+                              onPointerLeave={stopDrawing}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="rounded-2xl border border-ink-800 bg-ink-900/70 px-3 py-4">
+                              <div className="text-2xl font-bold text-white">{notes.length}</div>
+                              <div className="mt-1 text-xs text-slate-500">Notes</div>
+                            </div>
+                            <div className="rounded-2xl border border-ink-800 bg-ink-900/70 px-3 py-4">
+                              <div className="text-2xl font-bold text-white">{highlights.length}</div>
+                              <div className="mt-1 text-xs text-slate-500">Highlights</div>
+                            </div>
+                            <div className="rounded-2xl border border-ink-800 bg-ink-900/70 px-3 py-4">
+                              <div className="text-2xl font-bold text-white">{canvases.length}</div>
+                              <div className="mt-1 text-xs text-slate-500">Boards</div>
+                            </div>
+                          </div>
+                          <div className="max-h-[340px] space-y-3 overflow-auto pr-1">
+                            {entries.slice(0, 8).map((entry) => (
+                              <div key={entry.id} className="rounded-2xl border border-ink-800 bg-ink-900/70 p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{entry.entry_type}</div>
+                                    <div className="mt-1 font-semibold text-white">{entry.title || entry.quote || "Library item"}</div>
+                                    <div className="mt-1 text-xs text-slate-500">{formatDate(entry.updated_at)}</div>
+                                  </div>
+                                  <button type="button" className="text-slate-500 transition hover:text-red-300" onClick={() => void deleteEntry(entry.id)}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
                                 </div>
-                                <div className="mt-1 text-xs text-slate-500">{formatDate(entry.updated_at)}</div>
+                                {entry.body ? <div className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{entry.body}</div> : null}
                               </div>
-                              <div className="flex items-center gap-2">
-                                <button type="button" className="text-slate-500 transition hover:text-cyan-300" onClick={() => editNote(entry)}>
-                                  <PencilLine className="h-4 w-4" />
-                                </button>
-                                <button type="button" className="text-slate-500 transition hover:text-red-300" onClick={() => void deleteEntry(entry.id)}>
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </div>
-                            <div className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{entry.body}</div>
+                            ))}
+                            {!entries.length && !loading ? <div className="rounded-2xl border border-ink-800 bg-ink-900/50 p-5 text-sm text-slate-500">No saved items yet for this lesson.</div> : null}
                           </div>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              )}
-
-              {panel === "whiteboard" && (
-                <div className="space-y-4 p-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <label className="text-xs uppercase tracking-[0.16em] text-slate-500">Pen color</label>
-                    <input type="color" value={brushColor} onChange={(event) => setBrushColor(event.target.value)} className="h-10 w-14 rounded-xl border border-ink-700 bg-transparent p-1" />
-                    <label className="text-xs uppercase tracking-[0.16em] text-slate-500">Size</label>
-                    <input type="range" min={1} max={10} value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} />
-                    <button type="button" className="btn-ghost text-xs" onClick={clearCanvas}>Clear</button>
-                    <button type="button" className="btn-primary text-xs" disabled={saving} onClick={() => void saveCanvas()}>
-                      <Save className="h-3.5 w-3.5" /> Save whiteboard
-                    </button>
-                  </div>
-                  <div className="rounded-[28px] border border-ink-800 bg-slate-100 p-3">
-                    <canvas
-                      ref={canvasRef}
-                      className="study-canvas block w-full rounded-[20px] bg-white"
-                      onPointerDown={startDrawing}
-                      onPointerMove={draw}
-                      onPointerUp={stopDrawing}
-                      onPointerLeave={stopDrawing}
-                    />
-                  </div>
-                  {canvases.length ? (
-                    <div className="space-y-3">
-                      {canvases.slice(0, 6).map((entry) => {
-                        const image = typeof entry.data?.image === "string" ? entry.data.image : "";
-                        return (
-                          <div key={entry.id} className="rounded-2xl border border-ink-800 bg-ink-900/70 p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="font-semibold text-white">{entry.title || "Whiteboard"}</div>
-                                <div className="mt-1 text-xs text-slate-500">{formatDate(entry.updated_at)}</div>
-                              </div>
-                              <button type="button" className="text-slate-500 transition hover:text-red-300" onClick={() => void deleteEntry(entry.id)}>
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                            {image ? <img src={image} alt={entry.title || "Whiteboard snapshot"} className="mt-3 w-full rounded-2xl border border-ink-700 bg-white" /> : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              )}
-
-              {panel === "library" && (
-                <div className="space-y-4 p-4">
-                  <div className="grid grid-cols-3 gap-3 text-center">
-                    <div className="rounded-2xl border border-ink-800 bg-ink-900/70 px-3 py-4">
-                      <div className="text-2xl font-bold text-white">{notes.length}</div>
-                      <div className="mt-1 text-xs text-slate-500">Notes</div>
-                    </div>
-                    <div className="rounded-2xl border border-ink-800 bg-ink-900/70 px-3 py-4">
-                      <div className="text-2xl font-bold text-white">{highlights.length}</div>
-                      <div className="mt-1 text-xs text-slate-500">Highlights</div>
-                    </div>
-                    <div className="rounded-2xl border border-ink-800 bg-ink-900/70 px-3 py-4">
-                      <div className="text-2xl font-bold text-white">{canvases.length}</div>
-                      <div className="mt-1 text-xs text-slate-500">Boards</div>
-                    </div>
-                  </div>
-                  {loading ? <div className="rounded-2xl border border-ink-800 bg-ink-900/50 p-5 text-sm text-slate-500">Loading library…</div> : null}
-                  <div className="space-y-3">
-                    {entries.length ? entries.map((entry) => (
-                      <div key={entry.id} className="rounded-2xl border border-ink-800 bg-ink-900/70 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{entry.entry_type}</div>
-                            <div className="mt-1 font-semibold text-white">{entry.title || entry.quote || "Library item"}</div>
-                            <div className="mt-1 text-xs text-slate-500">{formatDate(entry.updated_at)}</div>
-                          </div>
-                          <button type="button" className="text-slate-500 transition hover:text-red-300" onClick={() => void deleteEntry(entry.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </button>
                         </div>
-                        {entry.quote ? <div className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">“{entry.quote}”</div> : null}
-                        {entry.body ? <div className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{entry.body}</div> : null}
-                      </div>
-                    )) : !loading ? (
-                      <div className="rounded-2xl border border-ink-800 bg-ink-900/50 p-5 text-sm text-slate-500">No saved items yet for this lesson.</div>
-                    ) : null}
-                  </div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
-              )}
+              </div>
             </section>
-            ) : null}
+          ) : (
+            <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-[#08111d] p-4">
+              <LessonViewer id={lessonId} kind={lessonKind} fileType={typeof lessonMeta?.file_type === "string" ? lessonMeta.file_type : undefined} />
+            </section>
+          )}
+        </div>
 
-            {playlistOpen ? (
-              <section className="rounded-[24px] border border-ink-800 bg-ink-900/70 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Lecture Playlist</div>
-                    <div className="mt-1 text-sm font-semibold text-white">Current, completed, remaining</div>
-                  </div>
-                  <div className="rounded-full border border-brand/20 bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">{scopedPlaylist.length}</div>
+        <div className={`${viewMode === "focus" ? "hidden" : "block"} min-w-0`}>
+          {showAttachmentInsideWorkspace && externalAttachment ? (
+            <AttachmentPanel attachment={externalAttachment} lessonId={lessonId} subjectSlug={subjectSlug} />
+          ) : (
+            <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-[#08111d] p-5 text-sm text-slate-400">
+              No attachment is linked to this lesson.
+            </section>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t border-ink-800 px-3 pb-3 pt-1 md:px-4 md:pb-4">
+        <section className="rounded-[22px] border border-ink-800 bg-[#07101a] p-4">
+          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Lecture Materials</div>
+          <div className="mt-3 space-y-2">
+            {totalMaterialItems.length ? totalMaterialItems.slice(0, 1).map((item) => (
+              <div key={`${item.label}-${item.url}`} className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-ink-800 bg-[#08111d] px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-white">{item.label}</div>
+                  <div className="mt-1 text-xs text-slate-500">{item.mime?.includes("pdf") ? "PDF" : item.kind}{item.mime?.includes("pdf") ? "" : item.mime ? ` • ${item.mime}` : ""}</div>
                 </div>
-                <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-                  <div className="rounded-2xl border border-ink-800 bg-[#07111d] px-3 py-3">
-                    <div className="text-lg font-bold text-white">{activeIndex >= 0 ? activeIndex + 1 : 1}</div>
-                    <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-slate-500">Current</div>
-                  </div>
-                  <div className="rounded-2xl border border-ink-800 bg-[#07111d] px-3 py-3">
-                    <div className="text-lg font-bold text-white">{completedCount}</div>
-                    <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-slate-500">Completed</div>
-                  </div>
-                  <div className="rounded-2xl border border-ink-800 bg-[#07111d] px-3 py-3">
-                    <div className="text-lg font-bold text-white">{remainingCount}</div>
-                    <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-slate-500">Remaining</div>
-                  </div>
-                </div>
-                <div className="mt-4 space-y-2">
-                  {scopedPlaylist.length ? scopedPlaylist.map((item, index) => {
-                    const done = Boolean(completionMap[item.id]);
-                    return (
-                      <a key={item.id} href={`/lesson/${item.id}`} className="flex items-start gap-3 rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-3 transition hover:border-brand/30">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-800/80 text-slate-300">
-                          {done ? <CheckCircle2 className="h-4 w-4 text-emerald-300" /> : <PlaySquare className="h-4 w-4" />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-slate-400">Lecture {index + 1}</span>
-                            {item.active ? <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand">Now playing</span> : null}
-                          </div>
-                          <div className="mt-2 line-clamp-2 text-sm font-semibold text-white">{item.title}</div>
-                        </div>
-                      </a>
-                    );
-                  }) : (
-                    <div className="rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-5 text-sm text-slate-500">No related video playlist was found for this lesson.</div>
-                  )}
-                </div>
-              </section>
-            ) : null}
+                <button type="button" className="btn-primary text-sm" disabled={offlineSyncing} onClick={() => void toggleOfflineQueue()}>
+                  <HardDriveDownload className="h-4 w-4" /> {offlineSyncing ? "Preparing…" : "Add to downloads"}
+                </button>
+              </div>
+            )) : (
+              <div className="rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-5 text-sm text-slate-500">No lecture materials are attached yet.</div>
+            )}
           </div>
-        </aside>
+        </section>
       </div>
     </div>
   );
