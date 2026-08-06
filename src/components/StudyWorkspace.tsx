@@ -21,6 +21,7 @@ import {
   Maximize2,
   Minimize2,
   MoreHorizontal,
+  MousePointer2,
   PencilLine,
   PictureInPicture2,
   PlaySquare,
@@ -162,7 +163,7 @@ class AttachmentErrorBoundary extends React.Component<{ children: React.ReactNod
 }
 
 function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: NonNullable<Attachment>; lessonId: string; subjectSlug?: string | null }) {
-  type AnnotationTool = "pen" | "highlighter" | "eraser";
+  type AnnotationTool = "navigate" | "pen" | "highlighter" | "eraser";
   type AnnotationStroke = {
     tool: AnnotationTool;
     color: string;
@@ -176,7 +177,7 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
   const [htmlSource, setHtmlSource] = useState("");
   const [loadingHtml, setLoadingHtml] = useState(isHtml);
   const [failedHtml, setFailedHtml] = useState(false);
-  const [tool, setTool] = useState<AnnotationTool>("highlighter");
+  const [tool, setTool] = useState<AnnotationTool>("navigate");
   const [annotationColor, setAnnotationColor] = useState("#fde047");
   const [annotationSize, setAnnotationSize] = useState(4);
   const [strokes, setStrokes] = useState<AnnotationStroke[]>([]);
@@ -495,6 +496,10 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
 
       <div className="border-b border-ink-800 px-4 py-3 md:px-5">
         <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className={tool === "navigate" ? "subject-tab active" : "subject-tab"} onClick={() => setTool("navigate")}>
+            <MousePointer2 className="h-4 w-4" />
+            <span>Navigate</span>
+          </button>
           <button type="button" className={tool === "pen" ? "subject-tab active" : "subject-tab"} onClick={() => setTool("pen")}>
             <PencilLine className="h-4 w-4" />
             <span>Pen</span>
@@ -566,15 +571,21 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
 
         <canvas
           ref={overlayRef}
-          className="absolute inset-0 h-full w-full touch-none"
-          onPointerDown={startStroke}
-          onPointerMove={drawStroke}
-          onPointerUp={finishStroke}
-          onPointerLeave={finishStroke}
-          onPointerCancel={cancelStroke}
+          className={`absolute inset-0 h-full w-full ${tool === "navigate" ? "pointer-events-none" : "touch-none pointer-events-auto"}`}
+          style={{ touchAction: tool === "navigate" ? "auto" : "none" }}
+          onPointerDown={tool === "navigate" ? undefined : startStroke}
+          onPointerMove={tool === "navigate" ? undefined : drawStroke}
+          onPointerUp={tool === "navigate" ? undefined : finishStroke}
+          onPointerLeave={tool === "navigate" ? undefined : finishStroke}
+          onPointerCancel={tool === "navigate" ? undefined : cancelStroke}
         />
-        <button type="button" className="absolute bottom-5 right-5 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#4f7cff] text-white shadow-[0_10px_30px_rgba(79,124,255,0.45)]">
-          <PencilLine className="h-5 w-5" />
+        <button
+          type="button"
+          onClick={() => setTool(tool === "navigate" ? "pen" : "navigate")}
+          aria-label={tool === "navigate" ? "Enable drawing" : "Disable drawing (navigate)"}
+          className={`absolute bottom-5 right-5 inline-flex h-12 w-12 items-center justify-center rounded-full text-white shadow-[0_10px_30px_rgba(79,124,255,0.45)] transition ${tool === "navigate" ? "bg-[#4f7cff]" : "bg-emerald-500"}`}
+        >
+          {tool === "navigate" ? <PencilLine className="h-5 w-5" /> : <MousePointer2 className="h-5 w-5" />}
         </button>
       </div>
     </div>
