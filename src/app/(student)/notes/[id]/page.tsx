@@ -22,7 +22,7 @@ export default async function NotesViewerPage({
 
   const { data: lesson } = await db
     .from("lessons")
-    .select("id, title, kind, meta, course_id")
+    .select("id, title, kind, meta, course_id, visible")
     .eq("id", id)
     .single();
 
