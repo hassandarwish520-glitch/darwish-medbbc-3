@@ -56,6 +56,7 @@ import {
   Link as LinkIcon,
   Brush,
   NotebookPen,
+  PlaySquare,
 } from "lucide-react";
 
 export type BlockType =
@@ -73,6 +74,7 @@ export type BlockType =
   | "quote"
   | "code"
   | "pdf"
+  | "youtube"
   | "attachment"
   | "drawing";
 
@@ -146,6 +148,14 @@ function applyMarks(text: string): string {
   return out;
 }
 
+function toYouTubeEmbed(url: string | undefined): string | null {
+  if (!url) return null;
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/)
+    ?? url.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
+  if (!match) return null;
+  return `https://www.youtube.com/embed/${match[1]}?rel=0&modestbranding=1`;
+}
+
 type ToolbarProps = {
   onCommand: (cmd: ToolbarCmd) => void;
   theme: EditorTheme;
@@ -173,6 +183,7 @@ type ToolbarCmd =
   | "quote"
   | "code"
   | "pdf"
+  | "youtube"
   | "attachment"
   | "drawing";
 
@@ -210,7 +221,8 @@ function Toolbar(p: ToolbarProps) {
       <Btn cmd="table" title="Table"><TableIcon className="h-4 w-4" /></Btn>
       <Btn cmd="image" title="Image"><ImageIcon className="h-4 w-4" /></Btn>
       <Btn cmd="pdf" title="Embed PDF"><FileTextIcon className="h-4 w-4" /></Btn>
-      <Btn cmd="attachment" title="File attachment"><LinkIcon className="h-4 w-4" /></Btn>
+      <Btn cmd="youtube" title="Embed YouTube"><PlaySquare className="h-4 w-4" /></Btn>
+      <Btn cmd="attachment" title="Link or file"><LinkIcon className="h-4 w-4" /></Btn>
       <Btn cmd="drawing" title="Drawing"><Brush className="h-4 w-4" /></Btn>
       <span className="mx-1 h-5 w-px bg-slate-300 dark:bg-white/10" />
       <Btn cmd="callout" title="Callout"><Highlighter className="h-4 w-4" /></Btn>
@@ -683,11 +695,27 @@ function BlockRow({
           </div>
         ) : null}
         {block.type === "pdf" && block.url ? (
-          <div className="my-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-white/10 dark:bg-white/5">
-            <FileTextIcon className="mb-1 mr-2 inline h-4 w-4 text-rose-500" />
-            <a href={block.url} target="_blank" rel="noopener" className="text-blue-600 underline">
-              {block.name ?? "Embedded PDF"}
-            </a>
+          <div className="my-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/5">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2 text-sm dark:border-white/10">
+              <div className="inline-flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                <FileTextIcon className="h-4 w-4 text-rose-500" />
+                <span>{block.name ?? "Embedded PDF"}</span>
+              </div>
+              <a href={block.url} target="_blank" rel="noopener" className="text-blue-600 underline">Open</a>
+            </div>
+            <iframe src={block.url} title={block.name ?? "Embedded PDF"} className="h-[420px] w-full bg-white" />
+          </div>
+        ) : null}
+        {block.type === "youtube" && block.url ? (
+          <div className="my-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/5">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2 text-sm dark:border-white/10">
+              <div className="inline-flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                <PlaySquare className="h-4 w-4 text-red-500" />
+                <span>{block.text ?? block.name ?? "YouTube video"}</span>
+              </div>
+              <a href={block.url} target="_blank" rel="noopener" className="text-blue-600 underline">Open</a>
+            </div>
+            <iframe src={toYouTubeEmbed(block.url) ?? block.url} title={block.text ?? block.name ?? "YouTube video"} className="aspect-video w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen />
           </div>
         ) : null}
         {block.type === "attachment" && block.url ? (
@@ -807,6 +835,39 @@ export default function BlockEditor({
 
   const toolbarCommand = useCallback(
     (cmd: ToolbarCmd) => {
+      const appendBlock = (block: Block) => {
+        setBlocks((prev) => {
+          const tail = prev.length ? prev[prev.length - 1] : newBlock("paragraph");
+          const next = [...prev.slice(0, Math.max(prev.length - 1, 0)), block, tail];
+          onChange?.(next);
+          return next;
+        });
+      };
+
+      if (cmd === "pdf") {
+        const url = window.prompt("PDF URL");
+        if (url?.trim()) {
+          appendBlock({ id: uid(), type: "pdf", url: url.trim(), name: "Embedded PDF" });
+          return;
+        }
+      }
+
+      if (cmd === "youtube") {
+        const url = window.prompt("YouTube URL");
+        if (url?.trim()) {
+          appendBlock({ id: uid(), type: "youtube", url: url.trim(), text: "YouTube video" });
+          return;
+        }
+      }
+
+      if (cmd === "attachment") {
+        const url = window.prompt("Link URL");
+        if (url?.trim()) {
+          appendBlock({ id: uid(), type: "attachment", url: url.trim(), name: url.trim() });
+          return;
+        }
+      }
+
       const map: Record<ToolbarCmd, BlockType> = {
         h1: "heading1",
         h2: "heading2",
@@ -822,12 +883,13 @@ export default function BlockEditor({
         quote: "quote",
         code: "code",
         pdf: "pdf",
+        youtube: "youtube",
         attachment: "attachment",
         drawing: "drawing",
       };
       insertAt(blocks.length - 1, map[cmd]);
     },
-    [insertAt, blocks.length]
+    [blocks.length, insertAt, onChange]
   );
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);

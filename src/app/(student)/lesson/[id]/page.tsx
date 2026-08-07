@@ -325,6 +325,7 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
           materials={materials}
           playlist={playlist}
           playlistScopeKey={lesson.course_id ?? lesson.id}
+          isAdmin={canPreviewHidden}
         />
       </section>
     </div>

@@ -13,13 +13,9 @@ function assetHref(path?: string | null) {
 
 type RawWorkspace = {
   id: string;
-  title: string | null;
-  category: string;
-  blocks: unknown;
-  legacy_body: string | null;
   lesson_id: string | null;
-  meta: unknown;
-  pinned: boolean;
+  body: string | null;
+  meta: Record<string, unknown> | null;
   updated_at: string;
   user_id: string;
 };
@@ -42,14 +38,18 @@ export default async function DocumentWorkspacePage({
 
   const { data: row } = await admin
     .from("notes")
-    .select("id, user_id, title, category, blocks, legacy_body, lesson_id, meta, pinned, updated_at")
+    .select("id, user_id, lesson_id, body, meta, updated_at")
     .eq("id", id)
     .maybeSingle<RawWorkspace>();
   if (!row) notFound();
   if (row.user_id !== ctx.user.id && !isAdmin) notFound();
 
-  const category: "subject" | "lecture" | "qbank" | "qbank-active" | "documents" = isCategory(row.category)
-    ? row.category
+  const ws = row.meta && typeof row.meta.workspace === "object" && row.meta.workspace
+    ? (row.meta.workspace as Record<string, unknown>)
+    : {};
+
+  const category: "subject" | "lecture" | "qbank" | "qbank-active" | "documents" = isCategory(ws.category)
+    ? (ws.category as "subject" | "lecture" | "qbank" | "qbank-active" | "documents")
     : "documents";
 
   let lesson: {
@@ -99,13 +99,13 @@ export default async function DocumentWorkspacePage({
     <DocumentWorkspaceClient
       workspace={{
         id: row.id,
-        title: row.title,
+        title: typeof ws.title === "string" ? ws.title : null,
         category,
-        blocks: Array.isArray(row.blocks) ? (row.blocks as DocumentBlock[]) : [],
-        legacy_body: row.legacy_body,
+        blocks: Array.isArray(ws.blocks) ? (ws.blocks as DocumentBlock[]) : [],
+        legacy_body: typeof ws.legacy_body === "string" ? ws.legacy_body : row.body,
         lesson_id: row.lesson_id,
         meta: (row.meta ?? {}) as Record<string, unknown>,
-        pinned: row.pinned,
+        pinned: Boolean(ws.pinned),
         updated_at: row.updated_at,
       }}
       lesson={lesson}

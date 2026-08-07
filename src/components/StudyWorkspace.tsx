@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BookmarkButton from "@/components/BookmarkButton";
 import LessonViewer from "@/components/LessonViewer";
+import LectureWorkspaceBoard from "@/components/LectureWorkspaceBoard";
 import { getOfflinePackage, upsertOfflinePackage, type OfflinePackageAsset } from "@/lib/offline-downloads";
 import {
   CheckCircle2,
@@ -644,6 +645,7 @@ export default function StudyWorkspace({
   materials,
   playlist,
   playlistScopeKey,
+  isAdmin = false,
 }: {
   lessonId: string;
   lessonTitle: string;
@@ -659,6 +661,7 @@ export default function StudyWorkspace({
   materials?: MaterialItem[];
   playlist?: PlaylistItem[];
   playlistScopeKey?: string;
+  isAdmin?: boolean;
 }) {
   const [viewMode, setViewMode] = useState<"split" | "focus">("split");
   const [panel, setPanel] = useState<PanelKey>("notes");
@@ -1316,15 +1319,15 @@ export default function StudyWorkspace({
         </div>
 
         <div className={`${viewMode === "focus" ? "hidden" : "block"} min-w-0`}>
-          {showAttachmentInsideWorkspace && externalAttachment ? (
-            <AttachmentErrorBoundary>
-              <AttachmentPanel attachment={externalAttachment} lessonId={lessonId} subjectSlug={subjectSlug} />
-            </AttachmentErrorBoundary>
-          ) : (
-            <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-[#08111d] p-5 text-sm text-slate-400">
-              No attachment is linked to this lesson.
-            </section>
-          )}
+          <LectureWorkspaceBoard
+            lessonId={lessonId}
+            lessonTitle={lessonTitle}
+            lessonKind={lessonKind}
+            isAdmin={isAdmin}
+            attachmentUrl={externalAttachment?.href ?? null}
+            attachmentName={externalAttachment?.name ?? null}
+            videoUrl={sessionUrl ?? sessionEmbedUrl ?? null}
+          />
         </div>
       </div>
 
