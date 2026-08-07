@@ -690,6 +690,7 @@ export default function StudyWorkspace({
   const [offlinePackageState, setOfflinePackageState] = useState<"ready" | "partial" | "queued" | null>(null);
   const [playlistOpen, setPlaylistOpen] = useState(true);
   const [noteTimestamp, setNoteTimestamp] = useState(0);
+  const [rightPanelMode, setRightPanelMode] = useState<"attachment" | "workspace">("workspace");
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -844,6 +845,20 @@ export default function StudyWorkspace({
   const effectiveTelegramLinks = telegramLinks ?? [];
   const showAttachmentInsideWorkspace = Boolean(externalAttachment && viewMode === "split");
   const immersiveMode = viewMode === "focus" || isFullscreen;
+  const canUseAttachmentTools = Boolean(showAttachmentInsideWorkspace && externalAttachment);
+  const showRightPanelTabs = canUseAttachmentTools;
+
+  useEffect(() => {
+    if (!canUseAttachmentTools) {
+      setRightPanelMode("workspace");
+      return;
+    }
+    if (isVideoLesson) {
+      setRightPanelMode((current) => (current === "workspace" ? current : "attachment"));
+      return;
+    }
+    setRightPanelMode((current) => current || "workspace");
+  }, [canUseAttachmentTools, isVideoLesson]);
 
   async function saveEntry(payload: {
     id?: string;
@@ -1319,15 +1334,47 @@ export default function StudyWorkspace({
         </div>
 
         <div className={`${viewMode === "focus" ? "hidden" : "block"} min-w-0`}>
-          <LectureWorkspaceBoard
-            lessonId={lessonId}
-            lessonTitle={lessonTitle}
-            lessonKind={lessonKind}
-            isAdmin={isAdmin}
-            attachmentUrl={externalAttachment?.href ?? null}
-            attachmentName={externalAttachment?.name ?? null}
-            videoUrl={sessionUrl ?? sessionEmbedUrl ?? null}
-          />
+          <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-[#08111d]">
+            {showRightPanelTabs ? (
+              <div className="flex items-center justify-between gap-2 border-b border-ink-800 bg-[#07101a] px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition ${rightPanelMode === "attachment" ? "bg-white/10 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                    onClick={() => setRightPanelMode("attachment")}
+                  >
+                    Attachment tools
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition ${rightPanelMode === "workspace" ? "bg-white/10 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                    onClick={() => setRightPanelMode("workspace")}
+                  >
+                    Lecture workspace
+                  </button>
+                </div>
+                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  {isVideoLesson ? "Video keeps full annotation mode" : "Reference + workspace"}
+                </div>
+              </div>
+            ) : null}
+
+            {rightPanelMode === "attachment" && canUseAttachmentTools && externalAttachment ? (
+              <AttachmentErrorBoundary>
+                <AttachmentPanel attachment={externalAttachment} lessonId={lessonId} subjectSlug={subjectSlug} />
+              </AttachmentErrorBoundary>
+            ) : (
+              <LectureWorkspaceBoard
+                lessonId={lessonId}
+                lessonTitle={lessonTitle}
+                lessonKind={lessonKind}
+                isAdmin={isAdmin}
+                attachmentUrl={externalAttachment?.href ?? null}
+                attachmentName={externalAttachment?.name ?? null}
+                videoUrl={sessionUrl ?? sessionEmbedUrl ?? null}
+              />
+            )}
+          </section>
         </div>
       </div>
 
@@ -1341,9 +1388,9 @@ export default function StudyWorkspace({
                   <div className="truncate text-sm font-semibold text-white">{item.label}</div>
                   <div className="mt-1 text-xs text-slate-500">{item.mime?.includes("pdf") ? "PDF" : item.kind}{item.mime?.includes("pdf") ? "" : item.mime ? ` • ${item.mime}` : ""}</div>
                 </div>
-                <button type="button" className="btn-primary text-sm" disabled={offlineSyncing} onClick={() => void toggleOfflineQueue()}>
-                  <HardDriveDownload className="h-4 w-4" /> {offlineSyncing ? "Preparing…" : "Add to downloads"}
-                </button>
+                <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-200">
+                  <Lock className="h-3.5 w-3.5" /> In-app only
+                </div>
               </div>
             )) : (
               <div className="rounded-2xl border border-ink-800 bg-[#07111d] px-4 py-5 text-sm text-slate-500">No lecture materials are attached yet.</div>
