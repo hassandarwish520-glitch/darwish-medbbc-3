@@ -43,6 +43,7 @@ type BookmarkItem = { id: string; page: number; label: string };
 type RecentItem = { id: string; title: string; documentName: string; visitedAt: string };
 type OutlineItem = { title: string; page: number; level: number };
 type SearchResult = { page: number; excerpt: string; matchCount: number };
+type WorkspaceAsset = { id: string; kind: "image" | "pdf" | "file"; name: string; dataUrl: string };
 
 type StoredViewerState = {
   page: number;
@@ -93,10 +94,11 @@ export default function NotesViewerClient({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const viewerShellRef = useRef<HTMLDivElement | null>(null);
   const pdfPanelRef = useRef<HTMLDivElement | null>(null);
+  const workspaceFileInputRef = useRef<HTMLInputElement | null>(null);
   const chromeTimerRef = useRef<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
-  const [rightTab, setRightTab] = useState<"notes" | "bookmarks" | "search">("notes");
+  const [rightTab, setRightTab] = useState<"workspace" | "notes" | "bookmarks" | "search">("workspace");
   const [darkPdf, setDarkPdf] = useState(false);
   const [highlightMode, setHighlightMode] = useState(false);
   const [penMode, setPenMode] = useState(false);
@@ -118,9 +120,18 @@ export default function NotesViewerClient({
   const [recentNotes, setRecentNotes] = useState<RecentItem[]>([]);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [isPdfFullscreen, setIsPdfFullscreen] = useState(false);
+  const [workspaceTitle, setWorkspaceTitle] = useState(lesson.documentName);
+  const [workspaceBody, setWorkspaceBody] = useState("");
+  const [workspaceAssets, setWorkspaceAssets] = useState<WorkspaceAsset[]>([]);
+  const [workspaceVisibility, setWorkspaceVisibility] = useState<"private" | "published">("private");
+  const [workspaceSavedAt, setWorkspaceSavedAt] = useState<string | null>(null);
+  const [workspaceSaving, setWorkspaceSaving] = useState(false);
+  const [workspaceEntryId, setWorkspaceEntryId] = useState<string | null>(null);
+  const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
 
   const storageKey = `notes-viewer:${lesson.id}`;
   const recentStorageKey = "notes-viewer:recent";
+  const workspaceStorageKey = `notes-workspace:${lesson.id}`;
 
   const revealChrome = useCallback(() => {
     setChromeVisible(true);
@@ -152,6 +163,8 @@ export default function NotesViewerClient({
     const widthByZoom = Math.round(shellWidth * (zoom / 120));
     return clamp(widthByZoom, 260, readingMode ? 1480 : 1180);
   }, [readingMode, viewerWidth, zoom]);
+
+  const workspaceAssetCount = workspaceAssets.length;
 
   useEffect(() => {
     const syncSize = () => setViewerWidth(viewerShellRef.current?.clientWidth ?? 900);
@@ -218,6 +231,58 @@ export default function NotesViewerClient({
     window.localStorage.setItem(recentStorageKey, JSON.stringify(nextRecent));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lesson.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    try {
+      const rawWorkspace = window.localStorage.getItem(workspaceStorageKey);
+      if (rawWorkspace) {
+        const parsedWorkspace = JSON.parse(rawWorkspace) as {
+          title?: string;
+          body?: string;
+          visibility?: "private" | "published";
+          savedAt?: string | null;
+          assets?: WorkspaceAsset[];
+        };
+        if (!cancelled) {
+          if (typeof parsedWorkspace.title === "string") setWorkspaceTitle(parsedWorkspace.title);
+          if (typeof parsedWorkspace.body === "string") setWorkspaceBody(parsedWorkspace.body);
+          if (parsedWorkspace.visibility === "private" || parsedWorkspace.visibility === "published") setWorkspaceVisibility(parsedWorkspace.visibility);
+          if (Array.isArray(parsedWorkspace.assets)) setWorkspaceAssets(parsedWorkspace.assets);
+          if (typeof parsedWorkspace.savedAt === "string") setWorkspaceSavedAt(parsedWorkspace.savedAt);
+          setWorkspaceLoaded(true);
+        }
+        return;
+      }
+    } catch {
+      // ignore invalid local draft
+    }
+
+    setWorkspaceLoaded(true);
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceStorageKey]);
+
+  useEffect(() => {
+    if (!workspaceLoaded) return;
+    const handle = window.setTimeout(() => {
+      const savedAt = new Date().toISOString();
+      window.localStorage.setItem(
+        workspaceStorageKey,
+        JSON.stringify({
+          title: workspaceTitle,
+          body: workspaceBody,
+          visibility: workspaceVisibility,
+          savedAt,
+          assets: workspaceAssets,
+        }),
+      );
+      setWorkspaceSavedAt(savedAt);
+    }, 250);
+
+    return () => window.clearTimeout(handle);
+  }, [workspaceAssets, workspaceBody, workspaceLoaded, workspaceStorageKey, workspaceTitle, workspaceVisibility]);
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -357,6 +422,77 @@ export default function NotesViewerClient({
     return textItem.str.replace(regex, `<mark style=\"background:rgba(251,191,36,0.45);color:inherit;border-radius:2px;padding:0 1px;\">$1</mark>`);
   }, [searchQuery]);
 
+  const insertWorkspaceSnippet = useCallback((snippet: string) => {
+    setWorkspaceBody((value) => `${value}${value.trim() ? "\n\n" : ""}${snippet}`);
+    setRightTab("workspace");
+    setRightPanelOpen(true);
+  }, []);
+
+  const attachWorkspaceFiles = useCallback((files: FileList | File[] | null | undefined) => {
+    if (!files || !files.length) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === "string" ? reader.result : "";
+        if (!result) return;
+        setWorkspaceAssets((current) => [
+          ...current,
+          {
+            id: crypto.randomUUID(),
+            kind: file.type === "application/pdf" ? "pdf" : file.type.startsWith("image/") ? "image" : "file",
+            name: file.name,
+            dataUrl: result,
+          },
+        ]);
+        if (file.type === "application/pdf") {
+          insertWorkspaceSnippet(`[PDF Reference: ${file.name}]`);
+        } else if (file.type.startsWith("image/")) {
+          insertWorkspaceSnippet(`[Image: ${file.name}]`);
+        } else {
+          insertWorkspaceSnippet(`[Attachment: ${file.name}]`);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  }, [insertWorkspaceSnippet]);
+
+  const handleWorkspacePaste = useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(event.clipboardData.items || []);
+    const files = items.map((item) => item.getAsFile()).filter(Boolean) as File[];
+    if (!files.length) return;
+    event.preventDefault();
+    attachWorkspaceFiles(files);
+  }, [attachWorkspaceFiles]);
+
+  const handleWorkspaceDrop = useCallback((event: React.DragEvent<HTMLTextAreaElement>) => {
+    event.preventDefault();
+    attachWorkspaceFiles(event.dataTransfer.files);
+  }, [attachWorkspaceFiles]);
+
+  const removeWorkspaceAsset = useCallback((assetId: string) => {
+    setWorkspaceAssets((current) => current.filter((asset) => asset.id !== assetId));
+  }, []);
+
+  const saveWorkspace = useCallback(async () => {
+    setWorkspaceSaving(true);
+    await new Promise((resolve) => window.setTimeout(resolve, 180));
+    const savedAt = new Date().toISOString();
+    window.localStorage.setItem(
+      workspaceStorageKey,
+      JSON.stringify({
+        title: workspaceTitle,
+        body: workspaceBody,
+        visibility: workspaceVisibility,
+        savedAt,
+        assets: workspaceAssets,
+      }),
+    );
+    setWorkspaceSavedAt(savedAt);
+    setWorkspaceSaving(false);
+    setCopyStatus("Workspace saved");
+    window.setTimeout(() => setCopyStatus(null), 1800);
+  }, [workspaceAssets, workspaceBody, workspaceStorageKey, workspaceTitle, workspaceVisibility]);
+
   const addNote = useCallback(() => {
     if (!newNote.trim()) return;
     setNotes((prev) => [
@@ -481,7 +617,7 @@ export default function NotesViewerClient({
           </button>
           <button
             type="button"
-            onClick={() => { setPenMode((value) => !value); setHighlightMode(false); setRightPanelOpen(true); setRightTab("notes"); }}
+            onClick={() => { setPenMode((value) => !value); setHighlightMode(false); setRightPanelOpen(true); setRightTab("workspace"); }}
             className={`${shellButton} ${penMode ? "border-sky-300/40 bg-sky-300/10 text-sky-200" : ""}`}
           >
             <PenLine className="h-4 w-4" /> Add Note
@@ -659,17 +795,17 @@ export default function NotesViewerClient({
         </main>
 
         {!readingMode && rightPanelOpen && (
-          <aside className="hidden w-[340px] shrink-0 border-l border-white/10 bg-[#08111d] xl:flex xl:flex-col">
+          <aside className="hidden w-[380px] shrink-0 border-l border-white/10 bg-[#08111d] xl:flex xl:flex-col">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <div className="flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-1">
-                {(["notes", "bookmarks", "search"] as const).map((tab) => (
+                {(["workspace", "notes", "bookmarks", "search"] as const).map((tab) => (
                   <button
                     key={tab}
                     type="button"
                     onClick={() => setRightTab(tab)}
                     className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${rightTab === tab ? "bg-[#4f7cff] text-white" : "text-slate-400 hover:bg-white/10 hover:text-slate-200"}`}
                   >
-                    {tab === "notes" ? "Notes" : tab === "bookmarks" ? "Bookmarks" : "Search"}
+                    {tab === "workspace" ? "Workspace" : tab === "notes" ? "Notes" : tab === "bookmarks" ? "Bookmarks" : "Search"}
                   </button>
                 ))}
               </div>
@@ -679,6 +815,99 @@ export default function NotesViewerClient({
             </div>
 
             <div className="flex-1 overflow-y-auto p-4">
+              {rightTab === "workspace" && (
+                <div className="flex h-full flex-col gap-3">
+                  <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Lecture Workspace</div>
+                        <div className="mt-1 text-base font-semibold text-white">Teaching Board</div>
+                      </div>
+                      <div className="text-right text-[11px] text-slate-500">
+                        <div className={`inline-flex rounded-full border px-2 py-1 ${workspaceVisibility === "published" ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200" : "border-amber-400/30 bg-amber-500/10 text-amber-200"}`}>
+                          {workspaceVisibility === "published" ? "Published" : "Private"}
+                        </div>
+                        <div className="mt-2">Auto-save {workspaceSavedAt ? prettyTime(workspaceSavedAt) : "ready"}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => insertWorkspaceSnippet("# Heading")} className={shellButton}>H1</button>
+                    <button type="button" onClick={() => insertWorkspaceSnippet("## Subheading")} className={shellButton}>H2</button>
+                    <button type="button" onClick={() => insertWorkspaceSnippet("- [ ] Checklist item")} className={shellButton}>Checklist</button>
+                    <button type="button" onClick={() => insertWorkspaceSnippet("> High Yield callout")} className={shellButton}>Callout</button>
+                    <button type="button" onClick={() => insertWorkspaceSnippet("| Test | Result |\n| --- | --- |\n| Hb | 13.5 |\n| WBC | 8.1 |\n")} className={shellButton}>Table</button>
+                    <button type="button" onClick={() => insertWorkspaceSnippet("```\nAlgorithm / code\n```")} className={shellButton}>Code</button>
+                    <button type="button" onClick={() => insertWorkspaceSnippet("---")} className={shellButton}>Divider</button>
+                    <button type="button" onClick={() => insertWorkspaceSnippet("YouTube: https://www.youtube.com/watch?v=")} className={shellButton}>YouTube</button>
+                    <button type="button" onClick={() => insertWorkspaceSnippet(`PDF: ${lesson.documentName}`)} className={shellButton}>PDF</button>
+                    <button type="button" onClick={() => workspaceFileInputRef.current?.click()} className={shellButton}>Image / Upload</button>
+                    <button type="button" onClick={() => setWorkspaceVisibility((value) => value === "private" ? "published" : "private")} className={shellButton}>{workspaceVisibility === "private" ? "Publish" : "Make private"}</button>
+                  </div>
+
+                  <input
+                    ref={workspaceFileInputRef}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    multiple
+                    className="hidden"
+                    onChange={(event) => attachWorkspaceFiles(event.target.files)}
+                  />
+
+                  <input
+                    type="text"
+                    value={workspaceTitle}
+                    onChange={(event) => setWorkspaceTitle(event.target.value)}
+                    placeholder="Workspace title"
+                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100 outline-none placeholder:text-slate-500"
+                  />
+
+                  <textarea
+                    value={workspaceBody}
+                    onChange={(event) => setWorkspaceBody(event.target.value)}
+                    onPaste={handleWorkspacePaste}
+                    onDrop={handleWorkspaceDrop}
+                    onDragOver={(event) => event.preventDefault()}
+                    placeholder="اكتب شرحك هنا…\n\n- أضف High Yield notes\n- ألصق screenshots مباشرة\n- اسحب صور أو PDF\n- أضف روابط YouTube وجداول وخطوات العلاج"
+                    rows={12}
+                    className="min-h-[320px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-7 text-slate-100 outline-none placeholder:text-slate-500"
+                  />
+
+                  {workspaceAssetCount > 0 && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {workspaceAssets.map((asset) => (
+                        <div key={asset.id} className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+                          {asset.kind === "image" ? (
+                            <img src={asset.dataUrl} alt={asset.name} className="h-36 w-full object-cover" />
+                          ) : (
+                            <div className="flex h-36 items-center justify-center bg-slate-900/60 text-xs text-slate-400">{asset.kind.toUpperCase()}</div>
+                          )}
+                          <div className="flex items-center justify-between gap-2 px-3 py-2">
+                            <div className="min-w-0 text-xs text-slate-300">
+                              <div className="truncate font-medium text-slate-100">{asset.name}</div>
+                              <div className="mt-0.5 text-[11px] text-slate-500">{asset.kind}</div>
+                            </div>
+                            <button type="button" onClick={() => removeWorkspaceAsset(asset.id)} className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-2 py-1 text-[11px] text-rose-200">Remove</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-3 text-xs leading-6 text-slate-400">
+                    عملي الآن: رفع صور وPDF، سحب وإفلات، لصق صور مباشرة، عناوين، جداول، checklist، code، وروابط YouTube. الحفظ التلقائي يعمل لكل نوتة بشكل مستقل داخل نفس المتصفح.
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-xs text-slate-500">{workspaceAssetCount} asset(s) attached</div>
+                    <button type="button" onClick={() => void saveWorkspace()} className="rounded-2xl bg-gradient-to-r from-[#4f7cff] to-[#7f7cff] px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(79,124,255,0.28)]">
+                      {workspaceSaving ? "Saving…" : "Save workspace"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {rightTab === "notes" && (
                 <div className="flex h-full flex-col gap-3">
                   <textarea
