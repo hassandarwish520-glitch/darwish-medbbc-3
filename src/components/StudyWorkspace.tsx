@@ -1698,7 +1698,9 @@ function LessonViewerWithTools({
             className={`relative overflow-hidden rounded-[24px] border border-white/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] ${darkMode ? "[filter:invert(1)_hue-rotate(180deg)]" : ""}`}
             style={{ width: `min(100%, ${frameWidth}px)`, minHeight: frameHeight }}>
             <div style={{ minHeight: frameHeight }}>
-              {lessonKind === "html" ? (
+              {(lessonKind === "pdf" || fileType === "pdf" || lessonKind === "pptx") ? (
+                <LessonViewer id={lessonId} kind={lessonKind} fileType={fileType} />
+              ) : lessonKind === "html" ? (
                 <iframe
                   src={'/api/viewer/' + lessonId + '/html'}
                   className="block w-full bg-white"
@@ -1715,13 +1717,7 @@ function LessonViewerWithTools({
                   draggable={false}
                 />
               ) : (
-                <iframe
-                  src={'/api/viewer/' + lessonId + '/pdf#toolbar=0&navpanes=0&statusbar=0&view=FitH'}
-                  className="block w-full bg-white"
-                  style={{ height: frameHeight }}
-                  title="Lesson"
-                  sandbox="allow-same-origin allow-scripts"
-                />
+                <LessonViewer id={lessonId} kind={lessonKind} fileType={fileType} />
               )}
             </div>
 

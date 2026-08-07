@@ -1,7 +1,7 @@
 import { requireActive } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import IFOMLibraryClient from "./IFOMLibraryClient";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +50,16 @@ function normalizePrivateItem(item: any) {
     source: "private",
     source_label: "My note",
     read_only: false,
+  };
+}
+
+function normalizeAdminIfomItem(item: any) {
+  return {
+    ...item,
+    id: `shared-ifom:${item.id}`,
+    source: "shared",
+    source_label: "From admin",
+    read_only: true,
   };
 }
 
@@ -102,6 +112,7 @@ export default async function IFOMLibraryPage() {
   if (!ctx) redirect("/sign-in");
 
   const db = await createClient();
+  const adminDb = createAdminClient();
 
   const [{ data: privateItems }, sharedItems] = await Promise.all([
     db
@@ -111,6 +122,30 @@ export default async function IFOMLibraryPage() {
       .order("created_at", { ascending: false })
       .limit(500),
     (async () => {
+      const sharedFromAdminIfom = await (async () => {
+        const { data: adminProfiles } = await adminDb
+          .from("profiles")
+          .select("id")
+          .eq("role", "admin")
+          .neq("status", "suspended")
+          .limit(20);
+
+        const adminIds = (adminProfiles ?? [])
+          .map((row: any) => row?.id)
+          .filter((id: unknown): id is string => typeof id === "string" && id.length > 0 && id !== ctx.user.id);
+
+        if (!adminIds.length) return [];
+
+        const { data: adminItems } = await adminDb
+          .from("ifom_library")
+          .select("*")
+          .in("user_id", adminIds)
+          .order("created_at", { ascending: false })
+          .limit(500);
+
+        return (adminItems ?? []).map((item: any) => normalizeAdminIfomItem(item));
+      })();
+
       const sharedSelect = [
         "id",
         "entry_type",
@@ -133,23 +168,28 @@ export default async function IFOMLibraryPage() {
         "ifom_tags",
       ].join(", ");
 
-      const primary = await db
+      const primary = await adminDb
         .from("medical_library_entries")
         .select(sharedSelect)
         .eq("share_to_ifom", true)
         .order("created_at", { ascending: false })
         .limit(300);
 
-      if (!primary.error) return toSharedRows(primary.data).map((row) => normalizeSharedItem(row));
+      if (!primary.error) {
+        return [
+          ...sharedFromAdminIfom,
+          ...toSharedRows(primary.data).map((row) => normalizeSharedItem(row)),
+        ];
+      }
 
       const fallbackQueries = [
-        db
+        adminDb
           .from("medical_library_entries")
           .select("id, entry_type, title, body, quote, subject_slug, created_at, data")
           .contains("data", { share_to_ifom: true })
           .order("created_at", { ascending: false })
           .limit(300),
-        db
+        adminDb
           .from("medical_library_entries")
           .select("id, entry_type, title, body, quote, subject_slug, created_at, data")
           .contains("data", { ifom_shared: true })
@@ -159,10 +199,15 @@ export default async function IFOMLibraryPage() {
 
       for (const attempt of fallbackQueries) {
         const res = await attempt;
-        if (!res.error) return toSharedRows(res.data).map((row) => normalizeSharedItem(row));
+        if (!res.error) {
+          return [
+            ...sharedFromAdminIfom,
+            ...toSharedRows(res.data).map((row) => normalizeSharedItem(row)),
+          ];
+        }
       }
 
-      return [];
+      return sharedFromAdminIfom;
     })(),
   ]);
 
