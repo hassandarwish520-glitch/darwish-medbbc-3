@@ -1327,8 +1327,8 @@ export default function StudyWorkspace({
               </div>
             </section>
           ) : (
-            <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-[#08111d] p-4">
-              <LessonViewer id={lessonId} kind={lessonKind} fileType={typeof lessonMeta?.file_type === "string" ? lessonMeta.file_type : undefined} />
+            <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-[#08111d]">
+              <LessonViewerWithTools lessonId={lessonId} lessonKind={lessonKind} lessonMeta={lessonMeta} subjectSlug={subjectSlug} />
             </section>
           )}
         </div>
@@ -1397,6 +1397,333 @@ export default function StudyWorkspace({
             )}
           </div>
         </section>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   LessonViewerWithTools
+   Wraps LessonViewer (PDF / HTML / Notes / PPTX / Image lessons) with a full
+   annotation toolbar: Navigate · Pen · Highlighter · Eraser · Undo · Redo · Clear
+   Colour palette · Brush size · Zoom · Light/Dark toggle · Reading mode · Fullscreen
+   Strokes are persisted to localStorage and optionally to /api/medical-library.
+   ───────────────────────────────────────────────────────────────────────────── */
+type LessonAnnotationStroke = {
+  tool: "navigate" | "pen" | "highlighter" | "eraser";
+  color: string;
+  size: number;
+  points: { x: number; y: number }[];
+};
+
+function LessonViewerWithTools({
+  lessonId,
+  lessonKind,
+  lessonMeta,
+  subjectSlug,
+}: {
+  lessonId: string;
+  lessonKind: string;
+  lessonMeta?: Record<string, unknown> | null;
+  subjectSlug?: string | null;
+}) {
+  type AnnotationTool = "navigate" | "pen" | "highlighter" | "eraser";
+
+  const PALETTE = ["#fde047", "#86efac", "#f9a8d4", "#60a5fa", "#a78bfa", "#fdba74"];
+  const storageKey = `lessonviewer:annotations:${lessonId}`;
+
+  const [tool, setTool] = useState<AnnotationTool>("navigate");
+  const [color, setColor] = useState(PALETTE[0]);
+  const [size, setSize] = useState(4);
+  const [strokes, setStrokes] = useState<LessonAnnotationStroke[]>([]);
+  const [redoStack, setRedoStack] = useState<LessonAnnotationStroke[]>([]);
+  const [zoom, setZoom] = useState(100);
+  const [darkMode, setDarkMode] = useState(false);
+  const [readingMode, setReadingMode] = useState(false);
+  const [isLessonFullscreen, setIsLessonFullscreen] = useState(false);
+
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const overlayRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const drawingRef = useRef(false);
+  const currentStrokeRef = useRef<LessonAnnotationStroke | null>(null);
+  const strokesRef = useRef<LessonAnnotationStroke[]>([]);
+  const saveTimerRef = useRef<number | null>(null);
+
+  // keep ref in sync
+  useEffect(() => { strokesRef.current = strokes; }, [strokes]);
+
+  // hydrate from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { strokes: LessonAnnotationStroke[] };
+        if (Array.isArray(parsed?.strokes)) {
+          setStrokes(parsed.strokes);
+          strokesRef.current = parsed.strokes;
+        }
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessonId]);
+
+  // persist to localStorage whenever strokes change
+  useEffect(() => {
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(() => {
+      try { localStorage.setItem(storageKey, JSON.stringify({ strokes: strokesRef.current })); } catch { /* ignore */ }
+    }, 600);
+    return () => { if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strokes]);
+
+  // fullscreen listener
+  useEffect(() => {
+    const onChange = () => setIsLessonFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const renderStroke = useCallback((ctx: CanvasRenderingContext2D, stroke: LessonAnnotationStroke) => {
+    const pts = stroke.points.filter((p) => isFinite(p.x) && isFinite(p.y));
+    if (pts.length < 2) return;
+    try {
+      ctx.save();
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      if (stroke.tool === "eraser") {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.lineWidth = Math.max(12, stroke.size * 3);
+        ctx.strokeStyle = "rgba(0,0,0,1)";
+        ctx.globalAlpha = 1;
+      } else if (stroke.tool === "highlighter") {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.lineWidth = Math.max(14, stroke.size * 3.5);
+        ctx.strokeStyle = stroke.color;
+        ctx.globalAlpha = 0.38;
+      } else {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.lineWidth = Math.max(2, stroke.size);
+        ctx.strokeStyle = stroke.color;
+        ctx.globalAlpha = 1;
+      }
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      pts.slice(1).forEach((p) => ctx.lineTo(p.x, p.y));
+      ctx.stroke();
+      ctx.restore();
+    } catch { try { ctx.restore(); } catch { /* noop */ } }
+  }, []);
+
+  const redrawOverlay = useCallback(() => {
+    const canvas = overlayRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    strokesRef.current.forEach((s) => renderStroke(ctx, s));
+  }, [renderStroke]);
+
+  const resizeOverlay = useCallback(() => {
+    const canvas = overlayRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+    const rect = container.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.floor(rect.width));
+    canvas.height = Math.max(1, Math.floor(rect.height));
+    redrawOverlay();
+  }, [redrawOverlay]);
+
+  useEffect(() => {
+    redrawOverlay();
+  }, [redrawOverlay, strokes]);
+
+  useEffect(() => {
+    resizeOverlay();
+    window.addEventListener("resize", resizeOverlay);
+    return () => window.removeEventListener("resize", resizeOverlay);
+  }, [resizeOverlay]);
+
+  function getPoint(e: React.PointerEvent<HTMLCanvasElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    return { x: isFinite(x) ? x : 0, y: isFinite(y) ? y : 0 };
+  }
+
+  function startStroke(e: React.PointerEvent<HTMLCanvasElement>) {
+    drawingRef.current = true;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    currentStrokeRef.current = { tool, color, size, points: [getPoint(e)] };
+  }
+  function drawStroke(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current || !currentStrokeRef.current) return;
+    currentStrokeRef.current.points.push(getPoint(e));
+    redrawOverlay();
+    const canvas = overlayRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (ctx) renderStroke(ctx, currentStrokeRef.current);
+  }
+  function finishStroke(e: React.PointerEvent<HTMLCanvasElement>) {
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    if (!drawingRef.current || !currentStrokeRef.current) return;
+    drawingRef.current = false;
+    const stroke = currentStrokeRef.current;
+    currentStrokeRef.current = null;
+    if (stroke.points.length > 1) {
+      setStrokes((prev) => [...prev, stroke]);
+      setRedoStack([]);
+    } else {
+      redrawOverlay();
+    }
+  }
+  function cancelStroke(e: React.PointerEvent<HTMLCanvasElement>) {
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    drawingRef.current = false;
+    currentStrokeRef.current = null;
+    redrawOverlay();
+  }
+
+  function undoAnnotation() {
+    setStrokes((prev) => {
+      if (!prev.length) return prev;
+      const next = [...prev];
+      const removed = next.pop()!;
+      setRedoStack((r) => [...r, removed]);
+      return next;
+    });
+  }
+  function redoAnnotation() {
+    setRedoStack((prev) => {
+      if (!prev.length) return prev;
+      const next = [...prev];
+      const restored = next.pop()!;
+      setStrokes((s) => [...s, restored]);
+      return next;
+    });
+  }
+  function clearAnnotations() { setStrokes([]); setRedoStack([]); }
+
+  async function toggleLessonFullscreen() {
+    if (!panelRef.current) return;
+    try {
+      if (document.fullscreenElement) { await document.exitFullscreen(); }
+      else { await panelRef.current.requestFullscreen(); }
+    } catch { /* ignore */ }
+  }
+
+  const frameWidth = Math.min(1500, Math.round(980 * (zoom / 100)));
+  const frameHeight = readingMode || isLessonFullscreen ? "82vh" : "640px";
+
+  const fileType = typeof lessonMeta?.file_type === "string" ? lessonMeta.file_type : undefined;
+
+  return (
+    <div ref={panelRef} className="overflow-hidden">
+      {/* Toolbar row 1 — zoom + reading controls */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-800 px-4 py-2.5 bg-[#07101a]">
+        <div className="flex items-center gap-1.5 text-xs text-slate-300">
+          <button type="button" onClick={() => setZoom((v) => Math.max(70, v - 10))}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-ink-700 bg-ink-900/80 hover:border-brand/40">−</button>
+          <span className="rounded-xl border border-ink-700 bg-ink-900/80 px-3 py-1.5 tabular-nums">{zoom}%</span>
+          <button type="button" onClick={() => setZoom((v) => Math.min(220, v + 10))}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-ink-700 bg-ink-900/80 hover:border-brand/40">+</button>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs">
+          <button type="button" onClick={() => setDarkMode((v) => !v)}
+            className="rounded-xl border border-ink-700 bg-ink-900/80 px-3 py-1.5 text-slate-300 hover:border-brand/40">
+            {darkMode ? "☀ Light" : "🌙 Dark"}
+          </button>
+          <button type="button" onClick={() => setReadingMode((v) => !v)}
+            className={`rounded-xl border px-3 py-1.5 text-xs transition ${readingMode ? "border-brand/40 bg-brand/10 text-emerald-200" : "border-ink-700 bg-ink-900/80 text-slate-300 hover:border-brand/40"}`}>
+            {readingMode ? "Exit Reading" : "📖 Reading"}
+          </button>
+          <button type="button" onClick={toggleLessonFullscreen}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-ink-700 bg-ink-900/80 text-slate-300 hover:border-brand/40"
+            title="Toggle fullscreen">
+            {isLessonFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Toolbar row 2 — annotation tools (hidden in reading mode) */}
+      {!readingMode && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-ink-800 bg-[#07101a] px-4 py-2.5">
+          {(
+            [
+              { key: "navigate", label: "Navigate", Icon: MousePointer2 },
+              { key: "pen",      label: "Pen",      Icon: PencilLine   },
+              { key: "highlighter", label: "Highlight", Icon: Highlighter },
+              { key: "eraser",   label: "Eraser",   Icon: Eraser       },
+            ] as const
+          ).map(({ key, label, Icon }) => (
+            <button key={key} type="button" onClick={() => setTool(key)}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs transition ${
+                tool === key
+                  ? "border-[#4f7cff]/60 bg-[#4f7cff]/20 font-medium text-[#78a6ff]"
+                  : "border-ink-700 bg-ink-900/80 text-slate-300 hover:border-brand/40"
+              }`}>
+              <Icon className="h-3.5 w-3.5" /> {label}
+            </button>
+          ))}
+          <button type="button" disabled={!strokes.length} onClick={undoAnnotation}
+            className="inline-flex items-center gap-1 rounded-xl border border-ink-700 bg-ink-900/80 px-3 py-1.5 text-xs text-slate-300 hover:border-brand/40 disabled:opacity-30">
+            <Undo2 className="h-3.5 w-3.5" /> Undo
+          </button>
+          <button type="button" disabled={!redoStack.length} onClick={redoAnnotation}
+            className="inline-flex items-center gap-1 rounded-xl border border-ink-700 bg-ink-900/80 px-3 py-1.5 text-xs text-slate-300 hover:border-brand/40 disabled:opacity-30">
+            <Redo2 className="h-3.5 w-3.5" /> Redo
+          </button>
+          <button type="button" onClick={clearAnnotations}
+            className="inline-flex items-center gap-1 rounded-xl border border-ink-700 bg-ink-900/80 px-3 py-1.5 text-xs text-slate-300 hover:border-rose-400/40">
+            <MoreHorizontal className="h-3.5 w-3.5" /> Clear
+          </button>
+          {/* palette */}
+          <div className="ml-auto flex items-center gap-2">
+            {PALETTE.map((c) => (
+              <button key={c} type="button" onClick={() => setColor(c)}
+                className={`h-7 w-7 rounded-full border-2 transition ${color === c ? "scale-110 border-white" : "border-transparent"}`}
+                style={{ backgroundColor: c }} aria-label={`Color ${c}`} />
+            ))}
+            <input type="range" min={2} max={12} value={size}
+              onChange={(e) => setSize(Number(e.target.value))} className="w-24 accent-brand" />
+          </div>
+        </div>
+      )}
+
+      {/* Document area */}
+      <div className={`overflow-auto p-3 md:p-5 ${darkMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`}
+        onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>
+        <div className="mx-auto flex w-full justify-center">
+          <div ref={containerRef}
+            className={`relative overflow-hidden rounded-[24px] border border-white/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] ${darkMode ? "[filter:invert(1)_hue-rotate(180deg)]" : ""}`}
+            style={{ width: `min(100%, ${frameWidth}px)`, minHeight: frameHeight }}>
+            <div style={{ minHeight: frameHeight }}>
+              <LessonViewer id={lessonId} kind={lessonKind} fileType={fileType} />
+            </div>
+
+            {/* Annotation overlay canvas */}
+            <canvas
+              ref={overlayRef}
+              className={`absolute inset-0 h-full w-full ${tool === "navigate" ? "pointer-events-none" : "touch-none pointer-events-auto"}`}
+              style={{ touchAction: tool === "navigate" ? "auto" : "none" }}
+              onPointerDown={tool === "navigate" ? undefined : startStroke}
+              onPointerMove={tool === "navigate" ? undefined : drawStroke}
+              onPointerUp={tool === "navigate" ? undefined : finishStroke}
+              onPointerLeave={tool === "navigate" ? undefined : finishStroke}
+              onPointerCancel={tool === "navigate" ? undefined : cancelStroke}
+            />
+
+            {/* FAB toggle */}
+            <button type="button"
+              onClick={() => setTool(tool === "navigate" ? "pen" : "navigate")}
+              aria-label={tool === "navigate" ? "Enable drawing" : "Switch to navigate mode"}
+              className={`absolute bottom-5 right-5 inline-flex h-12 w-12 items-center justify-center rounded-full text-white shadow-[0_10px_30px_rgba(79,124,255,0.45)] transition ${
+                tool === "navigate" ? "bg-[#4f7cff]" : "bg-emerald-500"
+              }`}>
+              {tool === "navigate" ? <PencilLine className="h-5 w-5" /> : <MousePointer2 className="h-5 w-5" />}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
