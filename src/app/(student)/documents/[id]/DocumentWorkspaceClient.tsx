@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import BlockEditor from "@/components/BlockEditor";
 import type { Block } from "@/components/BlockEditor";
+import AnnotationPanel from "@/components/AnnotationPanel";
 
 export type { Block } from "@/components/BlockEditor";
 
@@ -266,7 +267,23 @@ export default function DocumentWorkspaceClient({
       </div>
       <div className="flex-1 overflow-hidden bg-black">
         {lesson?.document_url ? (
-          <DocumentViewer lesson={lesson} />
+          <div className="h-full overflow-auto p-3">
+            <AnnotationPanel
+              attachment={{
+                href: lesson.document_url,
+                mime: lesson.document_mime ?? "",
+                name: lesson.document_name ?? lesson.title ?? "Document",
+                lessonId: lesson.id,
+                storageKey: `documentsws:annotation:${workspace.id}:${lesson.id ?? lesson.title ?? "doc"}`,
+              }}
+              lessonId={lesson.id}
+              subjectSlug={
+                typeof (lesson as { subject_slug?: string | null }).subject_slug === "string"
+                  ? (lesson as { subject_slug?: string | null }).subject_slug ?? null
+                  : null
+              }
+            />
+          </div>
         ) : (
           <div className="grid h-full place-items-center p-8 text-center text-slate-400">
             <div>
