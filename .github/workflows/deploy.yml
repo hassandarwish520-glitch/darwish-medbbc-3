@@ -33,26 +33,25 @@ jobs:
       name: production
       url: ${{ steps.deploy.outputs.url }}
     steps:
+      # Project sits at the repo root (no `medbbc/` subfolder), so the
+      # working-directory used to be `./medbbc` and the install step 404'd.
+      # We run all build steps from "." instead.
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v3
         with:
           version: 9
 
-      - name: Install dependencies
-        working-directory: ./medbbc
-        run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       - name: Type check
-        working-directory: ./medbbc
-        run: pnpm exec tsc --noEmit
+        # Type errors do not block deploy (matches previous behaviour).
         continue-on-error: true
+        run: pnpm exec tsc --noEmit
 
       - id: deploy
         name: Deploy to Vercel
@@ -63,4 +62,4 @@ jobs:
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           vercel-args: '--prod'
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: ./medbbc
+          working-directory: .
