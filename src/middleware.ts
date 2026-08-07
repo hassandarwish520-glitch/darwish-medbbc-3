@@ -42,7 +42,7 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/bookmarks") ||
     path.startsWith("/progress") ||
     path.startsWith("/settings") ||
-    path.startsWith("/notes") ||
+    path.startsWith("/documents") ||
     path.startsWith("/ifom-library") ||
     path.startsWith("/videos") ||
     isAdminPage;

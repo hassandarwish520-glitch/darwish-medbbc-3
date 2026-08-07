@@ -10,7 +10,7 @@ import {
   BookOpen,
   BookOpenCheck,
   Bookmark,
-  FileText,
+  Files,
   FlaskConical,
   GraduationCap,
   HardDriveDownload,
@@ -36,8 +36,8 @@ const NAV = [
   { href: "/courses", label: "Courses", icon: GraduationCap },
   { href: "/videos", label: "Videos", icon: PlaySquare },
   { href: "/downloads", label: "Downloads", icon: HardDriveDownload },
-  { href: "/notes", label: "Notes", icon: FileText },
   { href: "/knowledge", label: "Library", icon: Library },
+  { href: "/documents", label: "Documents", icon: Files },
   { href: "/flashcards", label: "Flashcards", icon: Layers },
   { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/bookmarks", label: "Bookmarks", icon: Bookmark },
@@ -53,8 +53,8 @@ const MOBILE_NAV = [
   { href: "/videos", label: "Videos", icon: PlaySquare },
   { href: "/downloads", label: "Downloads", icon: HardDriveDownload },
   { href: "/messages", label: "Messages", icon: MessageSquare },
-  { href: "/notes", label: "Notes", icon: FileText },
   { href: "/knowledge", label: "Library", icon: Library },
+  { href: "/documents", label: "Documents", icon: Files },
 ] as const;
 
 function isActive(path: string, href: string) {
