@@ -1,32 +1,85 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { Document, Page, pdfjs } from "react-pdf";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 import {
-  ChevronLeft, ZoomIn, ZoomOut, Highlighter, PenLine,
-  Moon, Sun, Bookmark, Search, FileText, X, Menu,
-  BookOpen, Plus, Trash2, List, Save, FileX,
+  ArrowLeft,
+  ArrowRight,
+  Bookmark,
+  BookOpen,
+  ChevronLeft,
+  Download,
+  Expand,
+  FileText,
+  Highlighter,
+  Maximize2,
+  Minimize2,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  PenLine,
+  Pin,
+  Search,
+  Share2,
+  Sparkles,
+  Star,
+  Sun,
+  X,
 } from "lucide-react";
 
-type Lesson = { id: string; title: string; kind: string; documentName: string };
-type Sibling = { id: string; title: string; kind: string };
-type NoteItem = { id: string; text: string; createdAt: string };
-type BookmarkItem = { id: string; page: number; label: string };
+import "react-pdf/dist/Page/AnnotationLayer.css";
+import "react-pdf/dist/Page/TextLayer.css";
 
-const OUTLINE = [
+pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+
+type Lesson = { id: string; title: string; kind: string; documentName: string; courseTitle?: string | null };
+type Sibling = { id: string; title: string; kind: string };
+type NoteItem = { id: string; text: string; createdAt: string; page: number };
+type BookmarkItem = { id: string; page: number; label: string };
+type RecentItem = { id: string; title: string; documentName: string; visitedAt: string };
+type OutlineItem = { title: string; page: number; level: number };
+type SearchResult = { page: number; excerpt: string; matchCount: number };
+
+type StoredViewerState = {
+  page: number;
+  zoom: number;
+  darkPdf: boolean;
+  readingMode: boolean;
+  bookmarks: BookmarkItem[];
+  notes: NoteItem[];
+};
+
+const FALLBACK_OUTLINE: OutlineItem[] = [
   { title: "Introduction", page: 1, level: 0 },
-  { title: "Chapter 1: Overview", page: 3, level: 0 },
-  { title: "1.1 Background", page: 3, level: 1 },
-  { title: "1.2 Key Concepts", page: 5, level: 1 },
-  { title: "Chapter 2: Core Topics", page: 8, level: 0 },
-  { title: "2.1 Pathophysiology", page: 8, level: 1 },
-  { title: "2.2 Clinical Features", page: 12, level: 1 },
-  { title: "2.3 Diagnosis", page: 16, level: 1 },
-  { title: "Chapter 3: Management", page: 20, level: 0 },
-  { title: "3.1 Treatment", page: 20, level: 1 },
-  { title: "3.2 Follow-up", page: 24, level: 1 },
-  { title: "References", page: 28, level: 0 },
+  { title: "Hematopoiesis", page: 2, level: 0 },
+  { title: "Anemias", page: 4, level: 0 },
+  { title: "Microcytic", page: 5, level: 1 },
+  { title: "Normocytic", page: 8, level: 1 },
+  { title: "Macrocytic", page: 11, level: 1 },
+  { title: "Leukemia", page: 14, level: 0 },
+  { title: "Lymphoma", page: 18, level: 0 },
 ];
+
+const shellButton =
+  "inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 transition hover:border-[#4f7cff]/40 hover:bg-white/10";
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function prettyTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Recently";
+  return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
 
 export default function NotesViewerClient({
   lesson,
@@ -37,444 +90,677 @@ export default function NotesViewerClient({
   pdfUrl: string | null;
   siblings: Sibling[];
 }) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const viewerShellRef = useRef<HTMLDivElement | null>(null);
+  const chromeTimerRef = useRef<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [rightTab, setRightTab] = useState<"notes" | "bookmarks" | "search">("notes");
   const [darkPdf, setDarkPdf] = useState(false);
   const [highlightMode, setHighlightMode] = useState(false);
   const [penMode, setPenMode] = useState(false);
-  const [zoom, setZoom] = useState(100);
+  const [zoom, setZoom] = useState(120);
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [newNote, setNewNote] = useState("");
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
-  const [currentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [saved, setSaved] = useState(false);
+  const [readingMode, setReadingMode] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [numPages, setNumPages] = useState(0);
+  const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
+  const [outlineItems, setOutlineItems] = useState<OutlineItem[]>(FALLBACK_OUTLINE);
+  const [searchIndex, setSearchIndex] = useState<SearchResult[]>([]);
+  const [viewerWidth, setViewerWidth] = useState(900);
+  const [chromeVisible, setChromeVisible] = useState(true);
+  const [recentNotes, setRecentNotes] = useState<RecentItem[]>([]);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
 
-  const addNote = () => {
+  const storageKey = `notes-viewer:${lesson.id}`;
+  const recentStorageKey = "notes-viewer:recent";
+
+  const revealChrome = useCallback(() => {
+    setChromeVisible(true);
+    if (chromeTimerRef.current) window.clearTimeout(chromeTimerRef.current);
+    if (readingMode || isFullscreen) {
+      chromeTimerRef.current = window.setTimeout(() => setChromeVisible(false), 2600);
+    }
+  }, [isFullscreen, readingMode]);
+
+  const closeChromeTimer = useCallback(() => {
+    if (chromeTimerRef.current) {
+      window.clearTimeout(chromeTimerRef.current);
+      chromeTimerRef.current = null;
+    }
+  }, []);
+
+  const activeBookmark = useMemo(() => bookmarks.find((bookmark) => bookmark.page === currentPage), [bookmarks, currentPage]);
+
+  const progress = numPages > 0 ? Math.round((currentPage / numPages) * 100) : 0;
+  const effectiveOutline = outlineItems.length ? outlineItems : FALLBACK_OUTLINE;
+  const filteredOutline = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return effectiveOutline;
+    return effectiveOutline.filter((item) => item.title.toLowerCase().includes(query));
+  }, [effectiveOutline, searchQuery]);
+
+  const pageWidth = useMemo(() => {
+    const shellWidth = clamp(viewerWidth - (readingMode ? 32 : 72), 280, 1600);
+    const widthByZoom = Math.round(shellWidth * (zoom / 120));
+    return clamp(widthByZoom, 260, readingMode ? 1480 : 1180);
+  }, [readingMode, viewerWidth, zoom]);
+
+  useEffect(() => {
+    const syncSize = () => setViewerWidth(viewerShellRef.current?.clientWidth ?? 900);
+    syncSize();
+    const observer = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(syncSize)
+      : null;
+    if (observer && viewerShellRef.current) observer.observe(viewerShellRef.current);
+    window.addEventListener("resize", syncSize);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", syncSize);
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<StoredViewerState>;
+      if (typeof parsed.page === "number") setCurrentPage(parsed.page);
+      if (typeof parsed.zoom === "number") setZoom(clamp(parsed.zoom, 60, 400));
+      if (typeof parsed.darkPdf === "boolean") setDarkPdf(parsed.darkPdf);
+      if (typeof parsed.readingMode === "boolean") setReadingMode(parsed.readingMode);
+      if (Array.isArray(parsed.bookmarks)) setBookmarks(parsed.bookmarks);
+      if (Array.isArray(parsed.notes)) setNotes(parsed.notes);
+    } catch {
+      // ignore invalid persisted state
+    }
+
+    try {
+      const rawRecent = window.localStorage.getItem(recentStorageKey);
+      if (!rawRecent) return;
+      const parsedRecent = JSON.parse(rawRecent) as RecentItem[];
+      setRecentNotes(Array.isArray(parsedRecent) ? parsedRecent : []);
+    } catch {
+      // ignore invalid recent notes
+    }
+  }, [recentStorageKey, storageKey]);
+
+  useEffect(() => {
+    const payload: StoredViewerState = {
+      page: currentPage,
+      zoom,
+      darkPdf,
+      readingMode,
+      bookmarks,
+      notes,
+    };
+    window.localStorage.setItem(storageKey, JSON.stringify(payload));
+  }, [bookmarks, currentPage, darkPdf, notes, readingMode, storageKey, zoom]);
+
+  useEffect(() => {
+    const nextRecent: RecentItem[] = [
+      {
+        id: lesson.id,
+        title: lesson.title,
+        documentName: lesson.documentName,
+        visitedAt: new Date().toISOString(),
+      },
+      ...recentNotes.filter((item) => item.id !== lesson.id),
+    ].slice(0, 6);
+    setRecentNotes(nextRecent);
+    window.localStorage.setItem(recentStorageKey, JSON.stringify(nextRecent));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lesson.id]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    revealChrome();
+    return closeChromeTimer;
+  }, [closeChromeTimer, revealChrome]);
+
+  useEffect(() => {
+    if (numPages > 0) {
+      setCurrentPage((value) => clamp(value, 1, numPages));
+    }
+  }, [numPages]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea") return;
+
+      if (event.key === "ArrowLeft") setCurrentPage((page) => clamp(page - 1, 1, Math.max(1, numPages || 9999)));
+      if (event.key === "ArrowRight") setCurrentPage((page) => clamp(page + 1, 1, Math.max(1, numPages || 9999)));
+      if (event.key === "f" || event.key === "F") {
+        event.preventDefault();
+        void toggleFullscreen();
+      }
+      if ((event.key === "+" || event.key === "=") && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        setZoom((value) => clamp(value + 10, 60, 400));
+      }
+      if (event.key === "-" && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        setZoom((value) => clamp(value - 10, 60, 400));
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [numPages]);
+
+  useEffect(() => {
+    if (!pdfDoc) return;
+    const doc = pdfDoc;
+    let cancelled = false;
+
+    async function buildOutline() {
+      try {
+        const outline = await doc.getOutline();
+        if (!outline?.length) {
+          if (!cancelled) setOutlineItems(FALLBACK_OUTLINE);
+          return;
+        }
+
+        const nextItems: OutlineItem[] = [];
+        const walk = async (items: any[], level: number) => {
+          for (const item of items) {
+            let page = 1;
+            try {
+              const resolvedDest = typeof item.dest === "string" ? await doc.getDestination(item.dest) : item.dest;
+              if (Array.isArray(resolvedDest) && resolvedDest[0]) {
+                const pageIndex = await doc.getPageIndex(resolvedDest[0]);
+                page = pageIndex + 1;
+              }
+            } catch {
+              page = 1;
+            }
+            nextItems.push({ title: item.title || `Page ${page}`, page, level });
+            if (Array.isArray(item.items) && item.items.length) {
+              await walk(item.items, level + 1);
+            }
+          }
+        };
+
+        await walk(outline as any[], 0);
+        if (!cancelled && nextItems.length) setOutlineItems(nextItems);
+      } catch {
+        if (!cancelled) setOutlineItems(FALLBACK_OUTLINE);
+      }
+    }
+
+    async function buildSearchIndex() {
+      try {
+        const pages: SearchResult[] = [];
+        for (let page = 1; page <= doc.numPages; page += 1) {
+          const pdfPage = await doc.getPage(page);
+          const textContent = await pdfPage.getTextContent();
+          const text = textContent.items
+            .map((item: any) => (typeof item.str === "string" ? item.str : ""))
+            .join(" ")
+            .replace(/\s+/g, " ")
+            .trim();
+          pages.push({ page, excerpt: text, matchCount: 0 });
+          if (cancelled) return;
+        }
+        if (!cancelled) setSearchIndex(pages);
+      } catch {
+        if (!cancelled) setSearchIndex([]);
+      }
+    }
+
+    void buildOutline();
+    void buildSearchIndex();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfDoc]);
+
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return [] as SearchResult[];
+
+    return searchIndex
+      .map((item) => {
+        const haystack = item.excerpt.toLowerCase();
+        const firstIndex = haystack.indexOf(query);
+        if (firstIndex === -1) return null;
+        const matchCount = haystack.split(query).length - 1;
+        const start = Math.max(0, firstIndex - 60);
+        const end = Math.min(item.excerpt.length, firstIndex + query.length + 90);
+        const excerpt = `${start > 0 ? "…" : ""}${item.excerpt.slice(start, end)}${end < item.excerpt.length ? "…" : ""}`;
+        return { page: item.page, excerpt, matchCount };
+      })
+      .filter(Boolean) as SearchResult[];
+  }, [searchIndex, searchQuery]);
+
+  const searchAwareTextRenderer = useCallback((textItem: { str: string }) => {
+    const query = searchQuery.trim();
+    if (!query) return textItem.str;
+    const regex = new RegExp(`(${escapeRegExp(query)})`, "gi");
+    return textItem.str.replace(regex, `<mark style=\"background:rgba(251,191,36,0.45);color:inherit;border-radius:2px;padding:0 1px;\">$1</mark>`);
+  }, [searchQuery]);
+
+  const addNote = useCallback(() => {
     if (!newNote.trim()) return;
-    setNotes(prev => [
-      { id: crypto.randomUUID(), text: newNote.trim(), createdAt: new Date().toLocaleTimeString() },
+    setNotes((prev) => [
+      {
+        id: crypto.randomUUID(),
+        text: newNote.trim(),
+        createdAt: new Date().toISOString(),
+        page: currentPage,
+      },
       ...prev,
     ]);
     setNewNote("");
     setSaved(false);
-  };
+    setRightTab("notes");
+    setRightPanelOpen(true);
+  }, [currentPage, newNote]);
 
-  const deleteNote = (id: string) => setNotes(prev => prev.filter(n => n.id !== id));
+  const deleteNote = useCallback((id: string) => setNotes((prev) => prev.filter((note) => note.id !== id)), []);
 
-  const addBookmark = () => {
-    if (bookmarks.find(b => b.page === currentPage)) return;
-    setBookmarks(prev => [...prev, { id: crypto.randomUUID(), page: currentPage, label: `Page ${currentPage}` }]);
-  };
+  const addBookmark = useCallback(() => {
+    setBookmarks((prev) => {
+      if (prev.some((bookmark) => bookmark.page === currentPage)) return prev;
+      return [...prev, { id: crypto.randomUUID(), page: currentPage, label: `Page ${currentPage}` }].sort((a, b) => a.page - b.page);
+    });
+    setRightTab("bookmarks");
+    setRightPanelOpen(true);
+  }, [currentPage]);
 
-  const filteredOutline = searchQuery
-    ? OUTLINE.filter(i => i.title.toLowerCase().includes(searchQuery.toLowerCase()))
-    : OUTLINE;
+  const toggleFullscreen = useCallback(async () => {
+    if (!rootRef.current) return;
+    if (document.fullscreenElement) {
+      await document.exitFullscreen().catch(() => undefined);
+      return;
+    }
+    await rootRef.current.requestFullscreen().catch(() => undefined);
+  }, []);
+
+  const shareDocument = useCallback(async () => {
+    try {
+      const shareData = {
+        title: lesson.documentName,
+        text: `${lesson.courseTitle || lesson.title} — ${lesson.documentName}`,
+        url: window.location.href,
+      };
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        setCopyStatus("Link copied");
+        window.setTimeout(() => setCopyStatus(null), 1800);
+      }
+    } catch {
+      // user cancelled share
+    }
+  }, [lesson.courseTitle, lesson.documentName, lesson.title]);
+
+  const goToPage = useCallback((page: number) => {
+    setCurrentPage(clamp(page, 1, Math.max(1, numPages || page)));
+    revealChrome();
+  }, [numPages, revealChrome]);
+
+  const onWheelZoom = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    const delta = event.deltaY < 0 ? 8 : -8;
+    setZoom((value) => clamp(value + delta, 60, 400));
+  }, []);
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 4rem)", background: "var(--c-bg)" }}>
-      {/* ── TOP BAR ── */}
-      <div
-        className="flex items-center gap-3 px-4 py-2.5 border-b shrink-0 z-10"
-        style={{ background: "var(--c-surface)", borderColor: "var(--c-border)" }}
-      >
-        <Link
-          href="/courses"
-          className="flex items-center gap-1.5 text-sm transition hover:text-white shrink-0"
-          style={{ color: "var(--c-text-3)" }}
-        >
-          <ChevronLeft className="h-4 w-4" /> Back
-        </Link>
-        <div className="h-4 w-px" style={{ background: "var(--c-border)" }} />
-        <FileText className="h-4 w-4 shrink-0" style={{ color: "var(--c-brand)" }} />
-        <h1 className="text-sm font-semibold truncate flex-1" style={{ color: "var(--c-text-1)" }}>
-          {lesson.documentName}
-        </h1>
-        <button
-          onClick={addBookmark}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border transition hover:border-brand/40 shrink-0"
-          style={{
-            borderColor: bookmarks.find(b => b.page === currentPage) ? "var(--c-brand)" : "var(--c-border)",
-            color: bookmarks.find(b => b.page === currentPage) ? "var(--c-brand)" : "var(--c-text-3)",
-          }}
-        >
-          <Bookmark className="h-3.5 w-3.5" />
-          Bookmark
-        </button>
+    <div
+      ref={rootRef}
+      className="relative flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden bg-[#050b14] text-white"
+      onMouseMove={revealChrome}
+      onTouchStart={revealChrome}
+    >
+      <div className={`border-b border-white/10 bg-[#07111d]/95 backdrop-blur transition-all duration-300 ${readingMode && !chromeVisible ? "pointer-events-none -translate-y-full opacity-0" : "translate-y-0 opacity-100"}`}>
+        <div className="flex flex-wrap items-center gap-2 px-3 py-3 md:px-5">
+          <Link href="/courses" className={shellButton}>
+            <ChevronLeft className="h-4 w-4" />
+            <span>Back</span>
+          </Link>
+          <div className="min-w-0 flex-1 px-1">
+            <div className="truncate text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+              {lesson.courseTitle || lesson.title}
+            </div>
+            <div className="truncate text-sm font-semibold text-white md:text-base">{lesson.documentName}</div>
+          </div>
+          <a href={pdfUrl ?? "#"} target="_blank" rel="noreferrer" className={shellButton}>
+            <Download className="h-4 w-4" /> Download
+          </a>
+          <button type="button" onClick={shareDocument} className={shellButton}>
+            <Share2 className="h-4 w-4" /> Share
+          </button>
+          <button type="button" onClick={addBookmark} className={shellButton}>
+            <Bookmark className={`h-4 w-4 ${activeBookmark ? "text-yellow-300" : ""}`} /> Bookmark
+          </button>
+          <button type="button" onClick={() => void toggleFullscreen()} className={shellButton}>
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Expand className="h-4 w-4" />}
+            {isFullscreen ? "Exit" : "Full Screen"}
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-white/5 px-3 py-2 md:px-5">
+          <button type="button" onClick={addBookmark} className={shellButton}>
+            <Star className="h-4 w-4 text-yellow-300" /> Bookmark Page
+          </button>
+          <button
+            type="button"
+            onClick={() => { setHighlightMode((value) => !value); setPenMode(false); }}
+            className={`${shellButton} ${highlightMode ? "border-yellow-300/40 bg-yellow-300/10 text-yellow-200" : ""}`}
+          >
+            <Highlighter className="h-4 w-4" /> Highlight
+          </button>
+          <button
+            type="button"
+            onClick={() => { setPenMode((value) => !value); setHighlightMode(false); setRightPanelOpen(true); setRightTab("notes"); }}
+            className={`${shellButton} ${penMode ? "border-sky-300/40 bg-sky-300/10 text-sky-200" : ""}`}
+          >
+            <PenLine className="h-4 w-4" /> Add Note
+          </button>
+          <button type="button" onClick={addBookmark} className={shellButton}>
+            <Pin className="h-4 w-4 text-rose-300" /> Add Pin
+          </button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => setDarkPdf((value) => !value)} className={shellButton}>
+              {darkPdf ? <Sun className="h-4 w-4 text-amber-300" /> : <Moon className="h-4 w-4 text-violet-300" />}
+              {darkPdf ? "Light" : "Dark Reading Mode"}
+            </button>
+            <button type="button" onClick={() => setReadingMode((value) => !value)} className={shellButton}>
+              <Sparkles className="h-4 w-4 text-emerald-300" />
+              {readingMode ? "Exit Reading" : "Reading Mode"}
+            </button>
+            <button type="button" onClick={() => setSidebarOpen((value) => !value)} className={shellButton}>
+              {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />} Outline
+            </button>
+            <button type="button" onClick={() => setRightPanelOpen((value) => !value)} className={shellButton}>
+              {rightPanelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />} Panel
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* ── BODY (sidebar + pdf + right panel) ── */}
-      <div className="flex flex-1 overflow-hidden">
-
-        {/* LEFT SIDEBAR — Outline */}
-        <aside
-          className="flex flex-col border-r shrink-0 transition-all duration-300"
-          style={{
-            width: sidebarOpen ? "220px" : "0px",
-            overflow: "hidden",
-            borderColor: "var(--c-border)",
-            background: "var(--c-surface)",
-          }}
-        >
-          <div
-            className="flex items-center justify-between px-4 py-3 border-b shrink-0"
-            style={{ borderColor: "var(--c-border)" }}
-          >
-            <div className="flex items-center gap-2">
-              <List className="h-4 w-4" style={{ color: "var(--c-brand)" }} />
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--c-text-1)" }}>
-                Outline
-              </span>
-            </div>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="rounded-lg p-1 transition hover:bg-black/10"
-            >
-              <X className="h-3.5 w-3.5" style={{ color: "var(--c-text-3)" }} />
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto py-2">
-            {OUTLINE.map((item, i) => (
-              <button
-                key={i}
-                className="w-full text-left flex items-center gap-2 py-2 text-sm transition hover:bg-black/5"
-                style={{
-                  paddingLeft: `${12 + item.level * 14}px`,
-                  paddingRight: "12px",
-                  color: item.level === 0 ? "var(--c-text-1)" : "var(--c-text-3)",
-                  fontWeight: item.level === 0 ? "600" : "400",
-                }}
-              >
-                {item.level === 0
-                  ? <BookOpen className="h-3 w-3 shrink-0" style={{ color: "var(--c-brand)" }} />
-                  : <div className="h-1 w-1 rounded-full shrink-0" style={{ background: "var(--c-text-4)" }} />
-                }
-                <span className="truncate text-xs">{item.title}</span>
-                <span className="ml-auto text-[10px] shrink-0" style={{ color: "var(--c-text-4)" }}>
-                  p.{item.page}
-                </span>
-              </button>
-            ))}
-
-            {siblings.length > 0 && (
-              <>
-                <div className="mt-4 px-3 mb-1">
-                  <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--c-text-4)" }}>
-                    Course Lessons
-                  </span>
-                </div>
-                {siblings.map(s => (
-                  <Link
-                    key={s.id}
-                    href={`/notes/${s.id}`}
-                    className="flex items-center gap-2 px-3 py-2 text-xs transition hover:bg-black/5"
-                    style={{ color: s.id === lesson.id ? "var(--c-brand)" : "var(--c-text-3)" }}
-                  >
-                    <FileText className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{s.title}</span>
-                  </Link>
-                ))}
-              </>
-            )}
-          </div>
-        </aside>
-
-        {/* CENTER — PDF Viewer */}
-        <main className="flex-1 relative overflow-hidden flex flex-col">
-          {/* Pdf area */}
-          <div
-            className="flex-1 relative overflow-auto"
-            style={{ filter: darkPdf ? "invert(1) hue-rotate(180deg)" : "none" }}
-          >
-            {!sidebarOpen && (
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="absolute top-4 left-4 z-10 flex h-8 w-8 items-center justify-center rounded-xl border transition hover:border-brand/40"
-                style={{ background: "var(--c-card)", borderColor: "var(--c-border)" }}
-                title="Show Outline"
-              >
-                <Menu className="h-4 w-4" style={{ color: "var(--c-text-2)" }} />
-              </button>
-            )}
-
-            {pdfUrl ? (
-              <iframe
-                src={`${pdfUrl}#toolbar=0&navpanes=0&statusbar=0&scrollbar=0&view=FitH`}
-                className="w-full border-0"
-                style={{
-                  height: "100%",
-                  transform: zoom !== 100 ? `scale(${zoom / 100})` : undefined,
-                  transformOrigin: "top center",
-                  minHeight: zoom !== 100 ? `${100 / (zoom / 100)}%` : "100%",
-                }}
-                title={lesson.title}
-                sandbox="allow-same-origin allow-scripts"
-              />
-            ) : (
-              <div
-                className="flex flex-col items-center justify-center h-full gap-4"
-                style={{ color: "var(--c-text-3)" }}
-              >
-                <FileX className="h-16 w-16 opacity-20" />
-                <p className="text-sm">No PDF attached to this lesson</p>
-                <Link href="/courses" className="btn-ghost text-sm">Browse courses</Link>
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {!readingMode && sidebarOpen && (
+          <aside className="hidden w-[280px] shrink-0 border-r border-white/10 bg-[#08111d] lg:flex lg:flex-col">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Outline</div>
+                <div className="mt-1 text-sm text-slate-200">Jump to any section</div>
               </div>
-            )}
+              <button type="button" onClick={() => setSidebarOpen(false)} className="rounded-xl border border-white/10 bg-white/5 p-2 text-slate-300">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
+              <div className="space-y-1 rounded-2xl border border-white/10 bg-white/[0.03] p-2">
+                {filteredOutline.map((item, index) => (
+                  <button
+                    key={`${item.title}-${index}`}
+                    type="button"
+                    onClick={() => goToPage(item.page)}
+                    className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition hover:bg-white/10 ${currentPage === item.page ? "bg-[#4f7cff]/15 text-white" : "text-slate-300"}`}
+                    style={{ paddingLeft: `${12 + item.level * 16}px` }}
+                  >
+                    {item.level === 0 ? <BookOpen className="h-3.5 w-3.5 shrink-0 text-[#78a6ff]" /> : <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-500" />}
+                    <span className="truncate text-xs">{item.title}</span>
+                    <span className="ml-auto text-[10px] text-slate-500">p.{item.page}</span>
+                  </button>
+                ))}
+              </div>
+
+              {siblings.length > 0 && (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Related lessons</div>
+                  <div className="space-y-1.5">
+                    {siblings.map((sibling) => (
+                      <Link
+                        key={sibling.id}
+                        href={`/notes/${sibling.id}`}
+                        className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs transition hover:bg-white/10 ${sibling.id === lesson.id ? "bg-[#4f7cff]/12 text-white" : "text-slate-300"}`}
+                      >
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-[#78a6ff]" />
+                        <span className="truncate">{sibling.title}</span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {recentNotes.length > 0 && (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Recent Notes</div>
+                  <div className="space-y-1.5">
+                    {recentNotes.map((item) => (
+                      <Link key={item.id} href={`/notes/${item.id}`} className="block rounded-xl px-3 py-2 text-xs text-slate-300 transition hover:bg-white/10">
+                        <div className="truncate font-medium text-slate-100">✓ {item.documentName}</div>
+                        <div className="mt-0.5 truncate text-[10px] text-slate-500">{prettyTime(item.visitedAt)}</div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </aside>
+        )}
+
+        <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#09111a]">
+          <div ref={viewerShellRef} className="relative flex-1 overflow-auto px-3 py-4 md:px-6 md:py-6" onWheel={onWheelZoom}>
+            <div className="mx-auto flex min-h-full w-full items-start justify-center">
+              <div className={`w-full rounded-[28px] border border-white/10 bg-[#0d1624] p-3 shadow-[0_24px_60px_rgba(0,0,0,0.32)] transition-all duration-300 md:p-5 ${readingMode ? "max-w-none" : "max-w-[1280px]"}`}>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/10 bg-[#07101c] px-4 py-3 text-xs text-slate-300">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-400">{lesson.kind}</span>
+                    <span>{numPages ? `Page ${currentPage} / ${numPages}` : `Page ${currentPage}`}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                    <span>{zoom}% zoom</span>
+                    {highlightMode && <span className="rounded-full border border-yellow-300/25 bg-yellow-300/10 px-2 py-1 text-yellow-200">Highlight active</span>}
+                    {penMode && <span className="rounded-full border border-sky-300/25 bg-sky-300/10 px-2 py-1 text-sky-200">Note mode</span>}
+                  </div>
+                </div>
+
+                <div className={`relative overflow-hidden rounded-[28px] border border-white/10 bg-[#d7dde6] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition-all duration-300 ${darkPdf ? "bg-[#9ca3af]" : ""}`}>
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),_transparent_55%)]" />
+                  <div className="relative mx-auto flex w-full justify-center">
+                    {pdfUrl ? (
+                      <div className={`overflow-hidden rounded-[22px] border border-black/10 bg-white shadow-[0_30px_70px_rgba(15,23,42,0.22)] transition-all duration-300 ${darkPdf ? "[filter:invert(1)_hue-rotate(180deg)]" : ""}`}>
+                        <Document
+                          file={pdfUrl}
+                          loading={<div className="grid min-h-[70vh] place-items-center px-6 text-sm text-slate-500">Loading your note…</div>}
+                          error={<div className="grid min-h-[70vh] place-items-center px-6 text-sm text-red-500">Unable to load this document.</div>}
+                          onLoadSuccess={(doc) => {
+                            setPdfDoc(doc);
+                            setNumPages(doc.numPages);
+                          }}
+                        >
+                          <Page
+                            pageNumber={currentPage}
+                            width={pageWidth}
+                            renderAnnotationLayer
+                            renderTextLayer
+                            customTextRenderer={searchAwareTextRenderer}
+                            className="transition-all duration-300"
+                          />
+                        </Document>
+                      </div>
+                    ) : (
+                      <div className="grid min-h-[70vh] w-full place-items-center rounded-[22px] border border-dashed border-slate-300 bg-white text-slate-500">
+                        No PDF attached to this lesson
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* FLOATING TOOLBAR */}
-          <div
-            className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-2xl border px-3 py-2"
-            style={{
-              background: "var(--c-card)",
-              borderColor: "var(--c-border)",
-              boxShadow: "0 8px 40px rgba(0,0,0,0.25)",
-              backdropFilter: "blur(12px)",
-              zIndex: 20,
-            }}
-          >
-            {/* Zoom out */}
-            <button
-              onClick={() => setZoom(z => Math.max(50, z - 10))}
-              className="flex h-8 w-8 items-center justify-center rounded-xl transition hover:bg-black/10"
-              title="Zoom Out"
-            >
-              <ZoomOut className="h-4 w-4" style={{ color: "var(--c-text-2)" }} />
-            </button>
-            <span
-              className="text-xs font-semibold w-10 text-center select-none"
-              style={{ color: "var(--c-text-3)" }}
-            >
-              {zoom}%
-            </span>
-            <button
-              onClick={() => setZoom(z => Math.min(200, z + 10))}
-              className="flex h-8 w-8 items-center justify-center rounded-xl transition hover:bg-black/10"
-              title="Zoom In"
-            >
-              <ZoomIn className="h-4 w-4" style={{ color: "var(--c-text-2)" }} />
-            </button>
-
-            <div className="w-px h-5 mx-1" style={{ background: "var(--c-border)" }} />
-
-            {/* Highlight */}
-            <button
-              onClick={() => { setHighlightMode(h => !h); setPenMode(false); }}
-              className="flex h-8 w-8 items-center justify-center rounded-xl transition"
-              style={{ background: highlightMode ? "rgba(251,191,36,0.15)" : "transparent" }}
-              title="Highlight Mode"
-            >
-              <Highlighter className="h-4 w-4" style={{ color: highlightMode ? "#fbbf24" : "var(--c-text-2)" }} />
-            </button>
-
-            {/* Pen */}
-            <button
-              onClick={() => { setPenMode(p => !p); setHighlightMode(false); }}
-              className="flex h-8 w-8 items-center justify-center rounded-xl transition"
-              style={{ background: penMode ? "rgba(96,165,250,0.15)" : "transparent" }}
-              title="Pen Mode"
-            >
-              <PenLine className="h-4 w-4" style={{ color: penMode ? "#60a5fa" : "var(--c-text-2)" }} />
-            </button>
-
-            <div className="w-px h-5 mx-1" style={{ background: "var(--c-border)" }} />
-
-            {/* Dark mode toggle */}
-            <button
-              onClick={() => setDarkPdf(d => !d)}
-              className="flex h-8 w-8 items-center justify-center rounded-xl transition"
-              style={{ background: darkPdf ? "rgba(167,139,250,0.15)" : "transparent" }}
-              title="Toggle PDF Dark Mode"
-            >
-              {darkPdf
-                ? <Sun className="h-4 w-4" style={{ color: "#a78bfa" }} />
-                : <Moon className="h-4 w-4" style={{ color: "var(--c-text-2)" }} />
-              }
-            </button>
+          <div className={`border-t border-white/10 bg-[#07111d]/95 px-3 py-3 backdrop-blur transition-all duration-300 md:px-6 ${readingMode && !chromeVisible ? "pointer-events-none translate-y-full opacity-0" : "translate-y-0 opacity-100"}`}>
+            <div className="mx-auto flex max-w-[1280px] flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
+                <button type="button" onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1} className={`${shellButton} disabled:cursor-not-allowed disabled:opacity-40`}>
+                  <ArrowLeft className="h-4 w-4" /> السابق
+                </button>
+                <button type="button" onClick={() => setZoom((value) => clamp(value - 10, 60, 400))} className={shellButton}>Zoom -</button>
+                <span className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-200">{zoom}%</span>
+                <button type="button" onClick={() => setZoom((value) => clamp(value + 10, 60, 400))} className={shellButton}>Zoom +</button>
+                <button type="button" onClick={() => goToPage(currentPage + 1)} disabled={numPages > 0 && currentPage >= numPages} className={`${shellButton} disabled:cursor-not-allowed disabled:opacity-40`}>
+                  التالي <ArrowRight className="h-4 w-4" />
+                </button>
+                <span className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs text-slate-400">
+                  {numPages ? `Page ${currentPage} / ${numPages}` : `Page ${currentPage}`}
+                </span>
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
+                  <span>{numPages ? `Page ${currentPage} / ${numPages}` : `Page ${currentPage}`}</span>
+                  <span>{progress}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                  <div className="h-full rounded-full bg-gradient-to-r from-[#4f7cff] via-[#6ea8ff] to-[#9ad5ff] transition-all duration-300" style={{ width: `${progress}%` }} />
+                </div>
+              </div>
+            </div>
           </div>
         </main>
 
-        {/* RIGHT PANEL */}
-        <aside
-          className="w-72 flex flex-col border-l shrink-0"
-          style={{ borderColor: "var(--c-border)", background: "var(--c-surface)" }}
-        >
-          {/* Tabs */}
-          <div className="flex border-b shrink-0" style={{ borderColor: "var(--c-border)" }}>
-            {(["notes", "bookmarks", "search"] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setRightTab(tab)}
-                className="flex-1 py-3 text-xs font-semibold capitalize transition"
-                style={{
-                  color: rightTab === tab ? "var(--c-brand)" : "var(--c-text-3)",
-                  borderBottom: rightTab === tab ? "2px solid var(--c-brand)" : "2px solid transparent",
-                  background: "transparent",
-                }}
-              >
-                {tab === "notes" ? "📝 Notes" : tab === "bookmarks" ? "🔖 Bookmarks" : "🔍 Search"}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab content */}
-          <div className="flex-1 overflow-y-auto p-4">
-
-            {/* NOTES TAB */}
-            {rightTab === "notes" && (
-              <div className="flex flex-col gap-3 h-full">
-                <textarea
-                  value={newNote}
-                  onChange={e => setNewNote(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && e.metaKey) addNote(); }}
-                  placeholder="Write a quick note… (⌘+Enter to save)"
-                  rows={4}
-                  className="w-full rounded-xl border px-3 py-2.5 text-sm resize-none focus:outline-none transition"
-                  style={{
-                    background: "var(--c-input-bg)",
-                    borderColor: "var(--c-input-border)",
-                    color: "var(--c-text-1)",
-                  }}
-                />
-                <button
-                  onClick={addNote}
-                  className="flex items-center justify-center gap-2 w-full rounded-xl py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-                  style={{ background: "linear-gradient(135deg, #10b981, #34d399)" }}
-                >
-                  <Plus className="h-4 w-4" /> Add Note
-                </button>
-
-                <div className="space-y-2 flex-1 overflow-y-auto">
-                  {notes.length === 0 && (
-                    <p className="text-center text-xs py-8" style={{ color: "var(--c-text-4)" }}>
-                      No notes yet.
-                      <br />Add your first note above.
-                    </p>
-                  )}
-                  {notes.map(note => (
-                    <div
-                      key={note.id}
-                      className="rounded-xl border p-3 group"
-                      style={{ background: "var(--c-card)", borderColor: "var(--c-border)" }}
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[10px] font-semibold" style={{ color: "var(--c-brand)" }}>
-                          {note.createdAt}
-                        </span>
-                        <button
-                          onClick={() => deleteNote(note.id)}
-                          className="rounded p-0.5 opacity-0 group-hover:opacity-100 transition"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" style={{ color: "#f87171" }} />
-                        </button>
-                      </div>
-                      <p className="text-sm leading-6" style={{ color: "var(--c-text-2)" }}>
-                        {note.text}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                {notes.length > 0 && (
+        {!readingMode && rightPanelOpen && (
+          <aside className="hidden w-[340px] shrink-0 border-l border-white/10 bg-[#08111d] xl:flex xl:flex-col">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+              <div className="flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+                {(["notes", "bookmarks", "search"] as const).map((tab) => (
                   <button
-                    onClick={() => { setSaved(true); }}
-                    className="flex items-center justify-center gap-2 w-full rounded-xl py-2 text-xs font-semibold border transition hover:border-brand/40"
-                    style={{ borderColor: saved ? "var(--c-brand)" : "var(--c-border)", color: saved ? "var(--c-brand)" : "var(--c-text-3)" }}
+                    key={tab}
+                    type="button"
+                    onClick={() => setRightTab(tab)}
+                    className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${rightTab === tab ? "bg-[#4f7cff] text-white" : "text-slate-400 hover:bg-white/10 hover:text-slate-200"}`}
                   >
-                    <Save className="h-3.5 w-3.5" />
-                    {saved ? "Notes saved ✓" : "Save all notes"}
+                    {tab === "notes" ? "Notes" : tab === "bookmarks" ? "Bookmarks" : "Search"}
                   </button>
-                )}
-              </div>
-            )}
-
-            {/* BOOKMARKS TAB */}
-            {rightTab === "bookmarks" && (
-              <div className="space-y-2">
-                {bookmarks.length === 0 && (
-                  <div className="text-center py-10">
-                    <Bookmark
-                      className="h-10 w-10 mx-auto mb-3 opacity-20"
-                      style={{ color: "var(--c-text-3)" }}
-                    />
-                    <p className="text-xs" style={{ color: "var(--c-text-4)" }}>
-                      No bookmarks yet.
-                      <br />Click &ldquo;Bookmark&rdquo; in the top bar.
-                    </p>
-                  </div>
-                )}
-                {bookmarks.map(bm => (
-                  <div
-                    key={bm.id}
-                    className="flex items-center justify-between rounded-xl border p-3"
-                    style={{ background: "var(--c-card)", borderColor: "var(--c-border)" }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Bookmark className="h-4 w-4" style={{ color: "var(--c-brand)" }} />
-                      <span className="text-sm font-semibold" style={{ color: "var(--c-text-1)" }}>
-                        {bm.label}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setBookmarks(prev => prev.filter(b => b.id !== bm.id))}
-                      className="rounded-lg p-1 transition hover:bg-red-500/10"
-                    >
-                      <X className="h-3.5 w-3.5" style={{ color: "var(--c-text-4)" }} />
-                    </button>
-                  </div>
                 ))}
               </div>
-            )}
+              <button type="button" onClick={() => setRightPanelOpen(false)} className="rounded-xl border border-white/10 bg-white/5 p-2 text-slate-300">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
-            {/* SEARCH TAB */}
-            {rightTab === "search" && (
-              <div className="space-y-3">
-                <div className="relative">
-                  <Search
-                    className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
-                    style={{ color: "var(--c-text-4)" }}
+            <div className="flex-1 overflow-y-auto p-4">
+              {rightTab === "notes" && (
+                <div className="flex h-full flex-col gap-3">
+                  <textarea
+                    value={newNote}
+                    onChange={(event) => setNewNote(event.target.value)}
+                    onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") addNote(); }}
+                    placeholder="Write a quick note…"
+                    rows={5}
+                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-7 text-slate-100 outline-none placeholder:text-slate-500"
                   />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Search sections…"
-                    className="w-full rounded-xl border pl-9 pr-4 py-2.5 text-sm focus:outline-none"
-                    style={{
-                      background: "var(--c-input-bg)",
-                      borderColor: "var(--c-input-border)",
-                      color: "var(--c-text-1)",
-                    }}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  {searchQuery && filteredOutline.length === 0 && (
-                    <p className="text-center text-xs py-6" style={{ color: "var(--c-text-4)" }}>
-                      No sections found
-                    </p>
-                  )}
-                  {filteredOutline.map((item, i) => (
-                    <button
-                      key={i}
-                      className="w-full text-left rounded-xl border p-3 transition hover:border-brand/30"
-                      style={{ background: "var(--c-card)", borderColor: "var(--c-border)" }}
-                    >
-                      <div className="text-sm font-semibold" style={{ color: "var(--c-text-1)" }}>
-                        {item.title}
+                  <button type="button" onClick={addNote} className="rounded-2xl bg-gradient-to-r from-[#4f7cff] to-[#7f7cff] px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(79,124,255,0.28)]">
+                    Save note for page {currentPage}
+                  </button>
+                  <div className="space-y-3 overflow-y-auto">
+                    {notes.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-slate-500">No notes yet.</div>}
+                    {notes.map((note) => (
+                      <div key={note.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <button type="button" onClick={() => goToPage(note.page)} className="text-xs font-semibold text-[#78a6ff]">Page {note.page}</button>
+                          <button type="button" onClick={() => deleteNote(note.id)} className="text-xs text-rose-300">Delete</button>
+                        </div>
+                        <p className="text-sm leading-7 text-slate-200">{note.text}</p>
+                        <div className="mt-3 text-[11px] text-slate-500">{prettyTime(note.createdAt)}</div>
                       </div>
-                      <div className="text-[11px] mt-0.5" style={{ color: "var(--c-text-4)" }}>
-                        Page {item.page}
-                      </div>
+                    ))}
+                  </div>
+                  {notes.length > 0 && (
+                    <button type="button" onClick={() => setSaved(true)} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-semibold text-slate-300">
+                      {saved ? "Notes saved ✓" : "Save all notes"}
                     </button>
+                  )}
+                </div>
+              )}
+
+              {rightTab === "bookmarks" && (
+                <div className="space-y-3">
+                  {bookmarks.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-slate-500">No bookmarks yet.</div>}
+                  {bookmarks.map((bookmark) => (
+                    <div key={bookmark.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                      <button type="button" onClick={() => goToPage(bookmark.page)} className="text-left">
+                        <div className="text-sm font-semibold text-slate-100">{bookmark.label}</div>
+                        <div className="text-[11px] text-slate-500">Jump directly</div>
+                      </button>
+                      <button type="button" onClick={() => setBookmarks((prev) => prev.filter((item) => item.id !== bookmark.id))} className="text-xs text-rose-300">Remove</button>
+                    </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
-        </aside>
+              )}
+
+              {rightTab === "search" && (
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Search inside note…"
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 py-3 pl-10 pr-4 text-sm text-slate-100 outline-none placeholder:text-slate-500"
+                    />
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs text-slate-400">
+                    Search matches are highlighted on the rendered page when available.
+                  </div>
+                  <div className="space-y-2">
+                    {searchQuery && searchResults.length === 0 && filteredOutline.length === 0 && (
+                      <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-slate-500">No results found.</div>
+                    )}
+                    {searchResults.map((result) => (
+                      <button
+                        key={`${result.page}-${result.excerpt.slice(0, 20)}`}
+                        type="button"
+                        onClick={() => goToPage(result.page)}
+                        className="w-full rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-[#4f7cff]/35"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-semibold text-slate-100">Page {result.page}</span>
+                          <span className="text-[11px] text-slate-500">{result.matchCount} matches</span>
+                        </div>
+                        <p className="mt-2 text-xs leading-6 text-slate-300">{result.excerpt}</p>
+                      </button>
+                    ))}
+                    {filteredOutline.map((item, index) => (
+                      <button
+                        key={`${item.title}-outline-${index}`}
+                        type="button"
+                        onClick={() => goToPage(item.page)}
+                        className="w-full rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-[#4f7cff]/35"
+                      >
+                        <div className="text-sm font-semibold text-slate-100">{item.title}</div>
+                        <div className="mt-1 text-[11px] text-slate-500">Outline • Page {item.page}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </aside>
+        )}
       </div>
+
+      {copyStatus && <div className="absolute right-4 top-4 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">{copyStatus}</div>}
     </div>
   );
 }

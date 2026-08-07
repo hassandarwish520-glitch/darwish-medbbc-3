@@ -184,6 +184,11 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
   const [redoStack, setRedoStack] = useState<AnnotationStroke[]>([]);
   const [annotationEntryId, setAnnotationEntryId] = useState<string | null>(null);
   const [annotationReady, setAnnotationReady] = useState(false);
+  const [viewerZoom, setViewerZoom] = useState(100);
+  const [darkReadingMode, setDarkReadingMode] = useState(false);
+  const [readingMode, setReadingMode] = useState(false);
+  const [isAttachmentFullscreen, setIsAttachmentFullscreen] = useState(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
@@ -349,6 +354,12 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
   }, [resizeOverlay]);
 
   useEffect(() => {
+    const onFullscreenChange = () => setIsAttachmentFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
     if (!isHtml) {
       setHtmlSource("");
       setLoadingHtml(false);
@@ -468,8 +479,24 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
     setRedoStack([]);
   }
 
+  async function toggleAttachmentFullscreen() {
+    if (!panelRef.current) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await panelRef.current.requestFullscreen();
+      }
+    } catch {
+      // ignore fullscreen errors on unsupported webviews
+    }
+  }
+
+  const frameHeight = readingMode || isAttachmentFullscreen ? "82vh" : "640px";
+  const frameWidth = Math.min(1500, Math.round(980 * (viewerZoom / 100)));
+
   return (
-    <div className="overflow-hidden rounded-[28px] border border-ink-800 bg-ink-950/90 shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
+    <div ref={panelRef} className="overflow-hidden rounded-[28px] border border-ink-800 bg-ink-950/90 shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
       <div className="border-b border-ink-800 px-4 pt-3 md:px-5">
         <div className="flex items-center gap-6 text-sm">
           <button type="button" className="border-b-2 border-[#4f7cff] pb-2 font-medium text-[#78a6ff]">Attachment</button>
@@ -484,18 +511,21 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
             <div className="mt-1 text-xs text-slate-500">In-app secure attachment view</div>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-300">
-            <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-ink-700 bg-ink-900/80">−</button>
-            <span className="rounded-xl border border-ink-700 bg-ink-900/80 px-3 py-1.5">100%</span>
-            <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-ink-700 bg-ink-900/80">+</button>
-            <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-ink-700 bg-ink-900/80">
+            <button type="button" onClick={() => setViewerZoom((value) => Math.max(70, value - 10))} className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-ink-700 bg-ink-900/80 transition hover:border-brand/40">−</button>
+            <span className="rounded-xl border border-ink-700 bg-ink-900/80 px-3 py-1.5">{viewerZoom}%</span>
+            <button type="button" onClick={() => setViewerZoom((value) => Math.min(220, value + 10))} className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-ink-700 bg-ink-900/80 transition hover:border-brand/40">+</button>
+            <button type="button" onClick={() => setDarkReadingMode((value) => !value)} className="rounded-xl border border-ink-700 bg-ink-900/80 px-3 py-1.5 transition hover:border-brand/40">{darkReadingMode ? "Light" : "Dark"}</button>
+            <button type="button" onClick={() => setReadingMode((value) => !value)} className="rounded-xl border border-ink-700 bg-ink-900/80 px-3 py-1.5 transition hover:border-brand/40">{readingMode ? "Exit Reading" : "Reading"}</button>
+            <button type="button" onClick={toggleAttachmentFullscreen} className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-ink-700 bg-ink-900/80 transition hover:border-brand/40">
               <Expand className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
       </div>
 
-      <div className="border-b border-ink-800 px-4 py-3 md:px-5">
-        <div className="flex flex-wrap items-center gap-2">
+      {!readingMode && (
+        <div className="border-b border-ink-800 px-4 py-3 md:px-5">
+          <div className="flex flex-wrap items-center gap-2">
           <button type="button" className={tool === "navigate" ? "subject-tab active" : "subject-tab"} onClick={() => setTool("navigate")}>
             <MousePointer2 className="h-4 w-4" />
             <span>Navigate</span>
@@ -539,34 +569,39 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
           </div>
         </div>
       </div>
+      )}
 
-      <div ref={containerRef} className="relative min-h-[640px] overflow-hidden bg-white" onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>
+      <div className={`overflow-auto p-3 md:p-5 ${darkReadingMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>
+        <div className="mx-auto flex w-full justify-center">
+          <div ref={containerRef} className={`relative overflow-hidden rounded-[24px] border border-white/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] ${darkReadingMode ? "[filter:invert(1)_hue-rotate(180deg)]" : ""}`} style={{ width: `min(100%, ${frameWidth}px)` }}>
         {isImage ? (
-          <img src={attachment.href} alt={attachment.name} className="block h-full w-full object-contain" draggable={false} />
+          <img src={attachment.href} alt={attachment.name} className="block w-full object-contain" style={{ minHeight: frameHeight, maxHeight: frameHeight }} draggable={false} />
         ) : isPdf ? (
           <iframe
             src={`${attachment.href}#toolbar=0&navpanes=0&statusbar=0&scrollbar=0&view=FitH`}
-            className="block h-[640px] w-full bg-white"
+            className="block w-full bg-white"
+            style={{ height: frameHeight }}
             title={attachment.name}
             sandbox="allow-same-origin allow-scripts"
           />
         ) : isHtml ? (
           loadingHtml ? (
-            <div className="grid h-[640px] place-items-center px-6 text-center text-sm text-slate-500">Loading document…</div>
+            <div className="grid place-items-center px-6 text-center text-sm text-slate-500" style={{ height: frameHeight }}>Loading document…</div>
           ) : failedHtml ? (
-            <div className="grid h-[640px] place-items-center px-6 text-center text-sm text-red-400">
+            <div className="grid place-items-center px-6 text-center text-sm text-red-400" style={{ height: frameHeight }}>
               Unable to render this HTML document inside the workspace. Please try refreshing the page.
             </div>
           ) : (
             <iframe
               srcDoc={htmlSource}
               sandbox="allow-same-origin allow-scripts allow-forms"
-              className="block h-[640px] w-full bg-white"
+              className="block w-full bg-white"
+            style={{ height: frameHeight }}
               title={attachment.name}
             />
           )
         ) : (
-          <iframe src={attachment.href} className="block h-[640px] w-full bg-white" title={attachment.name} />
+          <iframe src={attachment.href} className="block w-full bg-white" style={{ height: frameHeight }} title={attachment.name} />
         )}
 
         <canvas
@@ -587,6 +622,8 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
         >
           {tool === "navigate" ? <PencilLine className="h-5 w-5" /> : <MousePointer2 className="h-5 w-5" />}
         </button>
+          </div>
+        </div>
       </div>
     </div>
   );

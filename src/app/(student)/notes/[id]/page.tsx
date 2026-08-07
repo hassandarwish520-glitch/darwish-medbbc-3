@@ -49,6 +49,16 @@ export default async function NotesViewerPage({
   const pdfUrl = meta?.document_path ? assetHref(meta.document_path) : null;
   const documentName = meta?.document_name ?? lesson.title;
 
+  let courseTitle: string | null = null;
+  if (lesson.course_id) {
+    const { data: course } = await db
+      .from("courses")
+      .select("title")
+      .eq("id", lesson.course_id)
+      .single();
+    courseTitle = (course as { title?: string | null } | null)?.title ?? null;
+  }
+
   // Fetch sibling lessons for outline context
   let siblingLessons: { id: string; title: string; kind: string }[] = [];
   if (lesson.course_id) {
@@ -69,6 +79,7 @@ export default async function NotesViewerPage({
         title: lesson.title,
         kind: lesson.kind,
         documentName,
+        courseTitle,
       }}
       pdfUrl={pdfUrl}
       siblings={siblingLessons}
