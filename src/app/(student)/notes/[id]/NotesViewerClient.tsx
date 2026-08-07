@@ -92,6 +92,7 @@ export default function NotesViewerClient({
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const viewerShellRef = useRef<HTMLDivElement | null>(null);
+  const pdfPanelRef = useRef<HTMLDivElement | null>(null);
   const chromeTimerRef = useRef<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
@@ -116,6 +117,7 @@ export default function NotesViewerClient({
   const [chromeVisible, setChromeVisible] = useState(true);
   const [recentNotes, setRecentNotes] = useState<RecentItem[]>([]);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [isPdfFullscreen, setIsPdfFullscreen] = useState(false);
 
   const storageKey = `notes-viewer:${lesson.id}`;
   const recentStorageKey = "notes-viewer:recent";
@@ -218,7 +220,10 @@ export default function NotesViewerClient({
   }, [lesson.id]);
 
   useEffect(() => {
-    const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+      setIsPdfFullscreen(document.fullscreenElement === pdfPanelRef.current);
+    };
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
@@ -420,6 +425,15 @@ export default function NotesViewerClient({
     setZoom((value) => clamp(value + delta, 60, 400));
   }, []);
 
+  const togglePdfFullscreen = useCallback(async () => {
+    if (!pdfPanelRef.current) return;
+    if (document.fullscreenElement === pdfPanelRef.current) {
+      await document.exitFullscreen().catch(() => undefined);
+      return;
+    }
+    await pdfPanelRef.current.requestFullscreen().catch(() => undefined);
+  }, []);
+
   return (
     <div
       ref={rootRef}
@@ -574,8 +588,14 @@ export default function NotesViewerClient({
                   </div>
                 </div>
 
-                <div className={`relative overflow-hidden rounded-[28px] border border-white/10 bg-[#d7dde6] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition-all duration-300 ${darkPdf ? "bg-[#9ca3af]" : ""}`}>
+                <div ref={pdfPanelRef} className={`relative overflow-hidden rounded-[28px] border border-white/10 bg-[#d7dde6] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition-all duration-300 ${darkPdf ? "bg-[#9ca3af]" : ""}`}>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),_transparent_55%)]" />
+                  <div className="relative mb-3 flex items-center justify-between gap-2 rounded-2xl border border-black/10 bg-white/55 px-3 py-2 text-xs text-slate-700 backdrop-blur-sm">
+                    <div className="font-semibold">{lesson.documentName}</div>
+                    <button type="button" onClick={() => void togglePdfFullscreen()} className="rounded-xl border border-slate-300/70 bg-white/70 px-3 py-1.5 font-semibold text-slate-700 transition hover:bg-white">
+                      {isPdfFullscreen ? "Exit file full screen" : "File full screen"}
+                    </button>
+                  </div>
                   <div className="relative mx-auto flex w-full justify-center">
                     {pdfUrl ? (
                       <div className={`overflow-hidden rounded-[22px] border border-black/10 bg-white shadow-[0_30px_70px_rgba(15,23,42,0.22)] transition-all duration-300 ${darkPdf ? "[filter:invert(1)_hue-rotate(180deg)]" : ""}`}>

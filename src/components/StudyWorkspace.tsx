@@ -56,7 +56,7 @@ type Attachment = {
   name: string;
 } | null;
 
-type PanelKey = "notes" | "whiteboard" | "library";
+type PanelKey = "notes" | "whiteboard" | "library" | "attachment";
 type TelegramLink = { label: string; url: string; resolution?: string | null; size?: string | null };
 type MaterialItem = { label: string; url: string; kind: string; mime?: string | null };
 type PlaylistItem = { id: string; title: string; active: boolean };
@@ -687,9 +687,12 @@ export default function StudyWorkspace({
   const [offlinePackageState, setOfflinePackageState] = useState<"ready" | "partial" | "queued" | null>(null);
   const [playlistOpen, setPlaylistOpen] = useState(true);
   const [noteTimestamp, setNoteTimestamp] = useState(0);
+  const [workspaceVisibility, setWorkspaceVisibility] = useState<"private" | "published">("private");
+  const [workspaceDraftSavedAt, setWorkspaceDraftSavedAt] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const workspaceFileInputRef = useRef<HTMLInputElement | null>(null);
   const drawingRef = useRef(false);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const viewerSectionRef = useRef<HTMLDivElement | null>(null);
@@ -841,6 +844,62 @@ export default function StudyWorkspace({
   const effectiveTelegramLinks = telegramLinks ?? [];
   const showAttachmentInsideWorkspace = Boolean(externalAttachment && viewMode === "split");
   const immersiveMode = viewMode === "focus" || isFullscreen;
+  const workspaceDraftStorageKey = `lesson-workspace-draft:${lessonId}`;
+
+  useEffect(() => {
+    const draft = safeParse<{ title?: string; body?: string; visibility?: "private" | "published"; timestamp?: number }>(safeStorageGet(workspaceDraftStorageKey));
+    if (!draft) return;
+    if (draft.title) setNoteTitle(draft.title);
+    if (draft.body) setNoteBody(draft.body);
+    if (draft.visibility === "private" || draft.visibility === "published") setWorkspaceVisibility(draft.visibility);
+    if (typeof draft.timestamp === "number") setNoteTimestamp(draft.timestamp);
+  }, [workspaceDraftStorageKey]);
+
+  useEffect(() => {
+    safeStorageSet(workspaceDraftStorageKey, JSON.stringify({
+      title: noteTitle,
+      body: noteBody,
+      visibility: workspaceVisibility,
+      timestamp: noteTimestamp,
+    }));
+    setWorkspaceDraftSavedAt(new Date().toISOString());
+  }, [noteBody, noteTitle, noteTimestamp, workspaceDraftStorageKey, workspaceVisibility]);
+
+  function insertWorkspaceSnippet(snippet: string) {
+    setNoteBody((value) => `${value}${value ? "\n" : ""}${snippet}`);
+  }
+
+  function readFilesIntoWorkspace(files: FileList | File[] | null | undefined) {
+    if (!files || !files.length) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === "string" ? reader.result : "";
+        if (!result) return;
+        if (file.type.startsWith("image/")) {
+          insertWorkspaceSnippet(`![${file.name}](${result})`);
+        } else if (file.type === "application/pdf") {
+          insertWorkspaceSnippet(`[PDF Embed: ${file.name}](${result})`);
+        } else {
+          insertWorkspaceSnippet(`[Attachment: ${file.name}](${result})`);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function handleWorkspacePaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = Array.from(event.clipboardData.items || []);
+    const fileItems = items.filter((item) => item.kind === "file");
+    if (!fileItems.length) return;
+    event.preventDefault();
+    readFilesIntoWorkspace(fileItems.map((item) => item.getAsFile()).filter(Boolean) as File[]);
+  }
+
+  function handleWorkspaceDrop(event: React.DragEvent<HTMLTextAreaElement>) {
+    event.preventDefault();
+    readFilesIntoWorkspace(event.dataTransfer.files);
+  }
 
   async function saveEntry(payload: {
     id?: string;
@@ -891,13 +950,16 @@ export default function StudyWorkspace({
         source: lessonKind,
         timestamp: Math.floor(currentTime),
         timeLabel: formatTime(currentTime),
+        visibility: workspaceVisibility,
+        content_format: "workspace_markdown",
       },
     });
     setEditingNoteId(null);
     setNoteBody("");
     setNoteTitle(lessonTitle);
     setNoteTimestamp(currentTime);
-    setStatus("Note saved");
+    safeStorageSet(workspaceDraftStorageKey, JSON.stringify({ title: lessonTitle, body: "", visibility: workspaceVisibility, timestamp: Math.floor(currentTime) }));
+    setStatus("Workspace saved");
   }
 
   async function saveCanvas() {
@@ -1056,6 +1118,8 @@ export default function StudyWorkspace({
     setNoteBody(entry.body || "");
     const ts = typeof entry.data?.timestamp === "number" ? entry.data.timestamp : 0;
     setNoteTimestamp(ts);
+    const visibility = entry.data?.visibility === "published" ? "published" : "private";
+    setWorkspaceVisibility(visibility);
     viewerSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -1115,7 +1179,7 @@ export default function StudyWorkspace({
         <div className="border-b border-ink-800 bg-brand/10 px-4 py-2 text-sm text-emerald-200">{status}</div>
       ) : null}
 
-      <div className={`grid gap-3 p-3 md:p-4 ${viewMode === "split" ? "md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-cols-1"}`}>
+      <div className={`grid gap-3 p-3 md:p-4 ${viewMode === "split" ? "md:grid-cols-[minmax(0,1.03fr)_minmax(360px,0.97fr)]" : "grid-cols-1"}`}>
         <div className="space-y-3">
           {isVideoLesson ? (
             <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-[#08111d] shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
@@ -1151,6 +1215,15 @@ export default function StudyWorkspace({
               </div>
 
               <div className="space-y-3 px-3 pb-3 pt-2">
+                <div className="rounded-[20px] border border-ink-800 bg-[#07111d] px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Lecture Session</div>
+                      <div className="mt-1 text-sm font-semibold text-white">Interactive video workspace</div>
+                    </div>
+                    <div className="text-xs text-slate-400">Layout aligned closer to Notes Reader while keeping all current video actions.</div>
+                  </div>
+                </div>
                 <div className="flex items-center gap-3 text-xs text-slate-400">
                   <button type="button" className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-ink-700 bg-ink-900/80 text-slate-300" disabled>
                     <PlaySquare className="h-3.5 w-3.5" />
@@ -1316,15 +1389,90 @@ export default function StudyWorkspace({
         </div>
 
         <div className={`${viewMode === "focus" ? "hidden" : "block"} min-w-0`}>
-          {showAttachmentInsideWorkspace && externalAttachment ? (
-            <AttachmentErrorBoundary>
-              <AttachmentPanel attachment={externalAttachment} lessonId={lessonId} subjectSlug={subjectSlug} />
-            </AttachmentErrorBoundary>
-          ) : (
-            <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-[#08111d] p-5 text-sm text-slate-400">
-              No attachment is linked to this lesson.
-            </section>
-          )}
+          <section className="overflow-hidden rounded-[24px] border border-ink-800 bg-[#08111d] shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
+            <div className="border-b border-ink-800 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Lecture Workspace</div>
+                  <div className="mt-1 text-sm font-semibold text-white">Teaching Board</div>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                  <span className={`rounded-full border px-2 py-1 ${workspaceVisibility === "published" ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200" : "border-amber-400/30 bg-amber-500/10 text-amber-200"}`}>{workspaceVisibility === "published" ? "Published" : "Private"}</span>
+                  <span>Auto-save {workspaceDraftSavedAt ? new Date(workspaceDraftSavedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "ready"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-4">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                <button type="button" className="subject-tab px-2 text-xs" onClick={() => insertWorkspaceSnippet("# Heading")}>H1</button>
+                <button type="button" className="subject-tab px-2 text-xs" onClick={() => insertWorkspaceSnippet("## Subheading")}>H2</button>
+                <button type="button" className="subject-tab px-2 text-xs" onClick={() => insertWorkspaceSnippet("- [ ] Checklist item")}>Checklist</button>
+                <button type="button" className="subject-tab px-2 text-xs" onClick={() => insertWorkspaceSnippet("> High Yield callout")}>Callout</button>
+                <button type="button" className="subject-tab px-2 text-xs" onClick={() => insertWorkspaceSnippet("| Column 1 | Column 2 |\n| --- | --- |\n| Value | Value |")}>Table</button>
+                <button type="button" className="subject-tab px-2 text-xs" onClick={() => insertWorkspaceSnippet("```\nAlgorithm / code\n```")}>Code</button>
+                <button type="button" className="subject-tab px-2 text-xs" onClick={() => insertWorkspaceSnippet("---")}>Divider</button>
+                <button type="button" className="subject-tab px-2 text-xs" onClick={() => insertWorkspaceSnippet("[YouTube](https://www.youtube.com/watch?v=)")}>YouTube</button>
+                <button type="button" className="subject-tab px-2 text-xs" onClick={() => insertWorkspaceSnippet(externalAttachment ? `[PDF Embed: ${externalAttachment.name}](${externalAttachment.href})` : "[PDF Embed](url)")}>PDF</button>
+                <button type="button" className="subject-tab px-2 text-xs" onClick={() => workspaceFileInputRef.current?.click()}>Image / Upload</button>
+                <button type="button" className="subject-tab px-2 text-xs" onClick={() => setWorkspaceVisibility((value) => value === "private" ? "published" : "private")}>{workspaceVisibility === "private" ? "Publish" : "Make private"}</button>
+                <button type="button" className="subject-tab px-2 text-xs" onClick={() => { setPanel("whiteboard"); setWorkspaceVisible(true); viewerSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Open board</button>
+              </div>
+
+              <input
+                ref={workspaceFileInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                multiple
+                className="hidden"
+                onChange={(event) => readFilesIntoWorkspace(event.target.files)}
+              />
+
+              <input
+                className="input border-ink-700 bg-[#08111d] text-white placeholder:text-slate-500"
+                value={noteTitle}
+                onChange={(event) => setNoteTitle(event.target.value)}
+                placeholder="Workspace title"
+              />
+
+              <textarea
+                className="min-h-[360px] w-full rounded-[18px] border border-ink-800 bg-[#08111d] px-4 py-4 text-sm leading-8 text-slate-200 outline-none placeholder:text-slate-500"
+                value={noteBody}
+                onChange={(event) => setNoteBody(event.target.value)}
+                onPaste={handleWorkspacePaste}
+                onDrop={handleWorkspaceDrop}
+                onDragOver={(event) => event.preventDefault()}
+                placeholder="Write the lecture explanation here…\n\n- Add high-yield notes\n- Paste screenshots / X-ray / ECG\n- Insert PDF, links, checklists and algorithms"
+              />
+
+              <div className="rounded-[18px] border border-dashed border-ink-700 bg-[#07101a] px-4 py-3 text-xs leading-6 text-slate-400">
+                Tip: drag and drop images or PDFs here, paste screenshots مباشرة، أو أضف روابط YouTube ومواد الشرح لكل محاضرة. سيتم حفظ المسودة تلقائيًا لكل فيديو بشكل مستقل.
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-xs text-slate-500">Timestamp {formatTime(noteTimestamp || currentTime)} • {notes.length} saved note(s)</div>
+                <div className="flex items-center gap-2">
+                  <button type="button" className="btn-ghost text-xs" onClick={() => setNoteTimestamp(currentTime)}>
+                    <TimerReset className="h-3.5 w-3.5" /> Link timestamp
+                  </button>
+                  <button type="button" className="btn-primary text-sm" disabled={saving || !noteBody.trim()} onClick={() => void saveNote()}>
+                    <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save workspace"}
+                  </button>
+                </div>
+              </div>
+
+              {showAttachmentInsideWorkspace && externalAttachment ? (
+                <div className="overflow-hidden rounded-[22px] border border-ink-800 bg-[#07101a]">
+                  <div className="border-b border-ink-800 px-4 py-3 text-sm font-semibold text-white">Attached material preview</div>
+                  <AttachmentErrorBoundary>
+                    <AttachmentPanel attachment={externalAttachment} lessonId={lessonId} subjectSlug={subjectSlug} />
+                  </AttachmentErrorBoundary>
+                </div>
+              ) : (
+                <div className="rounded-[18px] border border-ink-800 bg-[#07101a] px-4 py-5 text-sm text-slate-500">No attachment is linked to this lesson.</div>
+              )}
+            </div>
+          </section>
         </div>
       </div>
 
