@@ -29,6 +29,10 @@ type SharedMedicalLibraryRow = {
 
 const VALID_TYPES = new Set(["image_question", "ultrashot", "flashcard", "note"] as const);
 
+function toSharedRows(value: unknown): SharedMedicalLibraryRow[] {
+  return Array.isArray(value) ? (value as unknown as SharedMedicalLibraryRow[]) : [];
+}
+
 function normalizeSubject(input: string | null | undefined) {
   const raw = (input || "General").trim();
   if (!raw) return "General";
@@ -49,7 +53,7 @@ function normalizePrivateItem(item: any) {
   };
 }
 
-function normalizeSharedItem(row: SharedMedicalLibraryRow) {
+function normalizeSharedItem(row: SharedMedicalLibraryRow | any) {
   const data = row.data && typeof row.data === "object" ? row.data : {};
   const resolvedType = [row.ifom_type, data.ifom_type, data.type, row.entry_type].find(
     (value): value is string => typeof value === "string" && VALID_TYPES.has(value as any)
@@ -136,7 +140,7 @@ export default async function IFOMLibraryPage() {
         .order("created_at", { ascending: false })
         .limit(300);
 
-      if (!primary.error) return (primary.data ?? []).map(normalizeSharedItem);
+      if (!primary.error) return toSharedRows(primary.data).map((row) => normalizeSharedItem(row));
 
       const fallbackQueries = [
         db
@@ -155,7 +159,7 @@ export default async function IFOMLibraryPage() {
 
       for (const attempt of fallbackQueries) {
         const res = await attempt;
-        if (!res.error) return (res.data ?? []).map(normalizeSharedItem);
+        if (!res.error) return toSharedRows(res.data).map((row) => normalizeSharedItem(row));
       }
 
       return [];
