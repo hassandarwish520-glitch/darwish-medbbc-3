@@ -38,6 +38,9 @@ type LibraryItem = {
   image_caption: string | null;
   tags: string[];
   created_at: string;
+  source?: "private" | "shared";
+  source_label?: string | null;
+  read_only?: boolean;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -143,7 +146,7 @@ export default function IFOMLibraryClient({ initialItems }: { initialItems: Libr
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="section-title text-3xl">IFOM Library</h1>
-          <p className="mt-1 text-slate-400">Your personal medical study vault — image questions, ultrashots, flashcards & notes.</p>
+          <p className="mt-1 text-slate-400">Shared admin material appears alongside each student's own private notes, flashcards, and study items.</p>
         </div>
         <div className="flex gap-2">
           {items.length > 0 && (
@@ -308,12 +311,15 @@ function ItemCard({
 }) {
   const [deleting, setDeleting] = useState(false);
   const meta = TYPE_META[item.type];
+  const isShared = item.read_only || item.source === "shared";
 
   async function remove(e: React.MouseEvent) {
     e.stopPropagation();
+    if (isShared) return;
+    const rawId = item.id.replace(/^private:/, "");
     if (!confirm("Delete this item?")) return;
     setDeleting(true);
-    await fetch(`/api/ifom-library?id=${item.id}`, { method: "DELETE" });
+    await fetch(`/api/ifom-library?id=${rawId}`, { method: "DELETE" });
     onDelete(item.id);
   }
 
@@ -344,8 +350,15 @@ function ItemCard({
 
       <div className="p-4">
         {/* Type badge */}
-        <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${meta.bgColor} ${meta.color}`}>
-          {meta.icon} {meta.label}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${meta.bgColor} ${meta.color}`}>
+            {meta.icon} {meta.label}
+          </div>
+          {isShared ? (
+            <span className="inline-flex items-center rounded-full border border-brand/30 bg-brand/10 px-2.5 py-1 text-[11px] font-semibold text-brand">
+              {item.source_label || "From admin"}
+            </span>
+          ) : null}
         </div>
 
         {/* Title / stem */}
@@ -373,15 +386,19 @@ function ItemCard({
         )}
 
         {/* Footer */}
-        <div className="mt-3 flex items-center justify-between">
+        <div className="mt-3 flex items-center justify-between gap-3">
           <span className="text-xs text-slate-500">{item.subject}</span>
-          <button
-            onClick={remove}
-            disabled={deleting}
-            className="rounded-full p-1.5 text-slate-600 opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-          >
-            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-          </button>
+          {isShared ? (
+            <span className="text-[11px] font-medium text-slate-400">Read only</span>
+          ) : (
+            <button
+              onClick={remove}
+              disabled={deleting}
+              className="rounded-full p-1.5 text-slate-600 opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+            >
+              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -394,10 +411,13 @@ function ViewModal({ item, onClose, onDelete }: { item: LibraryItem; onClose: ()
   const [revealed, setRevealed] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const meta = TYPE_META[item.type];
+  const isShared = item.read_only || item.source === "shared";
 
   async function remove() {
+    if (isShared) return;
+    const rawId = item.id.replace(/^private:/, "");
     if (!confirm("Delete this item?")) return;
-    await fetch(`/api/ifom-library?id=${item.id}`, { method: "DELETE" });
+    await fetch(`/api/ifom-library?id=${rawId}`, { method: "DELETE" });
     onDelete();
   }
 
@@ -406,13 +426,22 @@ function ViewModal({ item, onClose, onDelete }: { item: LibraryItem; onClose: ()
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-ink-900 shadow-2xl">
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-ink-700 bg-ink-900 px-6 py-4">
-          <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${meta.bgColor} ${meta.color}`}>
-            {meta.icon} {meta.label} · {item.subject}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${meta.bgColor} ${meta.color}`}>
+              {meta.icon} {meta.label} · {item.subject}
+            </div>
+            {isShared ? (
+              <span className="inline-flex items-center rounded-full border border-brand/30 bg-brand/10 px-2.5 py-1 text-[11px] font-semibold text-brand">
+                {item.source_label || "From admin"}
+              </span>
+            ) : null}
           </div>
           <div className="flex gap-2">
-            <button onClick={remove} className="rounded-full p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-400">
-              <Trash2 className="h-4 w-4" />
-            </button>
+            {!isShared ? (
+              <button onClick={remove} className="rounded-full p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-400">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            ) : null}
             <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-white/10">
               <X className="h-5 w-5" />
             </button>
@@ -420,6 +449,11 @@ function ViewModal({ item, onClose, onDelete }: { item: LibraryItem; onClose: ()
         </div>
 
         <div className="p-6 space-y-5">
+          {isShared ? (
+            <div className="rounded-xl border border-brand/20 bg-brand/5 px-4 py-3 text-sm text-slate-300">
+              This item was added by the admin and is visible to all students. It is read only inside IFOM Library.
+            </div>
+          ) : null}
           {/* Medical Image */}
           {item.image_path && (
             <div className="overflow-hidden rounded-xl border border-ink-700">
