@@ -250,7 +250,7 @@ export default function DocumentWorkspaceClient({
     }
   }, [theme]);
 
-  const showAttached = !!lesson?.document_url && split && !fullscreen && !focus;
+  const showAttached = !!lesson && split && !fullscreen && !focus;
 
   const leftPane = (
     <div className="flex h-full min-h-[60vh] flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5">
@@ -275,6 +275,26 @@ export default function DocumentWorkspaceClient({
                 name: lesson.document_name ?? lesson.title ?? "Document",
                 lessonId: lesson.id,
                 storageKey: `documentsws:annotation:${workspace.id}:${lesson.id ?? lesson.title ?? "doc"}`,
+              }}
+              lessonId={lesson.id}
+              subjectSlug={
+                typeof (lesson as { subject_slug?: string | null }).subject_slug === "string"
+                  ? (lesson as { subject_slug?: string | null }).subject_slug ?? null
+                  : null
+              }
+            />
+          </div>
+        ) : lesson ? (
+          <div className="h-full overflow-auto p-3">
+            <AnnotationPanel
+              attachment={{
+                href: lesson.kind === "html"
+                  ? `/api/viewer/${lesson.id}/html`
+                  : `/api/viewer/${lesson.id}/pdf`,
+                mime: lesson.kind === "html" ? "text/html" : "application/pdf",
+                name: lesson.title ?? "Lesson",
+                lessonId: lesson.id,
+                storageKey: `documentsws:annotation:${workspace.id}:${lesson.id}`,
               }}
               lessonId={lesson.id}
               subjectSlug={
