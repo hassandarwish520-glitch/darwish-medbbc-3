@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { repairQuestion } from "@/lib/question-normalizer";
 import {
@@ -199,6 +199,7 @@ export default function QBankRunner({
   const [calcNa, setCalcNa] = useState("140");
   const [calcCl, setCalcCl] = useState("102");
   const [calcHco3, setCalcHco3] = useState("24");
+  const [isDarkTheme, setIsDarkTheme] = useState(true);
 
   const picked = picks[i] ?? null;
   const revealed = revealeds[i] ?? false;
@@ -222,6 +223,14 @@ export default function QBankRunner({
     const onFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange", onFullscreen);
     return () => document.removeEventListener("fullscreenchange", onFullscreen);
+  }, []);
+
+  useEffect(() => {
+    const syncTheme = () => setIsDarkTheme(document.documentElement.classList.contains("dark"));
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -406,6 +415,73 @@ export default function QBankRunner({
   const labItems = LAB_REFERENCE[labCategory] ?? [];
   const anionGap = Number(calcNa || 0) - (Number(calcCl || 0) + Number(calcHco3 || 0));
 
+
+  const runnerVars = (isDarkTheme ? {
+    "--qb-shell-bg": "radial-gradient(circle at top right, rgba(37,99,235,0.12), transparent 28%), var(--c-bg)",
+    "--qb-chrome-bg": "rgba(6,11,24,0.86)",
+    "--qb-chrome-border": "rgba(255,255,255,0.08)",
+    "--qb-chrome-button-bg": "rgba(12,18,34,0.92)",
+    "--qb-chrome-button-border": "rgba(255,255,255,0.08)",
+    "--qb-chrome-text": "#dbe6ff",
+    "--qb-chrome-muted": "#92a2bf",
+    "--qb-panel-bg": "linear-gradient(180deg, rgba(12,18,34,0.96), rgba(8,13,26,0.96))",
+    "--qb-panel-border": "rgba(255,255,255,0.08)",
+    "--qb-panel-shadow": "0 18px 48px rgba(0,0,0,0.22)",
+    "--qb-panel-title": "#ffffff",
+    "--qb-panel-text": "#dce5f4",
+    "--qb-panel-muted": "#7f90ae",
+    "--qb-panel-soft": "rgba(255,255,255,0.03)",
+    "--qb-panel-soft-alt": "rgba(255,255,255,0.02)",
+    "--qb-panel-soft-border": "rgba(255,255,255,0.06)",
+    "--qb-question-text": "#f8fbff",
+    "--qb-choice-bubble-bg": "rgba(255,255,255,0.05)",
+    "--qb-footer-bg": "rgba(6,11,24,0.88)",
+    "--qb-footer-border": "rgba(255,255,255,0.08)",
+    "--qb-blue": "#2563eb",
+    "--qb-blue-soft": "rgba(37,99,235,0.12)",
+    "--qb-blue-text": "#93c5fd",
+    "--qb-progress-bg": "rgba(255,255,255,0.05)",
+    "--qb-report-bg": "rgba(127,29,29,0.18)",
+    "--qb-report-border": "rgba(248,113,113,0.28)",
+    "--qb-report-chip-bg": "rgba(12,18,34,0.90)",
+    "--qb-report-chip-border": "rgba(248,113,113,0.24)",
+    "--qb-report-text": "#fecaca",
+    "--qb-report-chip-text": "#fca5a5",
+    "--qb-empty-text": "#92a2bf"
+  } : {
+    "--qb-shell-bg": "linear-gradient(180deg, #edf2f7 0%, #f7f9fc 100%)",
+    "--qb-chrome-bg": "linear-gradient(180deg, #25598b 0%, #1b4773 100%)",
+    "--qb-chrome-border": "rgba(11,37,68,0.18)",
+    "--qb-chrome-button-bg": "rgba(255,255,255,0.14)",
+    "--qb-chrome-button-border": "rgba(255,255,255,0.24)",
+    "--qb-chrome-text": "#ffffff",
+    "--qb-chrome-muted": "#d9e6f4",
+    "--qb-panel-bg": "linear-gradient(180deg, #ffffff, #fbfdff)",
+    "--qb-panel-border": "#cad7e6",
+    "--qb-panel-shadow": "0 12px 30px rgba(15,23,42,0.08)",
+    "--qb-panel-title": "#10253e",
+    "--qb-panel-text": "#2e4765",
+    "--qb-panel-muted": "#6f8298",
+    "--qb-panel-soft": "#f8fbff",
+    "--qb-panel-soft-alt": "#f3f7fb",
+    "--qb-panel-soft-border": "#dbe4ef",
+    "--qb-question-text": "#13263e",
+    "--qb-choice-bubble-bg": "#eef3f9",
+    "--qb-footer-bg": "linear-gradient(180deg, #25598b 0%, #1b4773 100%)",
+    "--qb-footer-border": "rgba(11,37,68,0.18)",
+    "--qb-blue": "#1f5faa",
+    "--qb-blue-soft": "rgba(31,95,170,0.10)",
+    "--qb-blue-text": "#1f5faa",
+    "--qb-progress-bg": "#e3ebf5",
+    "--qb-report-bg": "rgba(220,38,38,0.06)",
+    "--qb-report-border": "rgba(220,38,38,0.18)",
+    "--qb-report-chip-bg": "#ffffff",
+    "--qb-report-chip-border": "rgba(220,38,38,0.16)",
+    "--qb-report-text": "#991b1b",
+    "--qb-report-chip-text": "#b91c1c",
+    "--qb-empty-text": "#6f8298"
+  }) as CSSProperties;
+
   async function submit() {
     if (!picked || revealed) return;
     const correct = picked === q.answer_key;
@@ -509,33 +585,33 @@ export default function QBankRunner({
   }
 
   return (
-    <div className="min-h-[100dvh] pb-28" style={{ background: "radial-gradient(circle at top right, rgba(37,99,235,0.12), transparent 28%), var(--c-bg)" }}>
-      <div className="sticky top-0 z-40 border-b backdrop-blur-xl" style={{ background: "rgba(6,11,24,0.86)", borderColor: "rgba(255,255,255,0.08)" }}>
+    <div className="qbank-theme-scope qbank-runner-scope min-h-[100dvh] pb-28" style={{ ...runnerVars, background: "var(--qb-shell-bg)" }}>
+      <div className="sticky top-0 z-40 border-b backdrop-blur-xl" style={{ background: "var(--qb-chrome-bg)", borderColor: "var(--qb-chrome-border)" }}>
         <div className="mx-auto flex w-full max-w-[1520px] items-start justify-between gap-4 px-4 py-4 md:px-6">
           <div className="min-w-0 flex items-start gap-3">
-            <Link href={backHref} className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: "#dbe6ff" }}>
+            <Link href={backHref} className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border" style={{ borderColor: "var(--qb-chrome-button-border)", background: "var(--qb-chrome-button-bg)", color: "var(--qb-chrome-text)" }}>
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div className="min-w-0">
-              <div className="text-sm font-bold uppercase tracking-[0.18em] text-white">QBank</div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm" style={{ color: "#d1d9ea" }}>
+              <div className="text-sm font-bold uppercase tracking-[0.18em]" style={{ color: "var(--qb-chrome-text)" }}>QBank</div>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm" style={{ color: "var(--qb-chrome-muted)" }}>
                 <span className="font-semibold">{subjectLabel}</span>
                 <span style={{ color: "#5f6f8d" }}>•</span>
                 <span>Question {i + 1} of {questions.length}</span>
-                <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ borderColor: "rgba(96,165,250,0.28)", background: "rgba(59,130,246,0.10)", color: "#93c5fd" }}>{(q.tags[0] || subjectLabel).toUpperCase()}</span>
+                <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ borderColor: "rgba(96,165,250,0.28)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" }}>{(q.tags[0] || subjectLabel).toUpperCase()}</span>
                 <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: diff.border, background: diff.bg, color: diff.color }}>{q.difficulty || "Intermediate"}</span>
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <div className="flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: "#dbe6ff" }}>
+            <div className="flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold" style={{ borderColor: "var(--qb-chrome-button-border)", background: "var(--qb-chrome-button-bg)", color: "var(--qb-chrome-text)" }}>
               <span className="tabular-nums">{formatTime(seconds)}</span>
               <button onClick={() => setIsPaused((v) => !v)}>{isPaused ? <Play className="h-4 w-4 fill-current" /> : <Pause className="h-4 w-4 fill-current" />}</button>
             </div>
-            <div className="flex rounded-2xl border p-1" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)" }}>
+            <div className="flex rounded-2xl border p-1" style={{ borderColor: "var(--qb-chrome-button-border)", background: "var(--qb-chrome-button-bg)" }}>
               {(["tutor", "exam"] as const).map((entry) => (
-                <button key={entry} onClick={() => setMode(entry)} className="rounded-xl px-4 py-2 text-sm font-semibold capitalize transition" style={mode === entry ? { background: "#2563eb", color: "#fff" } : { color: "#aab6ce" }}>
+                <button key={entry} onClick={() => setMode(entry)} className="rounded-xl px-4 py-2 text-sm font-semibold capitalize transition" style={mode === entry ? { background: "var(--qb-blue)", color: "#fff" } : { color: "var(--qb-chrome-muted)" }}>
                   {entry}
                 </button>
               ))}
@@ -546,7 +622,7 @@ export default function QBankRunner({
             <button onClick={() => setReportOpen((v) => !v)} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: reportOpen ? "#f87171" : "#dbe6ff" }}>
               <Flag className="h-4 w-4" />
             </button>
-            <button onClick={() => setFocusMode((v) => !v)} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: focusMode ? "rgba(37,99,235,0.18)" : "rgba(12,18,34,0.92)", color: focusMode ? "#93c5fd" : "#dbe6ff" }}>
+            <button onClick={() => setFocusMode((v) => !v)} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "var(--qb-chrome-button-border)", background: focusMode ? "var(--qb-blue-soft)" : "var(--qb-chrome-button-bg)", color: focusMode ? "var(--qb-blue-text)" : "var(--qb-chrome-text)" }}>
               <Target className="h-4 w-4" />
             </button>
             <button onClick={toggleFullscreen} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: "#dbe6ff" }}>
@@ -634,12 +710,12 @@ export default function QBankRunner({
         <section className="overflow-hidden rounded-[26px] border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "linear-gradient(180deg, rgba(12,18,34,0.97), rgba(8,13,26,0.97))", boxShadow: "0 18px 48px rgba(0,0,0,0.22)" }}>
           <div className="px-4 py-4 md:px-5 md:py-5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: "rgba(96,165,250,0.24)", background: "rgba(59,130,246,0.10)", color: "#93c5fd" }}>{(q.tags[0] || subjectLabel).toUpperCase()}</span>
-              <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#c9d3e7" }}>{topic}</span>
+              <span className="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: "rgba(96,165,250,0.24)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" }}>{(q.tags[0] || subjectLabel).toUpperCase()}</span>
+              <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-text)" }}>{topic}</span>
               {q.difficulty ? <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: diff.border, background: diff.bg, color: diff.color }}>{q.difficulty}</span> : null}
             </div>
 
-            <div className="mt-5 max-w-[1040px] text-[25px] font-semibold leading-[1.55] tracking-[-0.02em] md:text-[33px]" style={{ color: "#f8fbff" }}>
+            <div className="mt-5 max-w-[1040px] text-[25px] font-semibold leading-[1.55] tracking-[-0.02em] md:text-[33px]" style={{ color: "var(--qb-question-text)" }}>
               {q.stem}
             </div>
 
@@ -647,26 +723,26 @@ export default function QBankRunner({
               {q.choices.map((choice) => {
                 const isCorrect = choice.key === q.answer_key;
                 const isPicked = choice.key === picked;
-                let bg = "rgba(255,255,255,0.02)";
-                let border = "rgba(255,255,255,0.07)";
-                let textColor = "#f3f7ff";
-                let helperColor = "#8da0c0";
+                let bg = isDarkTheme ? "rgba(255,255,255,0.02)" : "#ffffff";
+                let border = isDarkTheme ? "rgba(255,255,255,0.07)" : "#cfd9e6";
+                let textColor = isDarkTheme ? "#f3f7ff" : "#18324d";
+                let helperColor = isDarkTheme ? "#8da0c0" : "#69809c";
                 if (revealed) {
                   if (isCorrect) {
-                    bg = "rgba(34,197,94,0.10)";
+                    bg = isDarkTheme ? "rgba(34,197,94,0.10)" : "rgba(34,197,94,0.08)";
                     border = "rgba(34,197,94,0.35)";
-                    textColor = "#dcfce7";
-                    helperColor = "#86efac";
+                    textColor = isDarkTheme ? "#dcfce7" : "#166534";
+                    helperColor = isDarkTheme ? "#86efac" : "#15803d";
                   } else if (isPicked) {
-                    bg = "rgba(239,68,68,0.10)";
-                    border = "rgba(239,68,68,0.35)";
-                    textColor = "#fee2e2";
-                    helperColor = "#fca5a5";
+                    bg = isDarkTheme ? "rgba(239,68,68,0.10)" : "rgba(239,68,68,0.08)";
+                    border = "rgba(239,68,68,0.30)";
+                    textColor = isDarkTheme ? "#fee2e2" : "#991b1b";
+                    helperColor = isDarkTheme ? "#fca5a5" : "#b91c1c";
                   }
                 } else if (isPicked) {
-                  bg = "rgba(59,130,246,0.12)";
-                  border = "rgba(59,130,246,0.35)";
-                  helperColor = "#93c5fd";
+                  bg = isDarkTheme ? "rgba(59,130,246,0.12)" : "rgba(31,95,170,0.08)";
+                  border = isDarkTheme ? "rgba(59,130,246,0.35)" : "rgba(31,95,170,0.28)";
+                  helperColor = isDarkTheme ? "#93c5fd" : "#1f5faa";
                 }
                 return (
                   <button
@@ -674,10 +750,10 @@ export default function QBankRunner({
                     disabled={revealed}
                     onClick={() => setPicks((prev) => { const next = [...prev]; next[i] = choice.key; return next; })}
                     className="w-full rounded-[20px] border p-4 text-left transition md:p-5"
-                    style={{ background: bg, borderColor: border }}
+                    style={{ background: bg, borderColor: border, boxShadow: isDarkTheme ? "none" : "0 1px 2px rgba(15,23,42,0.04)" }}
                   >
                     <div className="flex items-center gap-4">
-                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ background: "rgba(255,255,255,0.05)", color: helperColor }}>
+                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ background: "var(--qb-choice-bubble-bg)", color: helperColor }}>
                         {choice.key}
                       </span>
                       <span className="text-base font-medium md:text-[17px]" style={{ color: textColor }}>{choice.text}</span>

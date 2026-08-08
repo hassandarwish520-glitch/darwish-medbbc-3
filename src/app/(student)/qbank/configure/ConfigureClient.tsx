@@ -82,7 +82,7 @@ export default function ConfigureClient() {
   const estimatedMinutes = useMemo(() => Math.ceil(count * (mode === "timed" ? 1.1 : mode === "exam" ? 1.4 : 1.5)), [count, mode]);
 
   return (
-    <div className="page-shell mx-auto max-w-6xl pb-32 sm:pb-24">
+    <div className="qbank-theme-scope page-shell mx-auto max-w-6xl pb-32 sm:pb-24">
       <Link href={returnTo} className="mb-6 inline-flex items-center gap-2 text-sm transition" style={{ color: "var(--c-text-3)" }}>
         <ArrowLeft className="h-4 w-4" />
         Back to QBank

@@ -269,7 +269,7 @@ function QBankPageInner() {
     : null;
 
   return (
-    <div className="page-shell pb-32 sm:pb-24">
+    <div className="qbank-theme-scope page-shell pb-32 sm:pb-24">
       <section className="mt-4 overflow-hidden rounded-[32px] border" style={{ background: "linear-gradient(180deg, var(--c-card) 0%, var(--c-surface) 100%)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-elevated)" }}>
         <div className="border-b px-5 py-5 md:px-6" style={{ borderColor: "var(--c-border-subtle)" }}>
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
