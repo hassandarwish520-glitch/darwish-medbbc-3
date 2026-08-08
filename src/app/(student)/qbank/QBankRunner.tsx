@@ -4,29 +4,34 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { repairQuestion } from "@/lib/question-normalizer";
 import {
-  CheckCircle2,
-  ChevronRight,
-  ChevronLeft,
-  Pause,
-  Play,
-  BookmarkPlus,
-  Highlighter,
-  PencilLine,
-  XCircle,
   ArrowLeft,
   Bell,
-  Target,
-  Flag,
-  Lightbulb,
+  BookmarkPlus,
   BookOpen,
-  ImageIcon,
-  Expand,
-  Minimize2,
-  Plus,
-  Minus,
-  FolderTree,
-  FlaskConical,
   Calculator,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Expand,
+  Flag,
+  FlaskConical,
+  FolderTree,
+  Highlighter,
+  ImageIcon,
+  Lightbulb,
+  List,
+  Maximize2,
+  Minimize2,
+  Minus,
+  MoreVertical,
+  Pause,
+  PencilLine,
+  Play,
+  Plus,
+  Target,
+  X,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -51,6 +56,70 @@ type Result = {
   correct: boolean;
 };
 
+type ContextTab = "figure" | "labs" | "calculator";
+
+type LabItem = {
+  test: string;
+  value: string;
+  ref: string;
+  tone?: "normal" | "abnormal";
+};
+
+const LAB_REFERENCE: Record<string, LabItem[]> = {
+  CBC: [
+    { test: "WBC", value: "6.8 ×10³/µL", ref: "4.0 – 10.0" },
+    { test: "RBC", value: "4.51 ×10⁶/µL", ref: "3.8 – 5.2" },
+    { test: "Hemoglobin", value: "13.2 g/dL", ref: "12.0 – 15.5" },
+    { test: "Hematocrit", value: "39.8 %", ref: "36 – 46" },
+    { test: "MCV", value: "88 fL", ref: "80 – 100" },
+    { test: "Platelets", value: "245 ×10³/µL", ref: "150 – 400" },
+  ],
+  BMP: [
+    { test: "Na⁺", value: "138 mEq/L", ref: "135 – 145" },
+    { test: "K⁺", value: "4.2 mEq/L", ref: "3.5 – 5.0" },
+    { test: "Cl⁻", value: "102 mEq/L", ref: "98 – 106" },
+    { test: "HCO₃⁻", value: "24 mEq/L", ref: "22 – 28" },
+    { test: "BUN", value: "16 mg/dL", ref: "7 – 20" },
+    { test: "Creatinine", value: "0.9 mg/dL", ref: "0.6 – 1.3" },
+  ],
+  LFTs: [
+    { test: "AST", value: "24 U/L", ref: "10 – 40" },
+    { test: "ALT", value: "28 U/L", ref: "7 – 56" },
+    { test: "ALP", value: "88 U/L", ref: "44 – 147" },
+    { test: "Total bilirubin", value: "0.8 mg/dL", ref: "0.2 – 1.2" },
+    { test: "Albumin", value: "4.1 g/dL", ref: "3.5 – 5.0" },
+  ],
+  Coagulation: [
+    { test: "PT", value: "12.1 s", ref: "11 – 13.5" },
+    { test: "INR", value: "1.0", ref: "0.8 – 1.1" },
+    { test: "aPTT", value: "31 s", ref: "25 – 35" },
+    { test: "Fibrinogen", value: "310 mg/dL", ref: "200 – 400" },
+  ],
+  ABG: [
+    { test: "pH", value: "7.40", ref: "7.35 – 7.45" },
+    { test: "PaCO₂", value: "40 mmHg", ref: "35 – 45" },
+    { test: "HCO₃⁻", value: "24 mEq/L", ref: "22 – 26" },
+    { test: "PaO₂", value: "94 mmHg", ref: "80 – 100" },
+  ],
+  Endocrine: [
+    { test: "TSH", value: "2.1 µIU/mL", ref: "0.4 – 4.5" },
+    { test: "Free T4", value: "1.1 ng/dL", ref: "0.8 – 1.8" },
+    { test: "Morning cortisol", value: "14 µg/dL", ref: "5 – 25" },
+  ],
+  Urinalysis: [
+    { test: "Specific gravity", value: "1.018", ref: "1.005 – 1.030" },
+    { test: "Protein", value: "Negative", ref: "Negative" },
+    { test: "Glucose", value: "Negative", ref: "Negative" },
+    { test: "RBC / HPF", value: "0 – 2", ref: "0 – 2" },
+  ],
+  CSF: [
+    { test: "Opening pressure", value: "15 cm H₂O", ref: "10 – 20" },
+    { test: "Protein", value: "34 mg/dL", ref: "15 – 45" },
+    { test: "Glucose", value: "64 mg/dL", ref: "50 – 80" },
+    { test: "WBC", value: "2 /µL", ref: "0 – 5" },
+  ],
+};
+
 function assetHref(path?: string | null) {
   if (!path) return "";
   if (/^(https?:|data:|blob:|\/)\/?/i.test(path)) return path;
@@ -59,9 +128,7 @@ function assetHref(path?: string | null) {
 
 function splitExplanation(value?: string | null) {
   const raw = (value || "").trim();
-  if (!raw) {
-    return { explanation: "", educationalObjective: "" };
-  }
+  if (!raw) return { explanation: "", educationalObjective: "" };
   const parts = raw.split(/educational\s*objective\s*:/i);
   return {
     explanation: parts[0]?.trim() || "",
@@ -73,12 +140,7 @@ function getTopic(tags: string[]) {
   return tags.filter(Boolean).slice(1, 3).join(" · ") || "Clinical reasoning";
 }
 
-function getYouTubeId(url: string): string | null {
-  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([A-Za-z0-9_-]{11})/);
-  return m?.[1] ?? null;
-}
-
-function excerpt(value: string, max = 60) {
+function excerpt(value: string, max = 90) {
   const trimmed = value.replace(/\s+/g, " ").trim();
   return trimmed.length > max ? `${trimmed.slice(0, max).trim()}…` : trimmed;
 }
@@ -89,6 +151,14 @@ function difficultyStyle(d: string) {
   if (l === "easy") return { color: "#22c55e", bg: "rgba(34,197,94,0.08)", border: "rgba(34,197,94,0.28)" };
   if (l === "hard") return { color: "#ef4444", bg: "rgba(239,68,68,0.08)", border: "rgba(239,68,68,0.28)" };
   return { color: "#f59e0b", bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.28)" };
+}
+
+function formatTime(totalSeconds: number) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
 export default function QBankRunner({
@@ -118,9 +188,17 @@ export default function QBankRunner({
   const [toolStatus, setToolStatus] = useState<string | null>(null);
   const [toolBusy, setToolBusy] = useState<"highlight" | "bookmark" | "note" | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
-  const [navigatorOpen, setNavigatorOpen] = useState(true);
+  const [questionMapOpen, setQuestionMapOpen] = useState(true);
+  const [contextVisible, setContextVisible] = useState(true);
+  const [contextTab, setContextTab] = useState<ContextTab>("labs");
+  const [labCategory, setLabCategory] = useState<string>("CBC");
   const [imageOpen, setImageOpen] = useState(false);
   const [imageZoom, setImageZoom] = useState(1);
+  const [focusMode, setFocusMode] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [calcNa, setCalcNa] = useState("140");
+  const [calcCl, setCalcCl] = useState("102");
+  const [calcHco3, setCalcHco3] = useState("24");
 
   const picked = picks[i] ?? null;
   const revealed = revealeds[i] ?? false;
@@ -139,6 +217,19 @@ export default function QBankRunner({
   useEffect(() => {
     secondsRef.current = seconds;
   }, [seconds]);
+
+  useEffect(() => {
+    const onFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFullscreen);
+    return () => document.removeEventListener("fullscreenchange", onFullscreen);
+  }, []);
+
+  useEffect(() => {
+    if (focusMode) {
+      setQuestionMapOpen(false);
+      setContextVisible(false);
+    }
+  }, [focusMode]);
 
   useEffect(() => {
     if (sessionIdRef.current || !questions.length) return;
@@ -169,9 +260,8 @@ export default function QBankRunner({
     function saveAsSuspended() {
       const sid = sessionIdRef.current;
       if (!sid) return;
-      const res = resultsRef.current;
       const answersMap: Record<string, { chosen: string; correct: boolean }> = {};
-      res.forEach((r) => {
+      resultsRef.current.forEach((r) => {
         answersMap[r.id] = { chosen: r.chosen, correct: r.correct };
       });
       fetch(`/api/quiz/sessions/${sid}`, {
@@ -179,7 +269,7 @@ export default function QBankRunner({
         headers: { "Content-Type": "application/json" },
         keepalive: true,
         body: JSON.stringify({
-          status: res.length >= questions.length ? "complete" : "suspended",
+          status: resultsRef.current.length >= questions.length ? "complete" : "suspended",
           current_index: iRef.current,
           answers_json: answersMap,
           seconds_elapsed: secondsRef.current,
@@ -205,26 +295,25 @@ export default function QBankRunner({
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isPaused, revealed, i, questions.length]);
+  }, [i, isPaused, questions.length, revealed]);
 
   const answered = results.length;
   const correctCount = results.filter((r) => r.correct).length;
   const incorrectCount = answered - correctCount;
   const accuracy = answered ? Math.round((correctCount / answered) * 100) : 0;
   const navigatorItems = questions.map((item, idx) => {
-    const revealedLocal = revealeds[idx];
-    const pickLocal = picks[idx];
     const result = results.find((r) => r.id === item.id);
-    return { item, idx, revealedLocal, pickLocal, result };
+    return { item, idx, result, picked: picks[idx], revealed: revealeds[idx] };
   });
 
-  const formatTime = (totalSeconds: number) => {
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = totalSeconds % 60;
-    if (h > 0) return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  };
+  async function toggleFullscreen() {
+    try {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+      else await document.exitFullscreen();
+    } catch {
+      // ignore
+    }
+  }
 
   async function patchSession(patch: Record<string, unknown>) {
     const sid = sessionIdRef.current;
@@ -268,23 +357,23 @@ export default function QBankRunner({
                 </div>
               </div>
               <div className="mt-6 grid grid-cols-2 gap-3 text-left sm:grid-cols-4">
-                <StatCard label="Answered" value={answered} color="var(--c-text-1)" />
-                <StatCard label="Correct" value={correctCount} color="#22c55e" />
-                <StatCard label="Incorrect" value={incorrectCount} color="#ef4444" />
-                <StatCard label="Accuracy" value={`${accuracy}%`} color="#38bdf8" />
+                <Metric label="Answered" value={answered} color="var(--c-text-1)" />
+                <Metric label="Correct" value={correctCount} color="#22c55e" />
+                <Metric label="Incorrect" value={incorrectCount} color="#ef4444" />
+                <Metric label="Accuracy" value={`${accuracy}%`} color="#38bdf8" />
               </div>
               <Link href={backHref} className="btn-primary mt-6 w-full">Back to Q-Bank</Link>
             </div>
           </div>
           <div className="mt-5 space-y-2.5">
-            {questions.map((q, idx) => {
+            {questions.map((question, idx) => {
               const result = results[idx];
               return (
-                <div key={q.id} className="card px-4 py-3.5">
+                <div key={question.id} className="card px-4 py-3.5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="text-sm font-medium leading-relaxed" style={{ color: "var(--c-text-2)" }}>
-                      <span style={{ color: "var(--c-text-4)" }} className="mr-1 font-normal">{idx + 1}.</span>
-                      {excerpt(q.stem, 90)}
+                      <span className="mr-1 font-normal" style={{ color: "var(--c-text-4)" }}>{idx + 1}.</span>
+                      {excerpt(question.stem)}
                     </div>
                     {result?.correct ? (
                       <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: "#22c55e", background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)" }}>
@@ -308,12 +397,14 @@ export default function QBankRunner({
   const rawQ = questions[i];
   const q = repairQuestion(rawQ);
   const imageHref = assetHref(q.image_path);
-  const details = splitExplanation(q.explanation);
-  const progressPct = ((i + 1) / questions.length) * 100;
   const topic = getTopic(q.tags);
   const diff = difficultyStyle(q.difficulty);
+  const details = splitExplanation(q.explanation);
+  const progressPct = ((i + 1) / questions.length) * 100;
   const isCorrectAnswer = picked === q.answer_key;
-  const wrongChoices = q.choices.filter((c) => c.key !== q.answer_key);
+  const wrongChoices = q.choices.filter((choice) => choice.key !== q.answer_key);
+  const labItems = LAB_REFERENCE[labCategory] ?? [];
+  const anionGap = Number(calcNa || 0) - (Number(calcCl || 0) + Number(calcHco3 || 0));
 
   async function submit() {
     if (!picked || revealed) return;
@@ -328,8 +419,6 @@ export default function QBankRunner({
       const existing = list.find((r) => r.id === q.id);
       const updated = existing ? list.map((r) => (r.id === q.id ? newResult : r)) : [...list, newResult];
       void (async () => {
-        const sid = sessionIdRef.current;
-        if (!sid) return;
         const answersMap: Record<string, { chosen: string; correct: boolean }> = {};
         updated.forEach((r) => {
           answersMap[r.id] = { chosen: r.chosen, correct: r.correct };
@@ -345,12 +434,13 @@ export default function QBankRunner({
       })();
       return updated;
     });
-    const s = createClient();
+
+    const supabase = createClient();
     const {
       data: { user },
-    } = await s.auth.getUser();
+    } = await supabase.auth.getUser();
     if (user) {
-      await s.from("question_attempts").insert({
+      await supabase.from("question_attempts").insert({
         user_id: user.id,
         question_id: q.id,
         chosen: picked,
@@ -419,184 +509,180 @@ export default function QBankRunner({
   }
 
   return (
-    <div className="min-h-[100dvh]" style={{ background: "var(--c-bg)" }}>
-      <div className="sticky top-0 z-40 border-b backdrop-blur-xl" style={{ background: "var(--c-header-bg)", borderColor: "var(--c-border)" }}>
-        <div className="px-4 py-3 md:px-6">
-          <div className="flex flex-wrap items-center gap-2 md:gap-3">
-            <Link href={backHref} className="grid h-10 w-10 place-items-center rounded-2xl border transition" style={{ borderColor: "var(--c-border)", background: "var(--c-card)", color: "var(--c-text-3)" }}>
+    <div className="min-h-[100dvh] pb-28" style={{ background: "radial-gradient(circle at top right, rgba(37,99,235,0.12), transparent 28%), var(--c-bg)" }}>
+      <div className="sticky top-0 z-40 border-b backdrop-blur-xl" style={{ background: "rgba(6,11,24,0.86)", borderColor: "rgba(255,255,255,0.08)" }}>
+        <div className="mx-auto flex w-full max-w-[1520px] items-start justify-between gap-4 px-4 py-4 md:px-6">
+          <div className="min-w-0 flex items-start gap-3">
+            <Link href={backHref} className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: "#dbe6ff" }}>
               <ArrowLeft className="h-5 w-5" />
             </Link>
-            <button onClick={() => setNavigatorOpen((v) => !v)} className="hidden h-10 items-center gap-2 rounded-2xl border px-3 text-sm font-semibold lg:inline-flex" style={{ borderColor: "var(--c-border)", background: "var(--c-card)", color: "var(--c-text-2)" }}>
-              <FolderTree className="h-4 w-4" />
-              {navigatorOpen ? "Hide" : "Show"} nav
-            </button>
-            <div className="min-w-[130px]">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--c-text-4)" }}>QBank</div>
-              <div className="text-base font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>Question {i + 1} of {questions.length}</div>
-            </div>
-            <div className="hidden rounded-full px-3 py-1 text-xs font-semibold sm:block" style={{ background: "var(--c-elevated)", color: "var(--c-text-3)", border: "1px solid var(--c-border)" }}>{subjectLabel}</div>
-            <div className="hidden rounded-full px-3 py-1 text-xs font-semibold md:block" style={{ background: diff.bg, color: diff.color, border: `1px solid ${diff.border}` }}>{q.difficulty || "Mixed"}</div>
-            <div className="ml-auto flex items-center gap-2">
-              <div className="flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold" style={{ borderColor: "var(--c-border)", background: "var(--c-card)", color: "var(--c-text-2)" }}>
-                <span style={{ color: "var(--c-text-4)" }}>⏱</span>
-                <span className="tabular-nums">{formatTime(seconds)}</span>
-                <button onClick={() => setIsPaused((v) => !v)} style={{ color: "var(--c-blue)" }}>
-                  {isPaused ? <Play className="h-4 w-4 fill-current" /> : <Pause className="h-4 w-4 fill-current" />}
-                </button>
+            <div className="min-w-0">
+              <div className="text-sm font-bold uppercase tracking-[0.18em] text-white">QBank</div>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm" style={{ color: "#d1d9ea" }}>
+                <span className="font-semibold">{subjectLabel}</span>
+                <span style={{ color: "#5f6f8d" }}>•</span>
+                <span>Question {i + 1} of {questions.length}</span>
+                <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ borderColor: "rgba(96,165,250,0.28)", background: "rgba(59,130,246,0.10)", color: "#93c5fd" }}>{(q.tags[0] || subjectLabel).toUpperCase()}</span>
+                <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: diff.border, background: diff.bg, color: diff.color }}>{q.difficulty || "Intermediate"}</span>
               </div>
-              <div className="hidden rounded-2xl border p-1 text-sm font-semibold md:flex" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)" }}>
-                {(["tutor", "exam"] as const).map((m) => (
-                  <button key={m} onClick={() => setMode(m)} className="rounded-xl px-4 py-1.5 capitalize transition" style={mode === m ? { background: "var(--c-blue)", color: "#fff" } : { color: "var(--c-text-3)" }}>
-                    {m}
-                  </button>
-                ))}
-              </div>
-              <button onClick={() => void saveLibraryEntry("bookmark")} disabled={toolBusy === "bookmark"} className="grid h-10 w-10 place-items-center rounded-2xl border transition" style={{ borderColor: "var(--c-border)", background: "var(--c-card)", color: toolBusy === "bookmark" ? "var(--c-blue)" : "var(--c-text-3)" }} title="Bookmark">
-                <BookmarkPlus className="h-4 w-4" />
-              </button>
-              <button onClick={() => setReportOpen((v) => !v)} className="grid h-10 w-10 place-items-center rounded-2xl border transition" style={{ borderColor: "var(--c-border)", background: "var(--c-card)", color: reportOpen ? "#ef4444" : "var(--c-text-3)" }} title="Report issue">
-                <Flag className="h-4 w-4" />
-              </button>
-              <Link href="/notifications" className="hidden h-10 w-10 place-items-center rounded-2xl border transition md:grid" style={{ borderColor: "var(--c-border)", background: "var(--c-card)", color: "var(--c-text-3)" }}>
-                <Bell className="h-4 w-4" />
-              </Link>
             </div>
           </div>
-          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--c-elevated)" }}>
-            <div className="h-full rounded-full bg-gradient-to-r from-brand to-cyan-400 transition-all duration-300" style={{ width: `${progressPct}%` }} />
+
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: "#dbe6ff" }}>
+              <span className="tabular-nums">{formatTime(seconds)}</span>
+              <button onClick={() => setIsPaused((v) => !v)}>{isPaused ? <Play className="h-4 w-4 fill-current" /> : <Pause className="h-4 w-4 fill-current" />}</button>
+            </div>
+            <div className="flex rounded-2xl border p-1" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)" }}>
+              {(["tutor", "exam"] as const).map((entry) => (
+                <button key={entry} onClick={() => setMode(entry)} className="rounded-xl px-4 py-2 text-sm font-semibold capitalize transition" style={mode === entry ? { background: "#2563eb", color: "#fff" } : { color: "#aab6ce" }}>
+                  {entry}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => void saveLibraryEntry("bookmark")} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: "#dbe6ff" }}>
+              <BookmarkPlus className="h-4 w-4" />
+            </button>
+            <button onClick={() => setReportOpen((v) => !v)} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: reportOpen ? "#f87171" : "#dbe6ff" }}>
+              <Flag className="h-4 w-4" />
+            </button>
+            <button onClick={() => setFocusMode((v) => !v)} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: focusMode ? "rgba(37,99,235,0.18)" : "rgba(12,18,34,0.92)", color: focusMode ? "#93c5fd" : "#dbe6ff" }}>
+              <Target className="h-4 w-4" />
+            </button>
+            <button onClick={toggleFullscreen} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: "#dbe6ff" }}>
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
+            <button className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: "#dbe6ff" }}>
+              <MoreVertical className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </div>
 
-      {reportOpen && (
-        <div className="mx-auto max-w-7xl px-4 pt-4 md:px-6">
-          <div className="rounded-[22px] border p-4" style={{ background: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.25)" }}>
-            <div className="mb-2 flex items-center gap-2">
-              <Flag className="h-4 w-4" style={{ color: "#ef4444" }} />
-              <span className="text-sm font-semibold" style={{ color: "#ef4444" }}>Report an Issue</span>
+      <div className="mx-auto w-full max-w-[1520px] px-4 py-4 md:px-6">
+        {reportOpen ? (
+          <div className="mb-4 rounded-[22px] border p-4" style={{ background: "rgba(127,29,29,0.18)", borderColor: "rgba(248,113,113,0.28)" }}>
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold" style={{ color: "#fecaca" }}>
+              <Flag className="h-4 w-4" /> Report issue
             </div>
             <div className="flex flex-wrap gap-2">
-              {["Wrong answer key", "Unclear question", "Incorrect explanation", "Typo / formatting"].map((reason) => (
-                <button key={reason} onClick={() => { setToolStatus(`Reported: ${reason}`); setReportOpen(false); }} className="rounded-xl border px-3 py-1.5 text-xs font-medium transition" style={{ borderColor: "rgba(239,68,68,0.25)", background: "var(--c-elevated)", color: "var(--c-text-2)" }}>
+              {["Wrong answer key", "Unclear stem", "Formatting issue", "Explanation issue"].map((reason) => (
+                <button key={reason} onClick={() => { setToolStatus(`Reported: ${reason}`); setReportOpen(false); }} className="rounded-xl border px-3 py-2 text-xs font-medium" style={{ borderColor: "rgba(248,113,113,0.24)", background: "rgba(12,18,34,0.9)", color: "#fca5a5" }}>
                   {reason}
                 </button>
               ))}
             </div>
           </div>
-        </div>
-      )}
+        ) : null}
 
-      <div className="grid gap-4 px-4 py-4 md:px-6 lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)_minmax(300px,360px)]">
-        <aside className={`${navigatorOpen ? "block" : "hidden sm:block"} ${navigatorOpen ? "lg:block" : "lg:hidden"}`}>
-          <div className="rounded-[26px] border p-4" style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}>
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--c-text-4)" }}>Navigation</div>
-                <div className="mt-1 text-base font-bold" style={{ color: "var(--c-text-1)" }}>Question map</div>
+        {!focusMode ? (
+          <section className="mb-4 overflow-hidden rounded-[24px] border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "linear-gradient(180deg, rgba(12,18,34,0.96), rgba(8,13,26,0.96))", boxShadow: "0 18px 48px rgba(0,0,0,0.22)" }}>
+            <button onClick={() => setQuestionMapOpen((v) => !v)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left md:px-5">
+              <div className="flex items-center gap-2">
+                <div className="grid h-9 w-9 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#dbe6ff" }}>
+                  <List className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-white">Question Map</div>
+                  <div className="text-xs" style={{ color: "#92a2bf" }}>{answered}/{questions.length} answered</div>
+                </div>
               </div>
-              <div className="rounded-full px-2.5 py-1 text-[10px] font-semibold" style={{ background: "var(--c-elevated)", color: "var(--c-text-4)", border: "1px solid var(--c-border)" }}>{answered}/{questions.length} answered</div>
-            </div>
-            <div className="mt-4 grid grid-cols-5 gap-2 sm:grid-cols-6 lg:grid-cols-4">
-              {navigatorItems.map(({ item, idx, revealedLocal, pickLocal, result }) => {
-                const active = idx === i;
-                const hasPick = Boolean(pickLocal);
-                const isCorrect = result?.correct;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setI(idx);
-                      setSeconds(0);
-                      setNoteOpen(false);
-                      setReportOpen(false);
-                    }}
-                    className="flex h-11 items-center justify-center rounded-2xl border text-xs font-semibold transition"
-                    style={active
-                      ? { borderColor: "var(--c-blue)", background: "rgba(37,99,235,0.12)", color: "var(--c-blue)" }
-                      : revealedLocal && isCorrect
-                        ? { borderColor: "rgba(34,197,94,0.25)", background: "rgba(34,197,94,0.08)", color: "#22c55e" }
-                        : revealedLocal && !isCorrect
-                          ? { borderColor: "rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.08)", color: "#ef4444" }
-                          : hasPick
-                            ? { borderColor: "rgba(245,158,11,0.25)", background: "rgba(245,158,11,0.08)", color: "#d97706" }
-                            : { borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-text-3)" }}
-                  >
-                    {idx + 1}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="mt-4 space-y-2 text-xs" style={{ color: "var(--c-text-4)" }}>
-              <LegendDot color="#2563eb" label="Current" />
-              <LegendDot color="#22c55e" label="Correct" />
-              <LegendDot color="#ef4444" label="Incorrect" />
-              <LegendDot color="#d97706" label="Selected" />
-            </div>
-          </div>
-        </aside>
+              <div className="flex items-center gap-3 text-xs" style={{ color: "#92a2bf" }}>
+                <span>{answered}/{questions.length} answered</span>
+                <ChevronDown className={`h-4 w-4 transition ${questionMapOpen ? "rotate-180" : "rotate-0"}`} />
+              </div>
+            </button>
+            {questionMapOpen ? (
+              <div className="border-t px-4 py-4 md:px-5" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                <div className="flex flex-wrap items-center gap-4 text-xs" style={{ color: "#aab6ce" }}>
+                  <Legend color="#3b82f6" label="Current" />
+                  <Legend color="#22c55e" label="Correct" />
+                  <Legend color="#ef4444" label="Incorrect" />
+                  <Legend color="#f59e0b" label="Selected" />
+                  <Legend color="#94a3b8" label="Unanswered" />
+                </div>
+                <div className="mt-4 grid grid-cols-9 gap-2 sm:grid-cols-12 lg:grid-cols-18">
+                  {navigatorItems.map(({ item, idx, result, picked: pickedLocal, revealed: revealedLocal }) => {
+                    const active = idx === i;
+                    const hasPick = Boolean(pickedLocal);
+                    const isCorrect = result?.correct;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => { setI(idx); setSeconds(0); setToolStatus(null); setNoteOpen(false); }}
+                        className="flex h-8 items-center justify-center rounded-xl border text-[11px] font-semibold transition"
+                        style={active
+                          ? { borderColor: "#3b82f6", background: "rgba(59,130,246,0.18)", color: "#93c5fd" }
+                          : revealedLocal && isCorrect
+                            ? { borderColor: "rgba(34,197,94,0.28)", background: "rgba(34,197,94,0.12)", color: "#4ade80" }
+                            : revealedLocal && !isCorrect
+                              ? { borderColor: "rgba(239,68,68,0.28)", background: "rgba(239,68,68,0.12)", color: "#f87171" }
+                              : hasPick
+                                ? { borderColor: "rgba(245,158,11,0.28)", background: "rgba(245,158,11,0.12)", color: "#fbbf24" }
+                                : { borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)", color: "#94a3b8" }}
+                      >
+                        {idx + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
-        <main className="min-w-0">
-          <div className="rounded-[28px] border p-4 sm:p-5 md:p-6" style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}>
+        <section className="overflow-hidden rounded-[26px] border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "linear-gradient(180deg, rgba(12,18,34,0.97), rgba(8,13,26,0.97))", boxShadow: "0 18px 48px rgba(0,0,0,0.22)" }}>
+          <div className="px-4 py-4 md:px-5 md:py-5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em]" style={{ background: "var(--c-blue-bg)", color: "var(--c-blue)", border: "1px solid var(--c-blue-border)" }}>{subjectLabel}</span>
-              <span className="rounded-full px-3 py-1 text-[11px] font-semibold" style={{ background: "var(--c-elevated)", color: "var(--c-text-3)", border: "1px solid var(--c-border)" }}>{topic}</span>
-              {q.difficulty ? <span className="rounded-full px-3 py-1 text-[11px] font-semibold" style={{ background: diff.bg, color: diff.color, border: `1px solid ${diff.border}` }}>{q.difficulty}</span> : null}
+              <span className="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: "rgba(96,165,250,0.24)", background: "rgba(59,130,246,0.10)", color: "#93c5fd" }}>{(q.tags[0] || subjectLabel).toUpperCase()}</span>
+              <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#c9d3e7" }}>{topic}</span>
+              {q.difficulty ? <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: diff.border, background: diff.bg, color: diff.color }}>{q.difficulty}</span> : null}
             </div>
 
-            <div className="mt-5 text-[17px] font-medium leading-[1.7] sm:text-[18px]" style={{ color: "var(--c-text-1)" }}>
+            <div className="mt-5 max-w-[1040px] text-[25px] font-semibold leading-[1.55] tracking-[-0.02em] md:text-[33px]" style={{ color: "#f8fbff" }}>
               {q.stem}
             </div>
-
-            {imageHref ? (
-              <button onClick={() => setImageOpen(true)} className="mt-5 block w-full overflow-hidden rounded-[24px] border text-left transition" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)" }}>
-                <img src={imageHref} alt={q.image_caption || "Question image"} className="max-h-[420px] w-full object-contain" />
-                <div className="flex items-center justify-between border-t px-4 py-3 text-sm" style={{ borderColor: "var(--c-border)", color: "var(--c-text-3)" }}>
-                  <span className="inline-flex items-center gap-2"><ImageIcon className="h-4 w-4" /> {q.image_caption || "Clinical figure"}</span>
-                  <span className="inline-flex items-center gap-2 font-semibold" style={{ color: "var(--c-blue)" }}><Expand className="h-4 w-4" /> Open viewer</span>
-                </div>
-              </button>
-            ) : null}
 
             <div className="mt-6 space-y-3">
               {q.choices.map((choice) => {
                 const isCorrect = choice.key === q.answer_key;
                 const isPicked = choice.key === picked;
-                let bg = "var(--c-card)";
-                let border = "var(--c-border)";
-                let textColor = "var(--c-text-1)";
+                let bg = "rgba(255,255,255,0.02)";
+                let border = "rgba(255,255,255,0.07)";
+                let textColor = "#f3f7ff";
+                let helperColor = "#8da0c0";
                 if (revealed) {
                   if (isCorrect) {
                     bg = "rgba(34,197,94,0.10)";
-                    border = "rgba(34,197,94,0.45)";
-                    textColor = "#166534";
+                    border = "rgba(34,197,94,0.35)";
+                    textColor = "#dcfce7";
+                    helperColor = "#86efac";
                   } else if (isPicked) {
                     bg = "rgba(239,68,68,0.10)";
-                    border = "rgba(239,68,68,0.45)";
-                    textColor = "#b91c1c";
+                    border = "rgba(239,68,68,0.35)";
+                    textColor = "#fee2e2";
+                    helperColor = "#fca5a5";
                   }
                 } else if (isPicked) {
-                  bg = "rgba(37,99,235,0.08)";
-                  border = "var(--c-blue)";
+                  bg = "rgba(59,130,246,0.12)";
+                  border = "rgba(59,130,246,0.35)";
+                  helperColor = "#93c5fd";
                 }
                 return (
                   <button
                     key={choice.key}
-                    className="w-full rounded-[22px] border p-4 text-left text-sm font-medium leading-7 transition sm:p-5"
-                    style={{ background: bg, borderColor: border, color: textColor }}
                     disabled={revealed}
-                    onClick={() =>
-                      setPicks((prev) => {
-                        const next = [...prev];
-                        next[i] = choice.key;
-                        return next;
-                      })
-                    }
+                    onClick={() => setPicks((prev) => { const next = [...prev]; next[i] = choice.key; return next; })}
+                    className="w-full rounded-[20px] border p-4 text-left transition md:p-5"
+                    style={{ background: bg, borderColor: border }}
                   >
-                    <div className="flex items-start gap-3">
-                      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ background: isPicked || (revealed && isCorrect) ? border : "var(--c-elevated)", color: isPicked || (revealed && isCorrect) ? "#fff" : "var(--c-text-3)" }}>{choice.key}</span>
-                      <span className="flex-1">{choice.text}</span>
-                      {revealed && isCorrect ? <CheckCircle2 className="mt-1 h-4 w-4 shrink-0" /> : null}
-                      {revealed && isPicked && !isCorrect ? <XCircle className="mt-1 h-4 w-4 shrink-0" /> : null}
+                    <div className="flex items-center gap-4">
+                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ background: "rgba(255,255,255,0.05)", color: helperColor }}>
+                        {choice.key}
+                      </span>
+                      <span className="text-base font-medium md:text-[17px]" style={{ color: textColor }}>{choice.text}</span>
+                      {revealed && isCorrect ? <CheckCircle2 className="ml-auto h-4 w-4 shrink-0" style={{ color: "#4ade80" }} /> : null}
+                      {revealed && isPicked && !isCorrect ? <XCircle className="ml-auto h-4 w-4 shrink-0" style={{ color: "#f87171" }} /> : null}
                     </div>
                   </button>
                 );
@@ -605,142 +691,201 @@ export default function QBankRunner({
 
             {revealed && mode === "tutor" ? (
               <div className="mt-6 space-y-4">
-                <div className="rounded-[24px] border p-4" style={{ background: isCorrectAnswer ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.06)", borderColor: isCorrectAnswer ? "rgba(34,197,94,0.30)" : "rgba(239,68,68,0.30)" }}>
-                  <div className="flex items-center gap-2">
-                    {isCorrectAnswer ? <CheckCircle2 className="h-5 w-5" style={{ color: "#22c55e" }} /> : <XCircle className="h-5 w-5" style={{ color: "#ef4444" }} />}
-                    <span className="text-base font-bold" style={{ color: isCorrectAnswer ? "#22c55e" : "#ef4444" }}>{isCorrectAnswer ? "Correct" : "Incorrect"}</span>
-                    <span className="ml-auto rounded-full px-3 py-1 text-xs font-semibold" style={{ background: "rgba(34,197,94,0.12)", color: "#15803d" }}>Correct answer: {q.answer_key}</span>
+                <div className="rounded-[22px] border p-4" style={{ borderColor: isCorrectAnswer ? "rgba(34,197,94,0.28)" : "rgba(239,68,68,0.28)", background: isCorrectAnswer ? "rgba(34,197,94,0.10)" : "rgba(239,68,68,0.10)" }}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {isCorrectAnswer ? <CheckCircle2 className="h-5 w-5" style={{ color: "#4ade80" }} /> : <XCircle className="h-5 w-5" style={{ color: "#f87171" }} />}
+                    <span className="text-sm font-bold uppercase tracking-[0.16em]" style={{ color: isCorrectAnswer ? "#86efac" : "#fca5a5" }}>{isCorrectAnswer ? "Correct" : "Incorrect"}</span>
+                    <span className="ml-auto text-xs font-semibold" style={{ color: "#c9d3e7" }}>Correct answer: {q.answer_key}</span>
                   </div>
-                  <div className="mt-2 text-sm" style={{ color: "var(--c-text-3)" }}>
+                  <div className="mt-2 text-sm leading-7" style={{ color: "#dce5f4" }}>
                     {isCorrectAnswer ? `You answered ${picked}.` : <>You answered <strong>{picked}</strong>. Correct answer: <strong>{q.answer_key}</strong>.</>}
                   </div>
                 </div>
 
                 {details.explanation ? (
-                  <div className="rounded-[24px] border p-4" style={{ background: "var(--c-card)", borderColor: "var(--c-border)" }}>
-                    <div className="mb-2 flex items-center gap-2">
-                      <BookOpen className="h-4 w-4" style={{ color: "var(--c-blue)" }} />
-                      <span className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "var(--c-blue)" }}>Explanation</span>
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+                    <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: "#93c5fd" }}>
+                      <BookOpen className="h-4 w-4" /> Explanation
                     </div>
-                    <div className="whitespace-pre-wrap text-sm leading-7" style={{ color: "var(--c-text-2)" }}>{details.explanation}</div>
+                    <div className="whitespace-pre-wrap text-sm leading-7" style={{ color: "#dce5f4" }}>{details.explanation}</div>
                   </div>
                 ) : null}
 
                 {details.educationalObjective ? (
-                  <div className="rounded-[24px] border p-4" style={{ background: "rgba(16,185,129,0.06)", borderColor: "rgba(16,185,129,0.20)" }}>
-                    <div className="mb-2 flex items-center gap-2">
-                      <Lightbulb className="h-4 w-4" style={{ color: "#10b981" }} />
-                      <span className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "#10b981" }}>High-Yield takeaway</span>
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: "rgba(16,185,129,0.25)", background: "rgba(16,185,129,0.08)" }}>
+                    <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: "#6ee7b7" }}>
+                      <Lightbulb className="h-4 w-4" /> High-yield takeaway
                     </div>
-                    <div className="text-sm leading-7" style={{ color: "var(--c-text-2)" }}>{details.educationalObjective}</div>
+                    <div className="text-sm leading-7" style={{ color: "#dce5f4" }}>{details.educationalObjective}</div>
                   </div>
                 ) : null}
 
                 {wrongChoices.length > 0 ? (
-                  <details className="rounded-[24px] border p-4" style={{ background: "var(--c-card)", borderColor: "var(--c-border)" }}>
-                    <summary className="cursor-pointer list-none text-sm font-semibold" style={{ color: "var(--c-text-2)" }}>Review the other answer choices</summary>
+                  <details className="rounded-[22px] border p-4" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+                    <summary className="cursor-pointer list-none text-sm font-semibold" style={{ color: "#dce5f4" }}>Why the other choices are incorrect</summary>
                     <div className="mt-3 space-y-2">
                       {wrongChoices.map((choice) => (
                         <div key={choice.key} className="flex items-start gap-2 text-sm">
-                          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold" style={{ background: "var(--c-elevated)", color: "var(--c-text-3)" }}>{choice.key}</span>
-                          <span style={{ color: "var(--c-text-3)" }}>{choice.text}</span>
+                          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold" style={{ background: "rgba(255,255,255,0.05)", color: "#aab6ce" }}>{choice.key}</span>
+                          <span style={{ color: "#aab6ce" }}>{choice.text}</span>
                         </div>
                       ))}
                     </div>
                   </details>
                 ) : null}
-
-                {q.tags.filter(Boolean).length > 0 ? (
-                  <div className="rounded-[24px] border p-4" style={{ background: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.20)" }}>
-                    <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "#d97706" }}>High-Yield tags</div>
-                    <div className="flex flex-wrap gap-2">
-                      {q.tags.filter(Boolean).map((tag) => (
-                        <span key={tag} className="rounded-full px-2.5 py-1 text-[10px] font-semibold" style={{ background: "rgba(245,158,11,0.10)", color: "#b45309", border: "1px solid rgba(245,158,11,0.25)" }}>{tag}</span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {revealed && rawQ.video_url ? (
-              <div className="mt-4 overflow-hidden rounded-[24px] border" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)" }}>
-                <div className="flex items-center gap-2 border-b px-4 py-2.5" style={{ borderColor: "var(--c-border)" }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" style={{ color: "#ef4444" }}>
-                    <path d="M23.498 6.186a2.99 2.99 0 0 0-2.11-2.11C19.527 3.5 12 3.5 12 3.5s-7.527 0-9.388.576a2.99 2.99 0 0 0-2.11 2.11C0 8.047 0 12 0 12s0 3.953.502 5.814a2.99 2.99 0 0 0 2.11 2.11C4.473 20.5 12 20.5 12 20.5s7.527 0 9.388-.576a2.99 2.99 0 0 0 2.11-2.11C24 15.953 24 12 24 12s0-3.953-.502-5.814zM9.75 15.5v-7l6.5 3.5-6.5 3.5z" />
-                  </svg>
-                  <span className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--c-text-3)" }}>Video Explanation</span>
-                </div>
-                {getYouTubeId(rawQ.video_url) ? (
-                  <div className="relative" style={{ paddingBottom: "56.25%" }}>
-                    <iframe src={`https://www.youtube.com/embed/${getYouTubeId(rawQ.video_url)}?rel=0&modestbranding=1`} title="Video Explanation" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="absolute inset-0 h-full w-full border-0" />
-                  </div>
-                ) : (
-                  <div className="relative" style={{ paddingBottom: "56.25%" }}>
-                    <iframe src={rawQ.video_url} title="Video Explanation" allowFullScreen className="absolute inset-0 h-full w-full border-0" />
-                  </div>
-                )}
               </div>
             ) : null}
 
             {noteOpen ? (
-              <div className="mt-4 rounded-[24px] border p-4" style={{ background: "var(--c-card)", borderColor: "var(--c-border)" }}>
-                <textarea className="input w-full resize-none rounded-2xl text-sm" rows={3} placeholder="Add a note for this question…" value={noteText} onChange={(e) => setNoteText(e.target.value)} />
-                <div className="mt-2 flex gap-2">
+              <div className="mt-5 rounded-[22px] border p-4" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+                <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={4} className="input w-full resize-none rounded-2xl text-sm" placeholder="Add a review note for this question…" />
+                <div className="mt-3 flex gap-2">
                   <button className="btn-primary text-sm" disabled={!noteText.trim()} onClick={() => void saveLibraryEntry("note", { body: noteText })}>Save note</button>
                   <button className="btn-ghost text-sm" onClick={() => { setNoteOpen(false); setNoteText(""); }}>Cancel</button>
                 </div>
               </div>
             ) : null}
           </div>
-        </main>
+        </section>
 
-        <aside className="min-w-0">
-          <div className="space-y-4">
-            <div className="rounded-[26px] border p-4" style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}>
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--c-text-4)" }}>Context panel</div>
-                  <div className="mt-1 text-base font-bold" style={{ color: "var(--c-text-1)" }}>Figure & tools</div>
-                </div>
-                {imageHref ? <button onClick={() => setImageOpen(true)} className="rounded-xl border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-blue)" }}>Open viewer</button> : null}
+        {!focusMode && contextVisible ? (
+          <section className="mt-4 overflow-hidden rounded-[24px] border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "linear-gradient(180deg, rgba(12,18,34,0.96), rgba(8,13,26,0.96))", boxShadow: "0 18px 48px rgba(0,0,0,0.22)" }}>
+            <div className="flex items-start justify-between gap-3 border-b px-4 py-4 md:px-5" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#7f90ae" }}>Context Panel</div>
+                <div className="mt-1 text-lg font-semibold text-white">Figure & Tools</div>
               </div>
-
-              {imageHref ? (
-                <button onClick={() => setImageOpen(true)} className="mt-4 block w-full overflow-hidden rounded-[22px] border" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)" }}>
-                  <img src={imageHref} alt={q.image_caption || "Question image"} className="max-h-72 w-full object-contain" />
-                </button>
-              ) : (
-                <div className="mt-4 rounded-[22px] border p-5 text-center text-sm" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-text-4)" }}>
-                  This question has no linked image.
-                </div>
-              )}
-
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button className="rounded-2xl border px-3 py-3 text-sm font-semibold" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-text-2)" }}>
-                  <FlaskConical className="mx-auto mb-1 h-4 w-4" />
-                  Labs
-                </button>
-                <button className="rounded-2xl border px-3 py-3 text-sm font-semibold" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-text-2)" }}>
-                  <Calculator className="mx-auto mb-1 h-4 w-4" />
-                  Calculator
-                </button>
-              </div>
+              <button onClick={() => setContextVisible(false)} className="grid h-10 w-10 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#c9d3e7" }}>
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
-            <div className="rounded-[26px] border p-4" style={{ background: "var(--c-card)", borderColor: "var(--c-border)", boxShadow: "var(--shadow-card)" }}>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--c-text-4)" }}>Session status</div>
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                <MiniMetric label="Done" value={answered} color="var(--c-text-1)" />
-                <MiniMetric label="Correct" value={correctCount} color="#22c55e" />
-                <MiniMetric label="Wrong" value={incorrectCount} color="#ef4444" />
+            <div className="px-4 py-4 md:px-5">
+              <div className="grid gap-2 md:grid-cols-[220px_220px_220px_auto]">
+                <button onClick={() => setContextTab("figure")} disabled={!imageHref} className="flex items-center justify-center gap-2 rounded-[18px] border px-4 py-3 text-sm font-semibold transition disabled:opacity-40" style={contextTab === "figure" ? { borderColor: "#2563eb", background: "rgba(37,99,235,0.12)", color: "#93c5fd" } : { borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#dce5f4" }}>
+                  <ImageIcon className="h-4 w-4" /> Figure
+                </button>
+                <button onClick={() => setContextTab("labs")} className="flex items-center justify-center gap-2 rounded-[18px] border px-4 py-3 text-sm font-semibold transition" style={contextTab === "labs" ? { borderColor: "#2563eb", background: "rgba(37,99,235,0.12)", color: "#93c5fd" } : { borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#dce5f4" }}>
+                  <FlaskConical className="h-4 w-4" /> Labs
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: "rgba(59,130,246,0.18)", color: "#bfdbfe" }}>3</span>
+                </button>
+                <button onClick={() => setContextTab("calculator")} className="flex items-center justify-center gap-2 rounded-[18px] border px-4 py-3 text-sm font-semibold transition" style={contextTab === "calculator" ? { borderColor: "#2563eb", background: "rgba(37,99,235,0.12)", color: "#93c5fd" } : { borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#dce5f4" }}>
+                  <Calculator className="h-4 w-4" /> Calculator
+                </button>
+                <div />
               </div>
-              <div className="mt-3 rounded-2xl border p-3 text-sm" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-text-3)" }}>
-                Accuracy so far: <strong style={{ color: "var(--c-text-1)" }}>{accuracy}%</strong>
-              </div>
+
+              {contextTab === "figure" ? (
+                <div className="mt-4 overflow-hidden rounded-[22px] border" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+                  {imageHref ? (
+                    <>
+                      <button onClick={() => setImageOpen(true)} className="block w-full">
+                        <img src={imageHref} alt={q.image_caption || "Figure"} className="max-h-[520px] w-full object-contain" />
+                      </button>
+                      <div className="flex items-center justify-between border-t px-4 py-3 text-sm" style={{ borderColor: "rgba(255,255,255,0.06)", color: "#c9d3e7" }}>
+                        <button onClick={() => void saveLibraryEntry("note", { body: `Figure note for question ${i + 1}` })} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+                          <PencilLine className="h-3.5 w-3.5" /> Add to notes
+                        </button>
+                        <button onClick={() => setImageOpen(true)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+                          <Expand className="h-3.5 w-3.5" /> Enlarge
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="p-8 text-center text-sm" style={{ color: "#92a2bf" }}>This question has no linked figure.</div>
+                  )}
+                </div>
+              ) : null}
+
+              {contextTab === "labs" ? (
+                <div className="mt-4 grid gap-3 lg:grid-cols-[190px_minmax(0,1fr)]">
+                  <div className="rounded-[22px] border p-3" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+                    <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#7f90ae" }}>Lab categories</div>
+                    <div className="space-y-2">
+                      {Object.entries(LAB_REFERENCE).map(([category, items]) => (
+                        <button key={category} onClick={() => setLabCategory(category)} className="flex w-full items-center justify-between rounded-[14px] px-3 py-2.5 text-sm font-medium transition" style={labCategory === category ? { background: "rgba(37,99,235,0.18)", color: "#dbeafe" } : { background: "rgba(255,255,255,0.02)", color: "#c9d3e7" }}>
+                          <span>{category}</span>
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: labCategory === category ? "rgba(147,197,253,0.18)" : "rgba(255,255,255,0.05)", color: labCategory === category ? "#bfdbfe" : "#8fa1be" }}>{items.length}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[22px] border p-3 md:p-4" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+                    <div className="mb-3 text-base font-semibold text-white">{labCategory}</div>
+                    <div className="overflow-hidden rounded-[18px] border" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                      <div className="grid grid-cols-[1.1fr_1fr_1fr] gap-3 border-b px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: "rgba(255,255,255,0.06)", color: "#7f90ae" }}>
+                        <div>Test</div>
+                        <div>Your value</div>
+                        <div>Reference range</div>
+                      </div>
+                      {labItems.map((item) => (
+                        <div key={item.test} className="grid grid-cols-[1.1fr_1fr_1fr] gap-3 border-b px-4 py-3 text-sm last:border-b-0" style={{ borderColor: "rgba(255,255,255,0.05)", color: "#dce5f4" }}>
+                          <div>{item.test}</div>
+                          <div style={{ color: item.tone === "abnormal" ? "#fca5a5" : "#86efac" }}>{item.value}</div>
+                          <div style={{ color: "#aab6ce" }}>{item.ref}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 text-xs" style={{ color: "#92a2bf" }}>When question-specific labs are available, abnormal values are highlighted.</div>
+                  </div>
+                </div>
+              ) : null}
+
+              {contextTab === "calculator" ? (
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+                    <div className="text-base font-semibold text-white">Anion gap</div>
+                    <div className="mt-3 grid grid-cols-3 gap-3">
+                      <CalcField label="Na⁺" value={calcNa} onChange={setCalcNa} />
+                      <CalcField label="Cl⁻" value={calcCl} onChange={setCalcCl} />
+                      <CalcField label="HCO₃⁻" value={calcHco3} onChange={setCalcHco3} />
+                    </div>
+                    <div className="mt-4 rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: "rgba(59,130,246,0.24)", background: "rgba(37,99,235,0.08)", color: "#dbeafe" }}>
+                      Anion gap = <strong>{Number.isFinite(anionGap) ? anionGap : "—"}</strong>
+                    </div>
+                  </div>
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+                    <div className="text-base font-semibold text-white">Quick reference</div>
+                    <div className="mt-3 space-y-2 text-sm" style={{ color: "#c9d3e7" }}>
+                      <div className="rounded-[16px] border px-3 py-2" style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>Normal anion gap: <strong>8 – 12</strong></div>
+                      <div className="rounded-[16px] border px-3 py-2" style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>Winter’s formula: <strong>1.5 × HCO₃ + 8 ± 2</strong></div>
+                      <div className="rounded-[16px] border px-3 py-2" style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>Corrected Na⁺ in hyperglycemia: <strong>+1.6 per 100 glucose above 100</strong></div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
+          </section>
+        ) : !focusMode ? (
+          <div className="mt-4 flex justify-end">
+            <button onClick={() => setContextVisible(true)} className="inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: "#dbe6ff" }}>
+              <FolderTree className="h-4 w-4" /> Show context panel
+            </button>
           </div>
-        </aside>
+        ) : null}
+
+        {!focusMode ? (
+          <section className="mt-4 overflow-hidden rounded-[24px] border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "linear-gradient(180deg, rgba(12,18,34,0.96), rgba(8,13,26,0.96))", boxShadow: "0 18px 48px rgba(0,0,0,0.22)" }}>
+            <div className="px-4 py-4 md:px-5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#7f90ae" }}>Session status</div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <StatusTile label="Done" value={answered} color="#dce5f4" />
+                <StatusTile label="Correct" value={correctCount} color="#4ade80" />
+                <StatusTile label="Wrong" value={incorrectCount} color="#f87171" />
+              </div>
+              <div className="mt-4 rounded-[18px] border px-4 py-3" style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
+                <div className="mb-2 flex items-center justify-between text-xs" style={{ color: "#aab6ce" }}>
+                  <span>Accuracy so far: {accuracy}%</span>
+                  <span>{answered}/{questions.length}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.05)" }}>
+                  <div className="h-full rounded-full bg-gradient-to-r from-[#2563eb] to-[#60a5fa] transition-all" style={{ width: `${accuracy}%` }} />
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
       </div>
 
       {imageOpen && imageHref ? (
@@ -767,7 +912,7 @@ export default function QBankRunner({
                 <button onClick={() => setImageZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)))} className="grid h-10 w-10 place-items-center rounded-2xl border" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-text-2)" }}><Plus className="h-4 w-4" /></button>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => void saveLibraryEntry("note", { body: `Image note: ${q.image_caption || `Question ${i + 1}`}` })} className="rounded-2xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-text-2)" }}>Add to notes</button>
+                <button onClick={() => void saveLibraryEntry("note", { body: `Image note for question ${i + 1}` })} className="rounded-2xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-text-2)" }}>Add to notes</button>
                 <button onClick={() => void saveLibraryEntry("bookmark")} className="rounded-2xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-blue)" }}>Bookmark</button>
               </div>
             </div>
@@ -775,33 +920,40 @@ export default function QBankRunner({
         </div>
       ) : null}
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t px-4 pb-6 pt-3 md:px-6 md:pb-4" style={{ background: "var(--c-header-bg)", borderColor: "var(--c-border)" }}>
-        <div className="mx-auto flex max-w-7xl flex-col gap-2">
-          {toolStatus ? <div className="text-center text-xs font-medium" style={{ color: "var(--c-blue)" }}>{toolStatus}</div> : null}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="shrink-0 flex gap-1.5">
-              <button onClick={() => void saveLibraryEntry("highlight")} disabled={toolBusy === "highlight"} className="grid h-11 w-11 place-items-center rounded-2xl border transition" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: toolBusy === "highlight" ? "var(--c-blue)" : "var(--c-text-3)" }} title="Highlight">
-                <Highlighter className="h-4 w-4" />
-              </button>
-              <button onClick={() => setNoteOpen((v) => !v)} className="grid h-11 w-11 place-items-center rounded-2xl border transition" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: noteOpen ? "var(--c-blue)" : "var(--c-text-3)" }} title="Add note">
-                <PencilLine className="h-4 w-4" />
-              </button>
-            </div>
-            <button onClick={prev} disabled={i <= 0} className="flex h-12 items-center justify-center gap-1.5 rounded-2xl border px-4 text-sm font-semibold transition disabled:opacity-40" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-text-2)" }}>
-              <ChevronLeft className="h-4 w-4" />
-              <span>Previous</span>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t px-4 pb-4 pt-3 backdrop-blur-xl md:px-6" style={{ background: "rgba(6,11,24,0.88)", borderColor: "rgba(255,255,255,0.08)" }}>
+        <div className="mx-auto flex max-w-[1520px] flex-col gap-2">
+          {toolStatus ? <div className="text-center text-xs font-medium" style={{ color: "#93c5fd" }}>{toolStatus}</div> : null}
+          <div className="flex flex-col gap-2 md:flex-row md:items-center">
+            <button onClick={prev} disabled={i <= 0} className="flex h-12 items-center justify-center gap-1.5 rounded-2xl border px-4 text-sm font-semibold transition disabled:opacity-40 md:min-w-[180px]" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#dce5f4" }}>
+              <ChevronLeft className="h-4 w-4" /> Previous
             </button>
-            <div className="flex-1">
-              {!revealed ? (
-                <button className="btn-primary h-12 w-full rounded-2xl text-base" disabled={!picked} onClick={() => void submit()}>
-                  Reveal Answer
-                </button>
-              ) : (
-                <button className="btn-primary h-12 w-full rounded-2xl text-base" onClick={next}>
-                  Next Question <ChevronRight className="ml-1 h-5 w-5" />
-                </button>
-              )}
-            </div>
+            <button onClick={() => setNoteOpen((v) => !v)} className="flex h-12 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold md:min-w-[180px]" style={{ borderColor: "rgba(255,255,255,0.08)", background: noteOpen ? "rgba(37,99,235,0.12)" : "rgba(255,255,255,0.03)", color: noteOpen ? "#93c5fd" : "#dce5f4" }}>
+              <PencilLine className="h-4 w-4" /> Review
+            </button>
+            <div className="md:flex-1" />
+            {!revealed ? (
+              <button className="btn-primary h-12 rounded-2xl px-8 text-base md:min-w-[200px]" disabled={!picked} onClick={() => void submit()}>
+                Reveal Answer
+              </button>
+            ) : (
+              <button className="btn-primary h-12 rounded-2xl px-8 text-base md:min-w-[200px]" onClick={next}>
+                Next <ChevronRight className="ml-1 h-5 w-5" />
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "#8ea1bf" }}>
+            <button onClick={() => void saveLibraryEntry("highlight")} disabled={toolBusy === "highlight"} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+              <Highlighter className="h-3.5 w-3.5" /> Highlight
+            </button>
+            <button onClick={() => void saveLibraryEntry("bookmark")} disabled={toolBusy === "bookmark"} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+              <BookmarkPlus className="h-3.5 w-3.5" /> Bookmark
+            </button>
+            <button onClick={() => setContextVisible((v) => !v)} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+              <FolderTree className="h-3.5 w-3.5" /> {contextVisible ? "Hide" : "Show"} context
+            </button>
+            <Link href="/notifications" className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+              <Bell className="h-3.5 w-3.5" /> Alerts
+            </Link>
           </div>
         </div>
       </div>
@@ -809,7 +961,25 @@ export default function QBankRunner({
   );
 }
 
-function StatCard({ label, value, color }: { label: string; value: string | number; color: string }) {
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <div className="inline-flex items-center gap-2">
+      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function StatusTile({ label, value, color }: { label: string; value: string | number; color: string }) {
+  return (
+    <div className="rounded-[18px] border px-4 py-4 text-center" style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.03)" }}>
+      <div className="text-3xl font-bold" style={{ color }}>{value}</div>
+      <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#8ea1bf" }}>{label}</div>
+    </div>
+  );
+}
+
+function Metric({ label, value, color }: { label: string; value: string | number; color: string }) {
   return (
     <div className="rounded-2xl p-4" style={{ border: "1px solid var(--c-border)", background: "var(--c-elevated)" }}>
       <div className="text-2xl font-bold" style={{ color }}>{value}</div>
@@ -818,20 +988,11 @@ function StatCard({ label, value, color }: { label: string; value: string | numb
   );
 }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
+function CalcField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color }} />
-      <span>{label}</span>
-    </div>
-  );
-}
-
-function MiniMetric({ label, value, color }: { label: string; value: string | number; color: string }) {
-  return (
-    <div className="rounded-2xl border p-3" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)" }}>
-      <div className="text-lg font-bold" style={{ color }}>{value}</div>
-      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--c-text-4)" }}>{label}</div>
-    </div>
+    <label className="block">
+      <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "#7f90ae" }}>{label}</div>
+      <input value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-2xl border px-3 py-2 text-sm" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#dce5f4" }} />
+    </label>
   );
 }
