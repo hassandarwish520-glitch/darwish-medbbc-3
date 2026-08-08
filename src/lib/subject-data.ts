@@ -40,6 +40,7 @@ type SubjectOverview = SubjectMeta & {
   documentCount: number;
   qbankCount: number;
   keyPointCount: number;
+  blockPreviews: Array<{ id: string; title: string; questionCount: number }>;
 };
 
 type SubjectDetail = {
@@ -200,12 +201,19 @@ export async function getSubjectOverviews(exam = "IFOM_CSE"): Promise<SubjectOve
       return type !== "video" && documentKinds.has(lesson.kind) && subjectTitleMatches(assignedSubject, subject.title);
     });
 
-    const qbankSources = new Set(
-      questions
-        .filter((question) => matchesSubject(subject.title, questionText(question), question.tags))
-        .map((question) => question.lesson_id || question.id),
-    );
+    const relevantQuestions = questions.filter((question) => matchesSubject(subject.title, questionText(question), question.tags));
+    const lessonName = new Map(lessons.map((lesson) => [lesson.id, lesson.title]));
+    const sourceMap = new Map<string, { id: string; title: string; questionCount: number }>();
 
+    for (const question of relevantQuestions) {
+      const key = question.lesson_id || `pool-${subject.slug}`;
+      const title = question.lesson_id ? lessonName.get(question.lesson_id) || subject.title : `${subject.title} Practice Pool`;
+      const existing = sourceMap.get(key) || { id: key, title, questionCount: 0 };
+      existing.questionCount += 1;
+      sourceMap.set(key, existing);
+    }
+
+    const qbankSources = [...sourceMap.values()].sort((a, b) => b.questionCount - a.questionCount || a.title.localeCompare(b.title));
     const keyPoints = flashcards.filter((card) => matchesSubject(subject.title, flashcardText(card), card.tags));
 
     return {
@@ -213,8 +221,9 @@ export async function getSubjectOverviews(exam = "IFOM_CSE"): Promise<SubjectOve
       exam,
       videoCount: videos.length,
       documentCount: documents.length,
-      qbankCount: qbankSources.size,
+      qbankCount: qbankSources.length,
       keyPointCount: keyPoints.length,
+      blockPreviews: qbankSources.slice(0, 4),
     };
   });
 }

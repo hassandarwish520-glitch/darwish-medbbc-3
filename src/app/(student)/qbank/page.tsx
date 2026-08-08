@@ -52,6 +52,7 @@ type SubjectOverview = {
   documentCount: number;
   qbankCount: number;
   keyPointCount: number;
+  blockPreviews: Array<{ id: string; title: string; questionCount: number }>;
 };
 
 type SessionState = {
@@ -112,6 +113,13 @@ function WorkspacePill({ icon, title, meta }: { icon: ReactNode; title: string; 
     </div>
   );
 }
+
+function formatBlockPreviewTitle(title: string, subjectTitle: string) {
+  const cleaned = title.replace(/\s+/g, " ").trim();
+  if (!cleaned) return `${subjectTitle} Block`;
+  return cleaned;
+}
+
 
 function QBankPageInner() {
   const router = useRouter();
@@ -498,6 +506,39 @@ function QBankPageInner() {
                     <div className="flex flex-wrap gap-2 text-[11px]">
                       <span className="rounded-full px-2.5 py-1" style={{ background: "var(--c-elevated)", color: "var(--c-text-4)", border: "1px solid var(--c-border)" }}>{subject.videoCount} videos</span>
                       <span className="rounded-full px-2.5 py-1" style={{ background: "var(--c-elevated)", color: "var(--c-text-4)", border: "1px solid var(--c-border)" }}>{subject.documentCount} notes</span>
+                    </div>
+
+                    <div className="rounded-[22px] border p-3" style={{ background: "linear-gradient(180deg, rgba(37,99,235,0.04) 0%, var(--c-card) 100%)", borderColor: "var(--c-border)" }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em]" style={{ color: "var(--c-text-4)" }}>Core blocks</div>
+                        <span className="text-[11px] font-semibold" style={{ color: "var(--c-blue)" }}>{subject.qbankCount} total</span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {subject.blockPreviews.length > 0 ? subject.blockPreviews.map((block, idx) => (
+                          <Link
+                            key={block.id}
+                            href={`/subjects/${subject.slug}?exam=${encodeURIComponent(selectedExam)}`}
+                            className="inline-flex max-w-full items-center gap-2 rounded-2xl border px-3 py-2 text-left text-xs font-semibold transition hover:-translate-y-0.5"
+                            style={{ background: "var(--c-elevated)", borderColor: "var(--c-border)", color: "var(--c-text-2)" }}
+                          >
+                            <span className="grid h-5 min-w-5 place-items-center rounded-full text-[10px] font-bold" style={{ background: "rgba(37,99,235,0.12)", color: "var(--c-blue)" }}>{idx + 1}</span>
+                            <span className="truncate">{formatBlockPreviewTitle(block.title, subject.title)}</span>
+                          </Link>
+                        )) : (
+                          <div className="rounded-2xl border px-3 py-2 text-xs" style={{ background: "var(--c-elevated)", borderColor: "var(--c-border)", color: "var(--c-text-4)" }}>
+                            Blocks will appear here once this subject has question pools.
+                          </div>
+                        )}
+                        {subject.qbankCount > subject.blockPreviews.length ? (
+                          <Link
+                            href={`/subjects/${subject.slug}?exam=${encodeURIComponent(selectedExam)}`}
+                            className="inline-flex items-center rounded-2xl border px-3 py-2 text-xs font-semibold transition"
+                            style={{ background: "rgba(16,185,129,0.08)", borderColor: "rgba(16,185,129,0.18)", color: "#059669" }}
+                          >
+                            +{subject.qbankCount - subject.blockPreviews.length} more blocks
+                          </Link>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="mt-auto grid grid-cols-[1fr_auto] gap-2">
