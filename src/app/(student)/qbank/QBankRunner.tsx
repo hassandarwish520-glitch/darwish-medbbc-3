@@ -449,37 +449,37 @@ export default function QBankRunner({
     "--qb-report-chip-text": "#fca5a5",
     "--qb-empty-text": "#92a2bf"
   } : {
-    "--qb-shell-bg": "linear-gradient(180deg, #edf2f7 0%, #f7f9fc 100%)",
-    "--qb-chrome-bg": "linear-gradient(180deg, #25598b 0%, #1b4773 100%)",
-    "--qb-chrome-border": "rgba(11,37,68,0.18)",
-    "--qb-chrome-button-bg": "rgba(255,255,255,0.14)",
-    "--qb-chrome-button-border": "rgba(255,255,255,0.24)",
+    "--qb-shell-bg": "linear-gradient(180deg, #f7fafd 0%, #f1f5fa 100%)",
+    "--qb-chrome-bg": "linear-gradient(180deg, #1f5588 0%, #173f69 100%)",
+    "--qb-chrome-border": "rgba(14,42,73,0.18)",
+    "--qb-chrome-button-bg": "rgba(255,255,255,0.16)",
+    "--qb-chrome-button-border": "rgba(255,255,255,0.28)",
     "--qb-chrome-text": "#ffffff",
-    "--qb-chrome-muted": "#d9e6f4",
-    "--qb-panel-bg": "linear-gradient(180deg, #ffffff, #fbfdff)",
-    "--qb-panel-border": "#cad7e6",
-    "--qb-panel-shadow": "0 12px 30px rgba(15,23,42,0.08)",
-    "--qb-panel-title": "#10253e",
-    "--qb-panel-text": "#2e4765",
-    "--qb-panel-muted": "#6f8298",
-    "--qb-panel-soft": "#f8fbff",
-    "--qb-panel-soft-alt": "#f3f7fb",
-    "--qb-panel-soft-border": "#dbe4ef",
-    "--qb-question-text": "#13263e",
-    "--qb-choice-bubble-bg": "#eef3f9",
-    "--qb-footer-bg": "linear-gradient(180deg, #25598b 0%, #1b4773 100%)",
-    "--qb-footer-border": "rgba(11,37,68,0.18)",
-    "--qb-blue": "#1f5faa",
-    "--qb-blue-soft": "rgba(31,95,170,0.10)",
-    "--qb-blue-text": "#1f5faa",
-    "--qb-progress-bg": "#e3ebf5",
+    "--qb-chrome-muted": "#e7eff9",
+    "--qb-panel-bg": "linear-gradient(180deg, #ffffff 0%, #fbfdff 100%)",
+    "--qb-panel-border": "#d7e1ec",
+    "--qb-panel-shadow": "0 10px 28px rgba(15,23,42,0.07)",
+    "--qb-panel-title": "#0f2742",
+    "--qb-panel-text": "#243b57",
+    "--qb-panel-muted": "#5f738d",
+    "--qb-panel-soft": "#f7fafd",
+    "--qb-panel-soft-alt": "#eef4fb",
+    "--qb-panel-soft-border": "#dce6f1",
+    "--qb-question-text": "#0d2238",
+    "--qb-choice-bubble-bg": "#edf3fb",
+    "--qb-footer-bg": "rgba(249,252,255,0.96)",
+    "--qb-footer-border": "#d6e0eb",
+    "--qb-blue": "#1c5aa1",
+    "--qb-blue-soft": "rgba(28,90,161,0.10)",
+    "--qb-blue-text": "#184d87",
+    "--qb-progress-bg": "#e6edf5",
     "--qb-report-bg": "rgba(220,38,38,0.06)",
     "--qb-report-border": "rgba(220,38,38,0.18)",
     "--qb-report-chip-bg": "#ffffff",
     "--qb-report-chip-border": "rgba(220,38,38,0.16)",
     "--qb-report-text": "#991b1b",
     "--qb-report-chip-text": "#b91c1c",
-    "--qb-empty-text": "#6f8298"
+    "--qb-empty-text": "#6a7f98"
   }) as CSSProperties;
 
   async function submit() {
@@ -616,19 +616,19 @@ export default function QBankRunner({
                 </button>
               ))}
             </div>
-            <button onClick={() => void saveLibraryEntry("bookmark")} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: "#dbe6ff" }}>
+            <button onClick={() => void saveLibraryEntry("bookmark")} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "var(--qb-chrome-button-border)", background: "var(--qb-chrome-button-bg)", color: "var(--qb-chrome-text)" }}>
               <BookmarkPlus className="h-4 w-4" />
             </button>
-            <button onClick={() => setReportOpen((v) => !v)} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: reportOpen ? "#f87171" : "#dbe6ff" }}>
+            <button onClick={() => setReportOpen((v) => !v)} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "var(--qb-chrome-button-border)", background: "var(--qb-chrome-button-bg)", color: reportOpen ? "var(--qb-report-chip-text)" : "var(--qb-chrome-text)" }}>
               <Flag className="h-4 w-4" />
             </button>
             <button onClick={() => setFocusMode((v) => !v)} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "var(--qb-chrome-button-border)", background: focusMode ? "var(--qb-blue-soft)" : "var(--qb-chrome-button-bg)", color: focusMode ? "var(--qb-blue-text)" : "var(--qb-chrome-text)" }}>
               <Target className="h-4 w-4" />
             </button>
-            <button onClick={toggleFullscreen} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: "#dbe6ff" }}>
+            <button onClick={toggleFullscreen} className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "var(--qb-chrome-button-border)", background: "var(--qb-chrome-button-bg)", color: "var(--qb-chrome-text)" }}>
               {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </button>
-            <button className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: "#dbe6ff" }}>
+            <button className="grid h-11 w-11 place-items-center rounded-2xl border" style={{ borderColor: "var(--qb-chrome-button-border)", background: "var(--qb-chrome-button-bg)", color: "var(--qb-chrome-text)" }}>
               <MoreVertical className="h-4 w-4" />
             </button>
           </div>
@@ -637,13 +637,13 @@ export default function QBankRunner({
 
       <div className="mx-auto w-full max-w-[1520px] px-4 py-4 md:px-6">
         {reportOpen ? (
-          <div className="mb-4 rounded-[22px] border p-4" style={{ background: "rgba(127,29,29,0.18)", borderColor: "rgba(248,113,113,0.28)" }}>
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold" style={{ color: "#fecaca" }}>
+          <div className="mb-4 rounded-[22px] border p-4" style={{ background: "var(--qb-report-bg)", borderColor: "var(--qb-report-border)" }}>
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--qb-report-text)" }}>
               <Flag className="h-4 w-4" /> Report issue
             </div>
             <div className="flex flex-wrap gap-2">
               {["Wrong answer key", "Unclear stem", "Formatting issue", "Explanation issue"].map((reason) => (
-                <button key={reason} onClick={() => { setToolStatus(`Reported: ${reason}`); setReportOpen(false); }} className="rounded-xl border px-3 py-2 text-xs font-medium" style={{ borderColor: "rgba(248,113,113,0.24)", background: "rgba(12,18,34,0.9)", color: "#fca5a5" }}>
+                <button key={reason} onClick={() => { setToolStatus(`Reported: ${reason}`); setReportOpen(false); }} className="rounded-xl border px-3 py-2 text-xs font-medium" style={{ borderColor: "var(--qb-report-chip-border)", background: "var(--qb-report-chip-bg)", color: "var(--qb-report-chip-text)" }}>
                   {reason}
                 </button>
               ))}
@@ -652,25 +652,25 @@ export default function QBankRunner({
         ) : null}
 
         {!focusMode ? (
-          <section className="mb-4 overflow-hidden rounded-[24px] border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "linear-gradient(180deg, rgba(12,18,34,0.96), rgba(8,13,26,0.96))", boxShadow: "0 18px 48px rgba(0,0,0,0.22)" }}>
+          <section className="mb-4 overflow-hidden rounded-[24px] border" style={{ borderColor: "var(--qb-panel-border)", background: "var(--qb-panel-bg)", boxShadow: "var(--qb-panel-shadow)" }}>
             <button onClick={() => setQuestionMapOpen((v) => !v)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left md:px-5">
               <div className="flex items-center gap-2">
-                <div className="grid h-9 w-9 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#dbe6ff" }}>
+                <div className="grid h-9 w-9 place-items-center rounded-2xl border" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-title)" }}>
                   <List className="h-4 w-4" />
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-white">Question Map</div>
-                  <div className="text-xs" style={{ color: "#92a2bf" }}>{answered}/{questions.length} answered</div>
+                  <div className="text-sm font-semibold" style={{ color: "var(--qb-panel-title)" }}>Question Map</div>
+                  <div className="text-xs" style={{ color: "var(--qb-panel-muted)" }}>{answered}/{questions.length} answered</div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 text-xs" style={{ color: "#92a2bf" }}>
+              <div className="flex items-center gap-3 text-xs" style={{ color: "var(--qb-panel-muted)" }}>
                 <span>{answered}/{questions.length} answered</span>
                 <ChevronDown className={`h-4 w-4 transition ${questionMapOpen ? "rotate-180" : "rotate-0"}`} />
               </div>
             </button>
             {questionMapOpen ? (
-              <div className="border-t px-4 py-4 md:px-5" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
-                <div className="flex flex-wrap items-center gap-4 text-xs" style={{ color: "#aab6ce" }}>
+              <div className="border-t px-4 py-4 md:px-5" style={{ borderColor: "var(--qb-panel-soft-border)" }}>
+                <div className="flex flex-wrap items-center gap-4 text-xs" style={{ color: "var(--qb-panel-muted)" }}>
                   <Legend color="#3b82f6" label="Current" />
                   <Legend color="#22c55e" label="Correct" />
                   <Legend color="#ef4444" label="Incorrect" />
@@ -695,7 +695,7 @@ export default function QBankRunner({
                               ? { borderColor: "rgba(239,68,68,0.28)", background: "rgba(239,68,68,0.12)", color: "#f87171" }
                               : hasPick
                                 ? { borderColor: "rgba(245,158,11,0.28)", background: "rgba(245,158,11,0.12)", color: "#fbbf24" }
-                                : { borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)", color: "#94a3b8" }}
+                                : { borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-muted)" }}
                       >
                         {idx + 1}
                       </button>
@@ -724,9 +724,9 @@ export default function QBankRunner({
                 const isCorrect = choice.key === q.answer_key;
                 const isPicked = choice.key === picked;
                 let bg = isDarkTheme ? "rgba(255,255,255,0.02)" : "#ffffff";
-                let border = isDarkTheme ? "rgba(255,255,255,0.07)" : "#cfd9e6";
-                let textColor = isDarkTheme ? "#f3f7ff" : "#18324d";
-                let helperColor = isDarkTheme ? "#8da0c0" : "#69809c";
+                let border = isDarkTheme ? "rgba(255,255,255,0.07)" : "#c7d4e2";
+                let textColor = isDarkTheme ? "#f3f7ff" : "#102740";
+                let helperColor = isDarkTheme ? "#8da0c0" : "#607792";
                 if (revealed) {
                   if (isCorrect) {
                     bg = isDarkTheme ? "rgba(34,197,94,0.10)" : "rgba(34,197,94,0.08)";
@@ -740,9 +740,9 @@ export default function QBankRunner({
                     helperColor = isDarkTheme ? "#fca5a5" : "#b91c1c";
                   }
                 } else if (isPicked) {
-                  bg = isDarkTheme ? "rgba(59,130,246,0.12)" : "rgba(31,95,170,0.08)";
-                  border = isDarkTheme ? "rgba(59,130,246,0.35)" : "rgba(31,95,170,0.28)";
-                  helperColor = isDarkTheme ? "#93c5fd" : "#1f5faa";
+                  bg = isDarkTheme ? "rgba(59,130,246,0.12)" : "rgba(28,90,161,0.10)";
+                  border = isDarkTheme ? "rgba(59,130,246,0.35)" : "rgba(28,90,161,0.28)";
+                  helperColor = isDarkTheme ? "#93c5fd" : "#184d87";
                 }
                 return (
                   <button
@@ -750,7 +750,7 @@ export default function QBankRunner({
                     disabled={revealed}
                     onClick={() => setPicks((prev) => { const next = [...prev]; next[i] = choice.key; return next; })}
                     className="w-full rounded-[20px] border p-4 text-left transition md:p-5"
-                    style={{ background: bg, borderColor: border, boxShadow: isDarkTheme ? "none" : "0 1px 2px rgba(15,23,42,0.04)" }}
+                    style={{ background: bg, borderColor: border, boxShadow: isDarkTheme ? "none" : "0 1px 2px rgba(15,23,42,0.04), 0 8px 18px rgba(15,23,42,0.03)" }}
                   >
                     <div className="flex items-center gap-4">
                       <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ background: "var(--qb-choice-bubble-bg)", color: helperColor }}>
@@ -771,39 +771,39 @@ export default function QBankRunner({
                   <div className="flex flex-wrap items-center gap-2">
                     {isCorrectAnswer ? <CheckCircle2 className="h-5 w-5" style={{ color: "#4ade80" }} /> : <XCircle className="h-5 w-5" style={{ color: "#f87171" }} />}
                     <span className="text-sm font-bold uppercase tracking-[0.16em]" style={{ color: isCorrectAnswer ? "#86efac" : "#fca5a5" }}>{isCorrectAnswer ? "Correct" : "Incorrect"}</span>
-                    <span className="ml-auto text-xs font-semibold" style={{ color: "#c9d3e7" }}>Correct answer: {q.answer_key}</span>
+                    <span className="ml-auto text-xs font-semibold" style={{ color: "var(--qb-panel-text)" }}>Correct answer: {q.answer_key}</span>
                   </div>
-                  <div className="mt-2 text-sm leading-7" style={{ color: "#dce5f4" }}>
+                  <div className="mt-2 text-sm leading-7" style={{ color: isDarkTheme ? "#dce5f4" : "var(--qb-panel-text)" }}>
                     {isCorrectAnswer ? `You answered ${picked}.` : <>You answered <strong>{picked}</strong>. Correct answer: <strong>{q.answer_key}</strong>.</>}
                   </div>
                 </div>
 
                 {details.explanation ? (
-                  <div className="rounded-[22px] border p-4" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
-                    <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: "#93c5fd" }}>
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
+                    <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: isDarkTheme ? "#93c5fd" : "var(--qb-blue-text)" }}>
                       <BookOpen className="h-4 w-4" /> Explanation
                     </div>
-                    <div className="whitespace-pre-wrap text-sm leading-7" style={{ color: "#dce5f4" }}>{details.explanation}</div>
+                    <div className="whitespace-pre-wrap text-sm leading-7" style={{ color: isDarkTheme ? "#dce5f4" : "var(--qb-panel-text)" }}>{details.explanation}</div>
                   </div>
                 ) : null}
 
                 {details.educationalObjective ? (
                   <div className="rounded-[22px] border p-4" style={{ borderColor: "rgba(16,185,129,0.25)", background: "rgba(16,185,129,0.08)" }}>
-                    <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: "#6ee7b7" }}>
+                    <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: isDarkTheme ? "#6ee7b7" : "#0f9d7a" }}>
                       <Lightbulb className="h-4 w-4" /> High-yield takeaway
                     </div>
-                    <div className="text-sm leading-7" style={{ color: "#dce5f4" }}>{details.educationalObjective}</div>
+                    <div className="text-sm leading-7" style={{ color: isDarkTheme ? "#dce5f4" : "var(--qb-panel-text)" }}>{details.educationalObjective}</div>
                   </div>
                 ) : null}
 
                 {wrongChoices.length > 0 ? (
-                  <details className="rounded-[22px] border p-4" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
-                    <summary className="cursor-pointer list-none text-sm font-semibold" style={{ color: "#dce5f4" }}>Why the other choices are incorrect</summary>
+                  <details className="rounded-[22px] border p-4" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
+                    <summary className="cursor-pointer list-none text-sm font-semibold" style={{ color: isDarkTheme ? "#dce5f4" : "var(--qb-panel-title)" }}>Why the other choices are incorrect</summary>
                     <div className="mt-3 space-y-2">
                       {wrongChoices.map((choice) => (
                         <div key={choice.key} className="flex items-start gap-2 text-sm">
-                          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold" style={{ background: "rgba(255,255,255,0.05)", color: "#aab6ce" }}>{choice.key}</span>
-                          <span style={{ color: "#aab6ce" }}>{choice.text}</span>
+                          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold" style={{ background: "var(--qb-choice-bubble-bg)", color: "var(--qb-panel-muted)" }}>{choice.key}</span>
+                          <span style={{ color: "var(--qb-panel-muted)" }}>{choice.text}</span>
                         </div>
                       ))}
                     </div>
@@ -813,7 +813,7 @@ export default function QBankRunner({
             ) : null}
 
             {noteOpen ? (
-              <div className="mt-5 rounded-[22px] border p-4" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+              <div className="mt-5 rounded-[22px] border p-4" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
                 <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={4} className="input w-full resize-none rounded-2xl text-sm" placeholder="Add a review note for this question…" />
                 <div className="mt-3 flex gap-2">
                   <button className="btn-primary text-sm" disabled={!noteText.trim()} onClick={() => void saveLibraryEntry("note", { body: noteText })}>Save note</button>
@@ -825,108 +825,108 @@ export default function QBankRunner({
         </section>
 
         {!focusMode && contextVisible ? (
-          <section className="mt-4 overflow-hidden rounded-[24px] border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "linear-gradient(180deg, rgba(12,18,34,0.96), rgba(8,13,26,0.96))", boxShadow: "0 18px 48px rgba(0,0,0,0.22)" }}>
-            <div className="flex items-start justify-between gap-3 border-b px-4 py-4 md:px-5" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+          <section className="mt-4 overflow-hidden rounded-[24px] border" style={{ borderColor: "var(--qb-panel-border)", background: "var(--qb-panel-bg)", boxShadow: "var(--qb-panel-shadow)" }}>
+            <div className="flex items-start justify-between gap-3 border-b px-4 py-4 md:px-5" style={{ borderColor: "var(--qb-panel-soft-border)" }}>
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#7f90ae" }}>Context Panel</div>
-                <div className="mt-1 text-lg font-semibold text-white">Figure & Tools</div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--qb-panel-muted)" }}>Context Panel</div>
+                <div className="mt-1 text-lg font-semibold" style={{ color: "var(--qb-panel-title)" }}>Figure & Tools</div>
               </div>
-              <button onClick={() => setContextVisible(false)} className="grid h-10 w-10 place-items-center rounded-2xl border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#c9d3e7" }}>
+              <button onClick={() => setContextVisible(false)} className="grid h-10 w-10 place-items-center rounded-2xl border" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-text)" }}>
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="px-4 py-4 md:px-5">
               <div className="grid gap-2 md:grid-cols-[220px_220px_220px_auto]">
-                <button onClick={() => setContextTab("figure")} disabled={!imageHref} className="flex items-center justify-center gap-2 rounded-[18px] border px-4 py-3 text-sm font-semibold transition disabled:opacity-40" style={contextTab === "figure" ? { borderColor: "#2563eb", background: "rgba(37,99,235,0.12)", color: "#93c5fd" } : { borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#dce5f4" }}>
+                <button onClick={() => setContextTab("figure")} disabled={!imageHref} className="flex items-center justify-center gap-2 rounded-[18px] border px-4 py-3 text-sm font-semibold transition disabled:opacity-40" style={contextTab === "figure" ? { borderColor: "var(--qb-blue)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" } : { borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-text)" }}>
                   <ImageIcon className="h-4 w-4" /> Figure
                 </button>
-                <button onClick={() => setContextTab("labs")} className="flex items-center justify-center gap-2 rounded-[18px] border px-4 py-3 text-sm font-semibold transition" style={contextTab === "labs" ? { borderColor: "#2563eb", background: "rgba(37,99,235,0.12)", color: "#93c5fd" } : { borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#dce5f4" }}>
+                <button onClick={() => setContextTab("labs")} className="flex items-center justify-center gap-2 rounded-[18px] border px-4 py-3 text-sm font-semibold transition" style={contextTab === "labs" ? { borderColor: "var(--qb-blue)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" } : { borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-text)" }}>
                   <FlaskConical className="h-4 w-4" /> Labs
                   <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: "rgba(59,130,246,0.18)", color: "#bfdbfe" }}>3</span>
                 </button>
-                <button onClick={() => setContextTab("calculator")} className="flex items-center justify-center gap-2 rounded-[18px] border px-4 py-3 text-sm font-semibold transition" style={contextTab === "calculator" ? { borderColor: "#2563eb", background: "rgba(37,99,235,0.12)", color: "#93c5fd" } : { borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#dce5f4" }}>
+                <button onClick={() => setContextTab("calculator")} className="flex items-center justify-center gap-2 rounded-[18px] border px-4 py-3 text-sm font-semibold transition" style={contextTab === "calculator" ? { borderColor: "var(--qb-blue)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" } : { borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-text)" }}>
                   <Calculator className="h-4 w-4" /> Calculator
                 </button>
                 <div />
               </div>
 
               {contextTab === "figure" ? (
-                <div className="mt-4 overflow-hidden rounded-[22px] border" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+                <div className="mt-4 overflow-hidden rounded-[22px] border" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
                   {imageHref ? (
                     <>
                       <button onClick={() => setImageOpen(true)} className="block w-full">
                         <img src={imageHref} alt={q.image_caption || "Figure"} className="max-h-[520px] w-full object-contain" />
                       </button>
-                      <div className="flex items-center justify-between border-t px-4 py-3 text-sm" style={{ borderColor: "rgba(255,255,255,0.06)", color: "#c9d3e7" }}>
-                        <button onClick={() => void saveLibraryEntry("note", { body: `Figure note for question ${i + 1}` })} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+                      <div className="flex items-center justify-between border-t px-4 py-3 text-sm" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-text)" }}>
+                        <button onClick={() => void saveLibraryEntry("note", { body: `Figure note for question ${i + 1}` })} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
                           <PencilLine className="h-3.5 w-3.5" /> Add to notes
                         </button>
-                        <button onClick={() => setImageOpen(true)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+                        <button onClick={() => setImageOpen(true)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
                           <Expand className="h-3.5 w-3.5" /> Enlarge
                         </button>
                       </div>
                     </>
                   ) : (
-                    <div className="p-8 text-center text-sm" style={{ color: "#92a2bf" }}>This question has no linked figure.</div>
+                    <div className="p-8 text-center text-sm" style={{ color: "var(--qb-panel-muted)" }}>This question has no linked figure.</div>
                   )}
                 </div>
               ) : null}
 
               {contextTab === "labs" ? (
                 <div className="mt-4 grid gap-3 lg:grid-cols-[190px_minmax(0,1fr)]">
-                  <div className="rounded-[22px] border p-3" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
-                    <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#7f90ae" }}>Lab categories</div>
+                  <div className="rounded-[22px] border p-3" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
+                    <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--qb-panel-muted)" }}>Lab categories</div>
                     <div className="space-y-2">
                       {Object.entries(LAB_REFERENCE).map(([category, items]) => (
-                        <button key={category} onClick={() => setLabCategory(category)} className="flex w-full items-center justify-between rounded-[14px] px-3 py-2.5 text-sm font-medium transition" style={labCategory === category ? { background: "rgba(37,99,235,0.18)", color: "#dbeafe" } : { background: "rgba(255,255,255,0.02)", color: "#c9d3e7" }}>
+                        <button key={category} onClick={() => setLabCategory(category)} className="flex w-full items-center justify-between rounded-[14px] px-3 py-2.5 text-sm font-medium transition" style={labCategory === category ? { borderColor: "rgba(28,90,161,0.18)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)", boxShadow: isDarkTheme ? "none" : "inset 0 0 0 1px rgba(28,90,161,0.14)" } : { background: "var(--qb-panel-soft-alt)", color: "var(--qb-panel-text)" }}>
                           <span>{category}</span>
-                          <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: labCategory === category ? "rgba(147,197,253,0.18)" : "rgba(255,255,255,0.05)", color: labCategory === category ? "#bfdbfe" : "#8fa1be" }}>{items.length}</span>
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: labCategory === category ? (isDarkTheme ? "rgba(147,197,253,0.18)" : "rgba(28,90,161,0.12)") : "var(--qb-panel-soft)", color: labCategory === category ? (isDarkTheme ? "#bfdbfe" : "var(--qb-blue-text)") : "var(--qb-panel-muted)" }}>{items.length}</span>
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <div className="rounded-[22px] border p-3 md:p-4" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
-                    <div className="mb-3 text-base font-semibold text-white">{labCategory}</div>
-                    <div className="overflow-hidden rounded-[18px] border" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
-                      <div className="grid grid-cols-[1.1fr_1fr_1fr] gap-3 border-b px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: "rgba(255,255,255,0.06)", color: "#7f90ae" }}>
+                  <div className="rounded-[22px] border p-3 md:p-4" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
+                    <div className="mb-3 text-base font-semibold" style={{ color: "var(--qb-panel-title)" }}>{labCategory}</div>
+                    <div className="overflow-hidden rounded-[18px] border" style={{ borderColor: "var(--qb-panel-soft-border)" }}>
+                      <div className="grid grid-cols-[1.1fr_1fr_1fr] gap-3 border-b px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-muted)" }}>
                         <div>Test</div>
                         <div>Your value</div>
                         <div>Reference range</div>
                       </div>
                       {labItems.map((item) => (
-                        <div key={item.test} className="grid grid-cols-[1.1fr_1fr_1fr] gap-3 border-b px-4 py-3 text-sm last:border-b-0" style={{ borderColor: "rgba(255,255,255,0.05)", color: "#dce5f4" }}>
+                        <div key={item.test} className="grid grid-cols-[1.1fr_1fr_1fr] gap-3 border-b px-4 py-3 text-sm last:border-b-0" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-text)" }}>
                           <div>{item.test}</div>
                           <div style={{ color: item.tone === "abnormal" ? "#fca5a5" : "#86efac" }}>{item.value}</div>
-                          <div style={{ color: "#aab6ce" }}>{item.ref}</div>
+                          <div style={{ color: "var(--qb-panel-muted)" }}>{item.ref}</div>
                         </div>
                       ))}
                     </div>
-                    <div className="mt-3 text-xs" style={{ color: "#92a2bf" }}>When question-specific labs are available, abnormal values are highlighted.</div>
+                    <div className="mt-3 text-xs" style={{ color: "var(--qb-panel-muted)" }}>When question-specific labs are available, abnormal values are highlighted.</div>
                   </div>
                 </div>
               ) : null}
 
               {contextTab === "calculator" ? (
                 <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                  <div className="rounded-[22px] border p-4" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
-                    <div className="text-base font-semibold text-white">Anion gap</div>
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
+                    <div className="text-base font-semibold" style={{ color: "var(--qb-panel-title)" }}>Anion gap</div>
                     <div className="mt-3 grid grid-cols-3 gap-3">
                       <CalcField label="Na⁺" value={calcNa} onChange={setCalcNa} />
                       <CalcField label="Cl⁻" value={calcCl} onChange={setCalcCl} />
                       <CalcField label="HCO₃⁻" value={calcHco3} onChange={setCalcHco3} />
                     </div>
-                    <div className="mt-4 rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: "rgba(59,130,246,0.24)", background: "rgba(37,99,235,0.08)", color: "#dbeafe" }}>
+                    <div className="mt-4 rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: "rgba(28,90,161,0.20)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" }}>
                       Anion gap = <strong>{Number.isFinite(anionGap) ? anionGap : "—"}</strong>
                     </div>
                   </div>
-                  <div className="rounded-[22px] border p-4" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
-                    <div className="text-base font-semibold text-white">Quick reference</div>
-                    <div className="mt-3 space-y-2 text-sm" style={{ color: "#c9d3e7" }}>
-                      <div className="rounded-[16px] border px-3 py-2" style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>Normal anion gap: <strong>8 – 12</strong></div>
-                      <div className="rounded-[16px] border px-3 py-2" style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>Winter’s formula: <strong>1.5 × HCO₃ + 8 ± 2</strong></div>
-                      <div className="rounded-[16px] border px-3 py-2" style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>Corrected Na⁺ in hyperglycemia: <strong>+1.6 per 100 glucose above 100</strong></div>
+                  <div className="rounded-[22px] border p-4" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
+                    <div className="text-base font-semibold" style={{ color: "var(--qb-panel-title)" }}>Quick reference</div>
+                    <div className="mt-3 space-y-2 text-sm" style={{ color: "var(--qb-panel-text)" }}>
+                      <div className="rounded-[16px] border px-3 py-2" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft-alt)" }}>Normal anion gap: <strong>8 – 12</strong></div>
+                      <div className="rounded-[16px] border px-3 py-2" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft-alt)" }}>Winter’s formula: <strong>1.5 × HCO₃ + 8 ± 2</strong></div>
+                      <div className="rounded-[16px] border px-3 py-2" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft-alt)" }}>Corrected Na⁺ in hyperglycemia: <strong>+1.6 per 100 glucose above 100</strong></div>
                     </div>
                   </div>
                 </div>
@@ -935,27 +935,27 @@ export default function QBankRunner({
           </section>
         ) : !focusMode ? (
           <div className="mt-4 flex justify-end">
-            <button onClick={() => setContextVisible(true)} className="inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(12,18,34,0.92)", color: "#dbe6ff" }}>
+            <button onClick={() => setContextVisible(true)} className="inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: "var(--qb-chrome-button-border)", background: "var(--qb-chrome-button-bg)", color: "var(--qb-chrome-text)" }}>
               <FolderTree className="h-4 w-4" /> Show context panel
             </button>
           </div>
         ) : null}
 
         {!focusMode ? (
-          <section className="mt-4 overflow-hidden rounded-[24px] border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "linear-gradient(180deg, rgba(12,18,34,0.96), rgba(8,13,26,0.96))", boxShadow: "0 18px 48px rgba(0,0,0,0.22)" }}>
+          <section className="mt-4 overflow-hidden rounded-[24px] border" style={{ borderColor: "var(--qb-panel-border)", background: "var(--qb-panel-bg)", boxShadow: "var(--qb-panel-shadow)" }}>
             <div className="px-4 py-4 md:px-5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#7f90ae" }}>Session status</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--qb-panel-muted)" }}>Session status</div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <StatusTile label="Done" value={answered} color="#dce5f4" />
+                <StatusTile label="Done" value={answered} color={isDarkTheme ? "#dce5f4" : "var(--qb-panel-title)"} />
                 <StatusTile label="Correct" value={correctCount} color="#4ade80" />
                 <StatusTile label="Wrong" value={incorrectCount} color="#f87171" />
               </div>
-              <div className="mt-4 rounded-[18px] border px-4 py-3" style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
-                <div className="mb-2 flex items-center justify-between text-xs" style={{ color: "#aab6ce" }}>
+              <div className="mt-4 rounded-[18px] border px-4 py-3" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft-alt)" }}>
+                <div className="mb-2 flex items-center justify-between text-xs" style={{ color: "var(--qb-panel-muted)" }}>
                   <span>Accuracy so far: {accuracy}%</span>
                   <span>{answered}/{questions.length}</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.05)" }}>
+                <div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--qb-progress-bg)" }}>
                   <div className="h-full rounded-full bg-gradient-to-r from-[#2563eb] to-[#60a5fa] transition-all" style={{ width: `${accuracy}%` }} />
                 </div>
               </div>
@@ -996,14 +996,14 @@ export default function QBankRunner({
         </div>
       ) : null}
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t px-4 pb-4 pt-3 backdrop-blur-xl md:px-6" style={{ background: "rgba(6,11,24,0.88)", borderColor: "rgba(255,255,255,0.08)" }}>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t px-4 pb-4 pt-3 backdrop-blur-xl md:px-6" style={{ background: "var(--qb-footer-bg)", borderColor: "var(--qb-footer-border)", boxShadow: "0 -8px 24px rgba(15,23,42,0.06)" }}>
         <div className="mx-auto flex max-w-[1520px] flex-col gap-2">
-          {toolStatus ? <div className="text-center text-xs font-medium" style={{ color: "#93c5fd" }}>{toolStatus}</div> : null}
+          {toolStatus ? <div className="text-center text-xs font-medium" style={{ color: isDarkTheme ? "#93c5fd" : "var(--qb-blue-text)" }}>{toolStatus}</div> : null}
           <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            <button onClick={prev} disabled={i <= 0} className="flex h-12 items-center justify-center gap-1.5 rounded-2xl border px-4 text-sm font-semibold transition disabled:opacity-40 md:min-w-[180px]" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#dce5f4" }}>
+            <button onClick={prev} disabled={i <= 0} className="flex h-12 items-center justify-center gap-1.5 rounded-2xl border px-4 text-sm font-semibold transition disabled:opacity-40 md:min-w-[180px]" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-text)" }}>
               <ChevronLeft className="h-4 w-4" /> Previous
             </button>
-            <button onClick={() => setNoteOpen((v) => !v)} className="flex h-12 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold md:min-w-[180px]" style={{ borderColor: "rgba(255,255,255,0.08)", background: noteOpen ? "rgba(37,99,235,0.12)" : "rgba(255,255,255,0.03)", color: noteOpen ? "#93c5fd" : "#dce5f4" }}>
+            <button onClick={() => setNoteOpen((v) => !v)} className="flex h-12 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold md:min-w-[180px]" style={{ borderColor: noteOpen ? "rgba(28,90,161,0.22)" : "var(--qb-panel-soft-border)", background: noteOpen ? "var(--qb-blue-soft)" : "var(--qb-panel-soft)", color: noteOpen ? "var(--qb-blue-text)" : "var(--qb-panel-text)" }}>
               <PencilLine className="h-4 w-4" /> Review
             </button>
             <div className="md:flex-1" />
@@ -1017,17 +1017,17 @@ export default function QBankRunner({
               </button>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "#8ea1bf" }}>
-            <button onClick={() => void saveLibraryEntry("highlight")} disabled={toolBusy === "highlight"} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+          <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--qb-panel-muted)" }}>
+            <button onClick={() => void saveLibraryEntry("highlight")} disabled={toolBusy === "highlight"} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
               <Highlighter className="h-3.5 w-3.5" /> Highlight
             </button>
-            <button onClick={() => void saveLibraryEntry("bookmark")} disabled={toolBusy === "bookmark"} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+            <button onClick={() => void saveLibraryEntry("bookmark")} disabled={toolBusy === "bookmark"} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
               <BookmarkPlus className="h-3.5 w-3.5" /> Bookmark
             </button>
-            <button onClick={() => setContextVisible((v) => !v)} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+            <button onClick={() => setContextVisible((v) => !v)} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
               <FolderTree className="h-3.5 w-3.5" /> {contextVisible ? "Hide" : "Show"} context
             </button>
-            <Link href="/notifications" className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+            <Link href="/notifications" className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
               <Bell className="h-3.5 w-3.5" /> Alerts
             </Link>
           </div>
@@ -1048,9 +1048,9 @@ function Legend({ color, label }: { color: string; label: string }) {
 
 function StatusTile({ label, value, color }: { label: string; value: string | number; color: string }) {
   return (
-    <div className="rounded-[18px] border px-4 py-4 text-center" style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.03)" }}>
+    <div className="rounded-[18px] border px-4 py-4 text-center" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
       <div className="text-3xl font-bold" style={{ color }}>{value}</div>
-      <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#8ea1bf" }}>{label}</div>
+      <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--qb-panel-muted)" }}>{label}</div>
     </div>
   );
 }
@@ -1067,8 +1067,8 @@ function Metric({ label, value, color }: { label: string; value: string | number
 function CalcField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label className="block">
-      <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "#7f90ae" }}>{label}</div>
-      <input value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-2xl border px-3 py-2 text-sm" style={{ borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#dce5f4" }} />
+      <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--qb-panel-muted)" }}>{label}</div>
+      <input value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-2xl border px-3 py-2 text-sm" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-text)" }} />
     </label>
   );
 }
