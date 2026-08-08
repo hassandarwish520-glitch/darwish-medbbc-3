@@ -1,6 +1,6 @@
 // Secure internal viewer — streams lesson bytes without exposing storage URLs.
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient, isAdminProfile, requireActive } from "@/lib/supabase/server";
+import { createAdminClient, createClient, isAdminProfile, requireActive } from "@/lib/supabase/server";
 
 /**
  * Sniff content-type from the storage path when the lesson.kind hint is missing
@@ -40,6 +40,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!lesson || (!lesson.visible && !canPreviewHidden)) return new NextResponse("Not found", { status: 404 });
 
   const wantDownload = new URL(req.url).searchParams.get("download") === "1";
+
+  if (wantDownload && !canPreviewHidden) {
+    const db = await createClient();
+    try {
+      await db.from("student_activity_logs").insert({
+        user_id: ctx.user.id,
+        activity_type: "pdf_download_blocked",
+        lesson_id: id,
+        metadata: { fmt },
+      });
+    } catch {}
+    return NextResponse.json({ error: "Downloads are disabled for protected lesson files." }, { status: 403 });
+  }
 
   if (fmt === "html" && lesson.kind === "html" && lesson.html_body) {
     return new NextResponse(lesson.html_body, {
@@ -93,8 +106,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     "X-Frame-Options": "SAMEORIGIN",
     "X-Content-Type-Options": "nosniff",
     "Content-Disposition": disposition,
-    // Critical so iOS Safari / Android Chrome render inline instead of
-    // offering to "Save" the file before it has bytes.
+    // Critical so pdf.js on mobile can fetch ranges without forcing download.
     "Accept-Ranges": "bytes",
   };
 

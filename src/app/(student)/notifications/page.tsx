@@ -216,6 +216,19 @@ export default function NotificationsPage() {
     setSlot(window.localStorage.getItem(SLOT_KEY) || "after-fajr");
     setReminders(loadReminders());
     setExamDate(window.localStorage.getItem(EXAM_DATE_KEY) || "");
+    fetch("/api/exam-settings", { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data) return;
+        if (typeof data.exam_date === "string" && data.exam_date) {
+          setExamDate(data.exam_date);
+          window.localStorage.setItem(EXAM_DATE_KEY, data.exam_date);
+        }
+        if (typeof data.reminder_slot === "string" && data.reminder_slot) {
+          setSlot(data.reminder_slot);
+        }
+      })
+      .catch(() => {});
     setSchedule(loadSchedule());
     setWarNotes(loadWarNotes());
     if ("serviceWorker" in navigator && !swRegistered.current) {
@@ -327,10 +340,19 @@ export default function NotificationsPage() {
 
   function removeReminder(id: string) { setReminders((l) => l.filter((r) => r.id !== id)); }
 
-  function saveExamDate() {
+  async function saveExamDate() {
     if (typeof window !== "undefined") window.localStorage.setItem(EXAM_DATE_KEY, examDate);
-    setExamSaved(true);
-    setTimeout(() => setExamSaved(false), 2000);
+    try {
+      await fetch("/api/exam-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exam_date: examDate, reminder_slot: slot }),
+      });
+      setExamSaved(true);
+      setTimeout(() => setExamSaved(false), 2000);
+    } catch {
+      setExamSaved(false);
+    }
   }
 
   function addScheduleEntry() {

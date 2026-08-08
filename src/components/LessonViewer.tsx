@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ChevronLeft, ChevronRight, Download, ExternalLink, Loader2, Presentation, RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Loader2, Presentation, RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
 
 interface PdfjsViewport {
   width: number;
@@ -240,70 +240,39 @@ function HtmlViewer({ id }: { id: string }) {
  *  1. Uses the UMD bundle (pdf.min.js) that DOES set `window.pdfjsLib`
  *     instead of the ESM `pdf.min.mjs` which left it undefined.
  *  2. Caches the pdfjsLib script in <head> so re-mounts don't re-download.
- *  3. Adds an Iframe fallback that mirrors native PDF reader chrome —
- *     critical for iOS Safari and Android Chrome where PDF.js can render
- *     with empty pages on first paint.
- *  4. Fit-to-width scaling that responds to ResizeObserver so rotation
- *     and split-screen actually reflow.
- *  5. Download button that hits `/api/viewer/{id}/pdf?download=1`.
+ *  3. Uses a fit-to-width canvas reader only, because external open / download
+ *     are intentionally blocked for students.
+ *  4. Logs protected PDF views so admin can audit activity.
  */
 function PdfViewer({ id }: { id: string }) {
   const pdfSrc = useMemo(() => `/api/viewer/${id}/pdf`, [id]);
-  const iframeSrc = useMemo(() => `/api/viewer/${id}/pdf#toolbar=1&navpanes=1&scrollbar=1&view=FitH`, [id]);
-  const [viewMode, setViewMode] = useState<"pdfjs" | "iframe">("pdfjs");
+
+  useEffect(() => {
+    fetch("/api/activity/log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activity_type: "pdf_view", lesson_id: id, metadata: { source: "lesson_viewer" } }),
+    }).catch(() => {});
+  }, [id]);
 
   return (
     <div className="card protected-view overflow-hidden flex flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-800 px-4 py-2 text-sm">
         <div className="flex items-center gap-2 text-slate-300">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">PDF Document</span>
-          <span className="text-xs text-slate-500">🔒 View only</span>
+          <span className="text-xs text-slate-500">🔒 View only inside the app</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="rounded-full bg-ink-800 p-1 flex">
-            <button
-              onClick={() => setViewMode("pdfjs")}
-              className={`px-3 py-1 text-xs rounded-full transition ${viewMode === "pdfjs" ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
-              title="In-app reader with page navigation"
-            >
-              Reader
-            </button>
-            <button
-              onClick={() => setViewMode("iframe")}
-              className={`px-3 py-1 text-xs rounded-full transition ${viewMode === "iframe" ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
-              title="Native browser PDF chrome (best on mobile)"
-            >
-              Native
-            </button>
-          </div>
-          <a href={`${pdfSrc}?download=1`} className="btn-ghost text-xs flex items-center gap-1" title="Open in browser">
-            <ExternalLink className="h-3.5 w-3.5" /> Open
-          </a>
-          <a href={`${pdfSrc}?download=1`} download className="btn-ghost text-xs flex items-center gap-1" title="Download">
-            <Download className="h-3.5 w-3.5" /> Download
-          </a>
-        </div>
+        <div className="text-[11px] text-slate-500">Protected mode · external open and download disabled</div>
       </div>
 
       <div className="relative w-full" style={{ minHeight: "80vh", height: "85vh" }}>
-        {viewMode === "pdfjs" ? (
-          <PdfjsReader id={id} src={pdfSrc} />
-        ) : (
-          <iframe
-            key={iframeSrc}
-            src={iframeSrc}
-            title="PDF native viewer"
-            className="absolute inset-0 w-full h-full border-0 bg-white"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
-            allow="fullscreen"
-          />
-        )}
+        <PdfjsReader id={id} src={pdfSrc} />
       </div>
     </div>
   );
 }
 
-function PdfjsReader({ id, src }: { id: string; src: string }) {
+function PdfjsReader({ src }: { id: string; src: string }) {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [containerWidth, setContainerWidth] = useState<number>(0);
