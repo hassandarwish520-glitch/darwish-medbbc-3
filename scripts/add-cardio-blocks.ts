@@ -19,6 +19,9 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { createClient } from "@supabase/supabase-js";
+import { parseDirectImportFile } from "../src/lib/import/direct-import";
+import { detectDifficulty, detectIfomSubject, detectTopic } from "../src/lib/ai/ifom";
 
 // Lightweight .env / .env.local reader — avoids adding a `dotenv` dependency.
 function loadEnvFile(p: string) {
@@ -37,12 +40,6 @@ function loadEnvFile(p: string) {
   }
 }
 for (const f of [".env.local", ".env"]) loadEnvFile(path.resolve(process.cwd(), f));
-
-import { createClient } from "@supabase/supabase-js";
-import { parseDirectImportFile } from "../src/lib/import/direct-import";
-import { detectDifficulty, detectIfomSubject, detectTopic } from "../src/lib/ai/ifom";
-import * as fs from "node:fs";
-import * as path from "node:path";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
