@@ -433,6 +433,9 @@ export default function QBankRunner({
     "--qb-panel-soft": "rgba(255,255,255,0.03)",
     "--qb-panel-soft-alt": "rgba(255,255,255,0.02)",
     "--qb-panel-soft-border": "rgba(255,255,255,0.06)",
+    "--qb-question-card-bg": "linear-gradient(180deg, rgba(12,18,34,0.97), rgba(8,13,26,0.97))",
+    "--qb-question-card-border": "rgba(255,255,255,0.08)",
+    "--qb-question-card-shadow": "0 18px 48px rgba(0,0,0,0.22)",
     "--qb-question-text": "#f8fbff",
     "--qb-choice-bubble-bg": "rgba(255,255,255,0.05)",
     "--qb-footer-bg": "rgba(6,11,24,0.88)",
@@ -465,6 +468,9 @@ export default function QBankRunner({
     "--qb-panel-soft": "#f7fafd",
     "--qb-panel-soft-alt": "#eef4fb",
     "--qb-panel-soft-border": "#dce6f1",
+    "--qb-question-card-bg": "linear-gradient(180deg, #ffffff 0%, #fdfefe 100%)",
+    "--qb-question-card-border": "#d7e1ec",
+    "--qb-question-card-shadow": "0 10px 28px rgba(15,23,42,0.07)",
     "--qb-question-text": "#0d2238",
     "--qb-choice-bubble-bg": "#edf3fb",
     "--qb-footer-bg": "rgba(249,252,255,0.96)",
@@ -707,12 +713,12 @@ export default function QBankRunner({
           </section>
         ) : null}
 
-        <section className="overflow-hidden rounded-[26px] border" style={{ borderColor: "rgba(255,255,255,0.08)", background: "linear-gradient(180deg, rgba(12,18,34,0.97), rgba(8,13,26,0.97))", boxShadow: "0 18px 48px rgba(0,0,0,0.22)" }}>
+        <section className="overflow-hidden rounded-[26px] border" style={{ borderColor: "var(--qb-question-card-border)", background: "var(--qb-question-card-bg)", boxShadow: "var(--qb-question-card-shadow)" }}>
           <div className="px-4 py-4 md:px-5 md:py-5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: "rgba(96,165,250,0.24)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" }}>{(q.tags[0] || subjectLabel).toUpperCase()}</span>
-              <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-text)" }}>{topic}</span>
-              {q.difficulty ? <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: diff.border, background: diff.bg, color: diff.color }}>{q.difficulty}</span> : null}
+              <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: isDarkTheme ? "var(--qb-panel-soft-border)" : "#e3eaf2", background: isDarkTheme ? "var(--qb-panel-soft)" : "#ffffff", color: isDarkTheme ? "var(--qb-panel-text)" : "#44586f" }}>{topic}</span>
+              {q.difficulty ? <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: diff.border, background: isDarkTheme ? diff.bg : "#fff8e8", color: diff.color }}>{q.difficulty}</span> : null}
             </div>
 
             <div className="mt-5 max-w-[1040px] text-[25px] font-semibold leading-[1.55] tracking-[-0.02em] md:text-[33px]" style={{ color: "var(--qb-question-text)" }}>
