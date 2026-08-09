@@ -8,61 +8,61 @@
    CSS Custom Properties — Light (default) & Dark
    ══════════════════════════════════════════════ */
 :root {
-  /* Page layers — 3 distinct levels for depth */
-  --c-bg:              #EEF2F8;   /* page background */
-  --c-surface:         #F7F9FC;   /* mid surface */
-  --c-card:            #FFFFFF;   /* card / elevated */
-  --c-elevated:        #F0F4FA;   /* subtle raised areas */
-  --c-modal:           #FFFFFF;   /* modal / overlay */
+  /* Page layers — bright, clinical light-mode hierarchy */
+  --c-bg:              #F7FAFC;
+  --c-surface:         #F3F7FB;
+  --c-card:            #FFFFFF;
+  --c-elevated:        #F8FBFD;
+  --c-modal:           #FFFFFF;
 
-  --c-border:          #C8D4E8;
-  --c-border-subtle:   #DDE6F4;
+  --c-border:          #D5DEE8;
+  --c-border-subtle:   #E4EBF3;
 
-  /* Text — strong contrast ladder */
-  --c-text-1:          #111827;   /* #1 primary — near-black */
-  --c-text-2:          #374151;   /* #2 body / secondary */
-  --c-text-3:          #6B7280;   /* #3 muted */
-  --c-text-4:          #9CA3AF;   /* #4 placeholder / hint */
+  /* Text — neutral, crisp, high contrast */
+  --c-text-1:          #0F172A;
+  --c-text-2:          #334155;
+  --c-text-3:          #64748B;
+  --c-text-4:          #94A3B8;
 
-  /* Green — vibrant emerald */
-  --c-brand:           #10b981;
-  --c-brand-bg:        rgba(16,185,129,0.10);
-  --c-brand-border:    rgba(16,185,129,0.30);
+  /* Green — visible but not fluorescent */
+  --c-brand:           #0F9D7A;
+  --c-brand-bg:        rgba(15,157,122,0.10);
+  --c-brand-border:    rgba(15,157,122,0.26);
 
-  /* Purple — rich violet */
-  --c-purple:          #7c3aed;
-  --c-purple-bg:       rgba(124,58,237,0.09);
-  --c-purple-border:   rgba(124,58,237,0.28);
+  /* Purple — supportive accent */
+  --c-purple:          #6D5CE7;
+  --c-purple-bg:       rgba(109,92,231,0.08);
+  --c-purple-border:   rgba(109,92,231,0.22);
 
   --c-blue:            #2563EB;
   --c-blue-bg:         rgba(37,99,235,0.08);
-  --c-blue-border:     rgba(37,99,235,0.28);
+  --c-blue-border:     rgba(37,99,235,0.24);
 
-  --c-header-bg:       rgba(255,255,255,0.97);
-  --c-nav-bg:          rgba(255,255,255,0.99);
-  --c-sidebar-bg:      #E8EEF8;
+  --c-header-bg:       rgba(255,255,255,0.96);
+  --c-nav-bg:          rgba(255,255,255,0.985);
+  --c-sidebar-bg:      #EEF3F8;
 
   --c-input-bg:        #FFFFFF;
-  --c-input-border:    #B0BDD4;   /* stronger than before for visibility */
+  --c-input-border:    #C6D1DE;
 
-  --c-choice-bg:       #F7F9FD;
-  --c-choice-border:   #C8D4E8;
+  --c-choice-bg:       #FFFFFF;
+  --c-choice-border:   #D5DEE8;
 
-  --c-stat-bg:         #EFF3FB;
-  --c-stat-border:     #C8D4E8;
+  --c-stat-bg:         #F4F8FC;
+  --c-stat-border:     #DCE4EE;
 
-  --c-expl-bg:         rgba(209,250,229,0.70);
-  --c-expl-border:     rgba(16,185,129,0.32);
+  --c-expl-bg:         rgba(15,157,122,0.08);
+  --c-expl-border:     rgba(15,157,122,0.22);
 
   /* Row helpers */
-  --c-row-hover:       rgba(37,99,235,0.045);
+  --c-row-hover:       rgba(37,99,235,0.05);
   --c-row-alt:         rgba(37,99,235,0.018);
 
-  /* Shadows — 3 tiers */
-  --shadow-card:       0 1px 3px rgba(0,0,0,0.06), 0 4px 20px rgba(0,0,0,0.08);
-  --shadow-elevated:   0 4px 16px rgba(0,0,0,0.10), 0 12px 36px rgba(0,0,0,0.10);
-  --shadow-modal:      0 8px 40px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06);
-  --shadow-btn:        0 2px 8px rgba(0,0,0,0.08);
+  /* Shadows — soft, clean, neutral */
+  --shadow-card:       0 1px 2px rgba(15,23,42,0.05), 0 10px 24px rgba(15,23,42,0.05);
+  --shadow-elevated:   0 10px 28px rgba(15,23,42,0.08);
+  --shadow-modal:      0 18px 48px rgba(15,23,42,0.12);
+  --shadow-btn:        0 2px 8px rgba(15,23,42,0.08);
 }
 
 .dark {
@@ -854,6 +854,55 @@ html:not(.dark) .card {
   background: var(--c-card);
   border-color: var(--c-border);
   box-shadow: var(--shadow-card);
+}
+
+/* Additional global light-mode correction for hard-coded dark UI */
+html:not(.dark) [class*="bg-[#07111b]"],
+html:not(.dark) [class*="bg-[#0b1322]"],
+html:not(.dark) [class*="bg-[#0B1322]"],
+html:not(.dark) [class*="bg-[#0b1422]"],
+html:not(.dark) [class*="bg-[#0B1422]"],
+html:not(.dark) [class*="bg-[#0c1324]"],
+html:not(.dark) [class*="bg-[#0C1324]"],
+html:not(.dark) [class*="bg-[#0f1929]"],
+html:not(.dark) [class*="bg-[#0F1929]"],
+html:not(.dark) [class*="bg-[#121A2B]"] {
+  background-color: var(--c-card) !important;
+}
+
+html:not(.dark) [class*="bg-black/20"] {
+  background-color: rgba(15,23,42,0.04) !important;
+}
+
+html:not(.dark) [class*="bg-black/60"] {
+  background-color: rgba(255,255,255,0.92) !important;
+  color: var(--c-text-1) !important;
+}
+
+html:not(.dark) [class*="text-cyan-50"],
+html:not(.dark) [class*="text-brand"][class*="bg-brand/10"] {
+  color: var(--c-text-1) !important;
+}
+
+html:not(.dark) [class*="divide-ink-800"] > :not([hidden]) ~ :not([hidden]),
+html:not(.dark) [class*="divide-ink-700"] > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--c-border-subtle) !important;
+}
+
+html:not(.dark) [class*="bg-cyan-500/12"],
+html:not(.dark) [class*="bg-cyan-500/10"] {
+  background-color: rgba(14,116,144,0.10) !important;
+}
+
+html:not(.dark) [class*="bg-brand/10"],
+html:not(.dark) [class*="bg-brand/15"] {
+  background-color: rgba(15,157,122,0.10) !important;
+}
+
+html:not(.dark) [class*="bg-ink-900 hover:border-ink-600"],
+html:not(.dark) [class*="bg-ink-900 hover:bg-ink-700"] {
+  background-color: var(--c-card) !important;
+  border-color: var(--c-border) !important;
 }
 
 /* ── Additional light mode overrides for hex backgrounds not yet covered ── */
