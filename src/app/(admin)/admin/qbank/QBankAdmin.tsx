@@ -51,10 +51,23 @@ function escapeHtml(input: string) {
   return input.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-async function createLessonFromFile(file: File, title: string) {
+async function createLessonFromFile(
+  file: File,
+  title: string,
+  options?: {
+    subject?: string;
+    meta?: Record<string, unknown>;
+  },
+) {
   const lower = file.name.toLowerCase();
   const fd = new FormData();
   fd.set("title", title || file.name.replace(/\.[^.]+$/, ""));
+
+  const mergedMeta = {
+    ...(options?.meta ?? {}),
+    ...(options?.subject?.trim() ? { subject: options.subject.trim() } : {}),
+  };
+  if (Object.keys(mergedMeta).length) fd.set("meta", JSON.stringify(mergedMeta));
 
   if (lower.endsWith(".pdf")) {
     fd.set("kind", "pdf");
@@ -381,6 +394,7 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
   const [file, setFile] = useState<File | null>(null);
   const [difficulty, setDifficulty] = useState("intermediate");
   const [tags, setTags] = useState("");
+  const [directSubject, setDirectSubject] = useState("");
   const [lessonId, setLessonId] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: true; count: number } | { ok: false; msg: string } | null>(null);
@@ -388,6 +402,7 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
   // Text-based pipeline (PDF / HTML / TXT) state
   const [textFile, setTextFile] = useState<File | null>(null);
   const [textTitle, setTextTitle] = useState("");
+  const [textSubject, setTextSubject] = useState("");
   const [textDifficulty, setTextDifficulty] = useState("intermediate");
   const [textBusy, setTextBusy] = useState(false);
   const [textOut, setTextOut] = useState("");
@@ -416,7 +431,18 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
         // which correctly handles every file format (PDF, HTML, PPTX, TXT, etc.).
         const fd = new FormData();
         fd.set("title", title);
-        fd.set("meta", JSON.stringify({ subject: blocksSubject.trim(), section: "qbank", skip_auto_import: true }));
+        fd.set(
+          "meta",
+          JSON.stringify({
+            type: "qbank",
+            subject: blocksSubject.trim(),
+            section: "qbank",
+            skip_auto_import: true,
+            is_official_block: true,
+            fixed_block: true,
+            block_kind: "official",
+          }),
+        );
 
         if (lower.endsWith(".pdf")) {
           fd.set("kind", "pdf");
@@ -449,6 +475,7 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
         importFd.set("file", blockFile);
         importFd.set("difficulty", blocksDifficulty);
         importFd.set("tags", blocksSubject.trim());
+        importFd.set("subject", blocksSubject.trim());
         if (lessonId) importFd.set("lesson_id", lessonId);
 
         const importResp = await fetch("/api/admin/qbank/import", { method: "POST", body: importFd });
@@ -482,7 +509,8 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
       const fd = new FormData();
       fd.set("file", file);
       fd.set("difficulty", difficulty);
-      fd.set("tags", tags);
+      fd.set("tags", [tags, directSubject].filter(Boolean).join(", "));
+      if (directSubject.trim()) fd.set("subject", directSubject.trim());
       if (lessonId) fd.set("lesson_id", lessonId);
       const r = await fetch("/api/admin/qbank/import", { method: "POST", body: fd });
       const j = await r.json();
@@ -501,7 +529,10 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
     setTextBusy(true);
     setTextOut("");
     try {
-      const lesson = await createLessonFromFile(textFile, textTitle.trim());
+      const lesson = await createLessonFromFile(textFile, textTitle.trim(), {
+        subject: textSubject.trim(),
+        meta: textSubject.trim() ? { section: "qbank" } : undefined,
+      });
       const r = await fetch("/api/documents/pipeline", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -558,7 +589,7 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
               <label className="label">Question file</label>
               <input className="input mt-1" type="file" accept="*" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResult(null); }} />
             </div>
-            <div className="grid md:grid-cols-2 gap-3">
+            <div className="grid md:grid-cols-3 gap-3">
               <div>
                 <label className="label">Default difficulty</label>
                 <select className="input mt-1" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
@@ -566,8 +597,12 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
                 </select>
               </div>
               <div>
+                <label className="label">Subject (optional)</label>
+                <input className="input mt-1" value={directSubject} onChange={(e) => setDirectSubject(e.target.value)} placeholder="e.g. Cardiology" />
+              </div>
+              <div>
                 <label className="label">Extra tags (comma separated)</label>
-                <input className="input mt-1" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="e.g. Cardiology, IFOM" />
+                <input className="input mt-1" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="e.g. IFOM, Block 1" />
               </div>
             </div>
             <div>
@@ -607,11 +642,17 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
                 <input className="input mt-1" value={textTitle} onChange={(e) => setTextTitle(e.target.value)} placeholder="e.g. Cardiology Q-Set" />
               </div>
             </div>
-            <div>
-              <label className="label">Default difficulty</label>
-              <select className="input" value={textDifficulty} onChange={(e) => setTextDifficulty(e.target.value)}>
-                {["foundation", "intermediate", "advanced", "expert"].map((d) => <option key={d}>{d}</option>)}
-              </select>
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <label className="label">Default difficulty</label>
+                <select className="input" value={textDifficulty} onChange={(e) => setTextDifficulty(e.target.value)}>
+                  {["foundation", "intermediate", "advanced", "expert"].map((d) => <option key={d}>{d}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Subject (optional)</label>
+                <input className="input" value={textSubject} onChange={(e) => setTextSubject(e.target.value)} placeholder="e.g. Cardiology" />
+              </div>
             </div>
             {textOut && (
               <p className={`text-sm ${textOut.toLowerCase().includes("fail") || textOut.toLowerCase().includes("error") ? "text-red-400" : "text-green-400"}`}>
@@ -630,7 +671,7 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
         {tab === "blocks" && (
           <div className="mt-4 space-y-3">
             <div className="rounded-xl border border-brand/20 bg-brand/5 p-3 text-xs text-slate-300 leading-5">
-              <span className="font-semibold text-brand">QBank Blocks Import</span> — Upload one or more files (PDF, HTML, PPTX, TXT). Each file is saved as a separate Active Q-Bank block under the subject you specify, with all questions auto-extracted and linked. This does not replace existing blocks.
+              <span className="font-semibold text-brand">QBank Blocks Import</span> — Upload one or more files (PDF, HTML, PPTX, TXT). Each file is saved as a separate official fixed block under the subject you specify, with all questions auto-extracted, linked to the block, and still counted inside the subject&apos;s random QBank pool. This does not replace existing blocks.
             </div>
             <div>
               <label className="label">Subject <span className="text-red-400">*</span></label>

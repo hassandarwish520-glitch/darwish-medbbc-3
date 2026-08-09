@@ -16,6 +16,7 @@ import { parseDirectImportFile } from "@/lib/import/direct-import";
 import { extractQuestionsFromImportedSource } from "@/lib/ai/question-import";
 import { parseDocumentBuffer } from "@/lib/import/doc-parser";
 import { parseHtmlQuestions } from "@/lib/import/html-question-parser";
+import { detectIfomSubject, detectTopic } from "@/lib/ai/ifom";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
   const file = fd.get("file") as File | null;
   const difficulty = String(fd.get("difficulty") || "intermediate");
   const tagsRaw = String(fd.get("tags") || "");
+  const selectedSubject = String(fd.get("subject") || "").trim();
   const extraTags = tagsRaw.split(",").map(t => t.trim()).filter(Boolean);
   const lessonIdRaw = String(fd.get("lesson_id") || "").trim();
   const lesson_id = lessonIdRaw || null;
@@ -243,19 +245,36 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient();
 
-  const rows = questions.map(q => ({
-    lesson_id,
-    stem: q.stem,
-    choices: q.choices,
-    answer_key: q.answer_key,
-    explanation: q.explanation,
-    difficulty: q.difficulty || difficulty,
-    tags: [...new Set([...extraTags, ...(q.tags ?? []), q.subject, q.system, q.topic].filter(Boolean))],
-    image_path: q.image_path || null,
-    image_caption: q.image_caption || null,
-    ai_generated: false,
-    created_by: ctx.user.id,
-  }));
+  let lessonSubject = "";
+  if (lesson_id) {
+    const { data: lesson } = await admin.from("lessons").select("meta,title").eq("id", lesson_id).maybeSingle();
+    const meta = (lesson?.meta ?? {}) as Record<string, unknown>;
+    if (typeof meta.subject === "string" && meta.subject.trim()) {
+      lessonSubject = meta.subject.trim();
+    } else if (typeof lesson?.title === "string" && lesson.title.trim()) {
+      lessonSubject = detectIfomSubject(lesson.title) || "";
+    }
+  }
+
+  const defaultSubject = selectedSubject || lessonSubject;
+  const rows = questions.map(q => {
+    const subject = q.subject || defaultSubject || detectIfomSubject(`${q.stem}\n${q.explanation}`) || "";
+    const system = q.system || subject;
+    const topic = q.topic || (subject ? detectTopic(`${q.stem}\n${q.explanation}`, subject) : "");
+    return {
+      lesson_id,
+      stem: q.stem,
+      choices: q.choices,
+      answer_key: q.answer_key,
+      explanation: q.explanation,
+      difficulty: q.difficulty || difficulty,
+      tags: [...new Set([...extraTags, ...(q.tags ?? []), subject, system, topic].filter(Boolean))],
+      image_path: q.image_path || null,
+      image_caption: q.image_caption || null,
+      ai_generated: false,
+      created_by: ctx.user.id,
+    };
+  });
 
   const { data: inserted, error } = await admin.from("questions").insert(rows).select("id");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

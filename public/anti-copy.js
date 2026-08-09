@@ -245,15 +245,37 @@
     document.addEventListener('touchstart', function(e) {
       var el = e.target;
       if (el && (el.tagName === 'CANVAS' || el.tagName === 'IMG' || el.tagName === 'IFRAME')) {
+        var firstTouch = e.touches && e.touches[0];
+        el._touchStartX = firstTouch ? firstTouch.clientX : 0;
+        el._touchStartY = firstTouch ? firstTouch.clientY : 0;
         el._longPressTimer = setTimeout(function() {
           e.preventDefault();
-        }, 400);
+        }, 550);
       }
     }, { passive: false });
+    document.addEventListener('touchmove', function(e) {
+      var el = e.target;
+      if (!el || !el._longPressTimer) return;
+      var firstTouch = e.touches && e.touches[0];
+      var dx = Math.abs((firstTouch ? firstTouch.clientX : 0) - (el._touchStartX || 0));
+      var dy = Math.abs((firstTouch ? firstTouch.clientY : 0) - (el._touchStartY || 0));
+      if (dx > 8 || dy > 8) {
+        clearTimeout(el._longPressTimer);
+        el._longPressTimer = null;
+      }
+    }, { passive: true });
     document.addEventListener('touchend', function(e) {
       var el = e.target;
       if (el && el._longPressTimer) {
         clearTimeout(el._longPressTimer);
+        el._longPressTimer = null;
+      }
+    });
+    document.addEventListener('touchcancel', function(e) {
+      var el = e.target;
+      if (el && el._longPressTimer) {
+        clearTimeout(el._longPressTimer);
+        el._longPressTimer = null;
       }
     });
 

@@ -453,7 +453,7 @@ function AnnotationPanelInner({
         </div>
       )}
 
-      <div className={`min-h-0 flex-1 overflow-auto p-3 md:p-5 ${darkMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`}
+      <div className={`min-h-0 flex-1 overflow-y-auto overflow-x-auto p-3 md:p-5 ${darkMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`}
            onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>
         <div className="mx-auto flex min-h-full w-full justify-center">
           <div ref={containerRef}
@@ -467,7 +467,7 @@ function AnnotationPanelInner({
               <img src={attachment.href} alt={attachment.name} className="block w-full object-contain"
                    style={{ minHeight: frameHeight, maxHeight: frameHeight }} draggable={false} />
             ) : isPdf ? (
-              <iframe src={`${attachment.href}#toolbar=0&navpanes=0&statusbar=0&scrollbar=0&view=FitH`}
+              <iframe src={`${attachment.href}#toolbar=0&navpanes=0&statusbar=0&view=FitH`}
                       className="block w-full bg-white" style={{ height: frameHeight }} title={attachment.name}
                       sandbox="allow-same-origin allow-scripts" />
             ) : isHtml ? (
