@@ -84,12 +84,43 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Path 2: HTML / HTM — use DOM-aware parser as primary ─────────────────
+  // ── Path 2: HTML / HTM — quiz-app exports store questions in inline <script> ─
   if (!questions.length && ["html", "htm"].includes(ext)) {
     const rawHtml = bytes.toString("utf-8");
 
-    // Primary: DOM-level HTML parser (images scoped per block)
-    const htmlParsed = parseHtmlQuestions(rawHtml, { count: 1000, difficulty });
+    // Path 2a: extract any inline <script> containing `const questions = [...]`
+    // before falling back to DOM parsing. These quiz-app exports keep all
+    // question data (including embedded base64 images) inside the script tag,
+    // so the visible DOM contains no question markup at all.
+    const scriptBodies: string[] = [];
+    const scriptRe = /<script\b(?![^>]*\bsrc\s*=)[^>]*>([\s\S]*?)<\/script>/gi;
+    let scriptMatch: RegExpExecArray | null;
+    while ((scriptMatch = scriptRe.exec(rawHtml)) !== null) {
+      const body = (scriptMatch[1] || "").trim();
+      if (body.length > 2 && /\[\s*\{/.test(body)) scriptBodies.push(body);
+    }
+    for (const body of scriptBodies) {
+      const direct = parseDirectImportFile(body, `${filename}#script`, difficulty);
+      if (direct.length) {
+        questions = direct.map(q => ({
+          stem: q.stem,
+          choices: q.choices,
+          answer_key: q.answer_key,
+          explanation: q.explanation,
+          image_path: q.image_path,
+          image_caption: q.image_caption,
+          difficulty: q.difficulty,
+          tags: q.tags,
+          subject: q.subject,
+          system: q.system,
+          topic: q.topic,
+        }));
+        break;
+      }
+    }
+
+    // Path 2b: DOM-level HTML parser (images scoped per block)
+    const htmlParsed = questions.length ? [] : parseHtmlQuestions(rawHtml, { count: 1000, difficulty });
     if (htmlParsed.length) {
       questions = htmlParsed.map(q => ({
         stem: q.stem,

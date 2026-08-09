@@ -26,6 +26,26 @@ function coerceString(v: unknown): string {
   return "";
 }
 
+/** Strip HTML tags from a string, preserving readability */
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|section|li|tr|td|th|h[1-6]|blockquote|pre)>/gi, "\n")
+    .replace(/<li\b[^>]*>/gi, "\n• ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ").replace(/&quot;/g, '"')
+    .replace(/&#39;|&#x27;/g, "'").replace(/&#\d+;/g, " ")
+    .replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Pull the Educational Objective out of an `<div class='objective'>…</div>` block */
+function extractObjectiveBlock(html: string): string | null {
+  const m = html.match(/<div[^>]+class=["'][^"']*objective[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
+  if (!m) return null;
+  return htmlToPlainText(m[1]).replace(/^\s*educational\s*objective\s*:?\s*/i, "").trim() || null;
+}
+
 /** Pull the letter key out of "A. text", "A) text", "(A) text", "A: text", or just "A" */
 function extractKey(raw: string): string | null {
   const m = raw.match(/^\s*\(?([A-Fa-f])\)?[\s.\-):]/);
@@ -47,6 +67,11 @@ function stripKeyPrefix(raw: string): string {
 function resolveAnswerKey(raw: unknown, choices: { key: string; text: string }[]): string {
   if (typeof raw === "number") {
     return choices[raw]?.key ?? choices[0]?.key ?? "A";
+  }
+  // Numeric digit stored as string (e.g. "4") → 0-based option index
+  const trimmed = coerceString(raw).trim();
+  if (/^\d+$/.test(trimmed)) {
+    return choices[Number(trimmed)]?.key ?? choices[0]?.key ?? "A";
   }
   const s = coerceString(raw).toUpperCase();
   if (/^[A-F]$/.test(s)) return s;
@@ -81,16 +106,18 @@ function normalizeChoices(raw: unknown): { key: string; text: string }[] {
 
   const arr = raw as unknown[];
 
-  // Array of objects {key,text} / {label,value} / {option,content} / {letter,description}
+  // Array of objects, or tuple pairs (quiz-app exports use [["A","text"]])
   if (arr.length && typeof arr[0] === "object" && arr[0] !== null) {
     return arr.map((item, idx) => {
+      if (Array.isArray(item)) {
+        const k = coerceString(item[0]).toUpperCase().slice(0, 1);
+        const raw = coerceString(item[1]);
+        const text = raw.replace(/^\s*\(?[A-Fa-f]\)?[.:\-)\s]+/, "").trim() || raw;
+        return { key: CHOICE_KEYS.includes(k as (typeof CHOICE_KEYS)[number]) ? k : CHOICE_KEYS[idx] ?? "A", text };
+      }
       const o = item as Record<string, unknown>;
-      const text = coerceString(
-        o.text ?? o.value ?? o.content ?? o.description ?? o.answer ?? o.option ?? o.label ?? ""
-      );
-      const key = coerceString(
-        o.key ?? o.letter ?? o.label ?? o.id ?? CHOICE_KEYS[idx] ?? "A"
-      ).toUpperCase().slice(0, 1);
+      const text = coerceString(o.text ?? o.value ?? o.content ?? o.description ?? o.answer ?? o.option ?? o.label ?? "");
+      const key = coerceString(o.key ?? o.letter ?? o.label ?? o.id ?? CHOICE_KEYS[idx] ?? "A").toUpperCase().slice(0, 1);
       return { key: CHOICE_KEYS.includes(key as (typeof CHOICE_KEYS)[number]) ? key : CHOICE_KEYS[idx] ?? "A", text };
     });
   }
@@ -107,25 +134,28 @@ function normalizeChoices(raw: unknown): { key: string; text: string }[] {
 
 /** Normalise a single raw question object from any JSON format */
 function normalizeOne(raw: Record<string, unknown>, fallbackDifficulty: string): DirectQuestion | null {
-  // Stem
-  const stem = coerceString(
-    raw.stem ?? raw.question ?? raw.q ?? raw.text ?? raw.prompt ?? raw.vignette ?? raw.case ?? ""
-  );
+  let stem = coerceString(raw.stem ?? raw.question ?? raw.q ?? raw.text ?? raw.prompt ?? raw.vignette ?? raw.case ?? "");
   if (!stem) return null;
+  if (/<[a-z][^>]*>/i.test(stem)) stem = htmlToPlainText(stem);
 
-  // Choices
-  const choicesRaw = raw.choices ?? raw.options ?? raw.answers ?? raw.variants ?? raw.items ?? raw.opts;
-  const choices = normalizeChoices(choicesRaw);
+  const title = coerceString(raw.title ?? raw.heading ?? raw.name ?? "");
+  if (title && stem && !stem.toLowerCase().startsWith(title.toLowerCase().slice(0, 40))) {
+    stem = `${title}. ${stem}`;
+  }
+
+  const choices = normalizeChoices(raw.choices ?? raw.options ?? raw.answers ?? raw.variants ?? raw.items ?? raw.opts);
   if (choices.length < 2) return null;
 
-  // Answer key
   const answerRaw = raw.answer_key ?? raw.answer ?? raw.correct ?? raw.correct_answer ?? raw.correctAnswer ?? raw.key ?? raw.ans ?? raw.correctOption ?? raw.right ?? null;
   const answer_key = resolveAnswerKey(answerRaw, choices);
 
-  // Explanation
-  const explanation = coerceString(
-    raw.explanation ?? raw.rationale ?? raw.reason ?? raw.discussion ?? raw.exp ?? raw.feedback ?? raw.solution ?? raw.justification ?? ""
-  ) || "No explanation provided.";
+  let explanation = coerceString(raw.explanation ?? raw.rationale ?? raw.reason ?? raw.discussion ?? raw.exp ?? raw.feedback ?? raw.solution ?? raw.justification ?? "");
+  if (/<[a-z][^>]*>/i.test(explanation)) {
+    const objective = extractObjectiveBlock(explanation);
+    const plain = htmlToPlainText(explanation).replace(/educational\s*objective\s*:[\s\S]*$/i, "").trim();
+    explanation = objective ? `${plain}\n\nEducational Objective: ${objective}` : plain;
+  }
+  if (!explanation) explanation = "No explanation provided.";
 
   // Image
   const image_path = coerceString(
@@ -175,13 +205,13 @@ function extractJsonFromJs(text: string): string | null {
     if (ch === "]" || ch === "}") {
       depth--;
       if (depth === 0) {
-        // Replace JS-style unquoted keys with JSON-compatible keys
-        let slice = text.slice(arrayStart, i + 1);
-        // Replace single-quoted strings with double-quoted
-        slice = slice.replace(/'([^'\\]*(\\.[^'\\]*)*)'/g, (_, inner) => `"${inner.replace(/"/g, '\\"')}"`);
-        // Quote unquoted keys: `key:` -> `"key":`
+        const raw = text.slice(arrayStart, i + 1);
+        // The embedded quiz-app exports are already valid JSON — the previous
+        // apostrophe-replacement corrupted double-quoted strings like "I'm"
+        // into a syntax error. Try the slice as-is first.
+        try { JSON.parse(raw); return raw; } catch { /* needs JS→JSON normalisation */ }
+        let slice = raw.replace(/'([^'\\]*(\\.[^'\\]*)*)'/g, (_, inner) => `"${inner.replace(/"/g, '\\"')}"`);
         slice = slice.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":');
-        // Remove trailing commas before ] or }
         slice = slice.replace(/,(\s*[}\]])/g, "$1");
         return slice;
       }

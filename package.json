@@ -9,7 +9,8 @@
     "lint": "next lint",
     "prepare:subject-imports": "npx --yes tsx scripts/prepare-import-bundles.ts",
     "import:subject-content": "npx --yes tsx scripts/bulk-import-subject-content.ts",
-    "import:subject-content:dry": "npx --yes tsx scripts/bulk-import-subject-content.ts --dry-run"
+    "import:subject-content:dry": "npx --yes tsx scripts/bulk-import-subject-content.ts --dry-run",
+    "import:cardio-blocks": "npx --yes tsx scripts/add-cardio-blocks.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
