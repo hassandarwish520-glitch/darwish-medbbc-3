@@ -404,7 +404,7 @@ function PdfjsReader({ src }: { id: string; src: string }) {
   }
 
   return (
-    <div ref={wrapRef} className="relative w-full h-full bg-[#0b1322] select-none overflow-auto">
+    <div ref={wrapRef} tabIndex={0} className="relative h-full min-h-0 w-full overflow-y-auto overflow-x-auto bg-[#0b1322] select-none">
       {/* Floating controls */}
       <div className="sticky top-2 z-10 mx-auto flex w-fit items-center gap-1 rounded-full border border-ink-700 bg-ink-900/95 px-2 py-1 text-xs shadow-lg backdrop-blur">
         <button className="btn-ghost h-7 w-7 p-0 grid place-items-center" onClick={prevPage} disabled={currentPage <= 1 || loading} title="Previous">

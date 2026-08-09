@@ -493,11 +493,13 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
     }
   }
 
-  const frameHeight = readingMode || isAttachmentFullscreen ? "82vh" : "640px";
+  const frameHeight = readingMode || isAttachmentFullscreen
+    ? "calc(100vh - 9rem)"
+    : "clamp(420px, calc(100vh - 18rem), 1180px)";
   const frameWidth = Math.min(1500, Math.round(980 * (viewerZoom / 100)));
 
   return (
-    <div ref={panelRef} className="overflow-hidden rounded-[28px] border border-ink-800 bg-ink-950/90 shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
+    <div ref={panelRef} className="flex min-h-0 flex-col overflow-hidden rounded-[28px] border border-ink-800 bg-ink-950/90 shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
       <div className="border-b border-ink-800 px-4 pt-3 md:px-5">
         <div className="flex items-center gap-6 text-sm">
           <button type="button" className="border-b-2 border-[#4f7cff] pb-2 font-medium text-[#78a6ff]">Attachment</button>
@@ -572,9 +574,9 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
       </div>
       )}
 
-      <div className={`overflow-auto p-3 md:p-5 ${darkReadingMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>
-        <div className="mx-auto flex w-full justify-center">
-          <div ref={containerRef} className={`relative overflow-hidden rounded-[24px] border border-white/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] ${darkReadingMode ? "[filter:invert(1)_hue-rotate(180deg)]" : ""}`} style={{ width: `min(100%, ${frameWidth}px)` }}>
+      <div className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3 md:p-5 ${darkReadingMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} tabIndex={0}>
+        <div className="mx-auto flex min-h-full w-full justify-center">
+          <div ref={containerRef} className={`relative overflow-hidden rounded-[24px] border border-white/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] ${darkReadingMode ? "[filter:invert(1)_hue-rotate(180deg)]" : ""}`} style={{ width: `min(100%, ${frameWidth}px)`, minHeight: frameHeight }}>
         {isImage ? (
           <img src={attachment.href} alt={attachment.name} className="block w-full object-contain" style={{ minHeight: frameHeight, maxHeight: frameHeight }} draggable={false} />
         ) : isPdf ? (
@@ -1613,12 +1615,14 @@ function LessonViewerWithTools({
   }
 
   const frameWidth = Math.min(1500, Math.round(980 * (zoom / 100)));
-  const frameHeight = readingMode || isLessonFullscreen ? "82vh" : "640px";
+  const frameHeight = readingMode || isLessonFullscreen
+    ? "calc(100vh - 9rem)"
+    : "clamp(420px, calc(100vh - 18rem), 1180px)";
 
   const fileType = typeof lessonMeta?.file_type === "string" ? lessonMeta.file_type : undefined;
 
   return (
-    <div ref={panelRef} className="overflow-hidden">
+    <div ref={panelRef} className="flex min-h-0 flex-col overflow-hidden">
       {/* Toolbar row 1 — zoom + reading controls */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-800 px-4 py-2.5 bg-[#07101a]">
         <div className="flex items-center gap-1.5 text-xs text-slate-300">
@@ -1691,13 +1695,13 @@ function LessonViewerWithTools({
       )}
 
       {/* Document area */}
-      <div className={`overflow-auto p-3 md:p-5 ${darkMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`}
-        onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>
-        <div className="mx-auto flex w-full justify-center">
+      <div className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3 md:p-5 ${darkMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`}
+        onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} tabIndex={0}>
+        <div className="mx-auto flex min-h-full w-full justify-center">
           <div ref={containerRef}
             className={`relative overflow-hidden rounded-[24px] border border-white/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] ${darkMode ? "[filter:invert(1)_hue-rotate(180deg)]" : ""}`}
             style={{ width: `min(100%, ${frameWidth}px)`, minHeight: frameHeight }}>
-            <div style={{ minHeight: frameHeight }}>
+            <div style={{ minHeight: frameHeight, height: "100%" }}>
               {(lessonKind === "pdf" || fileType === "pdf" || lessonKind === "pptx") ? (
                 <LessonViewer id={lessonId} kind={lessonKind} fileType={fileType} />
               ) : lessonKind === "html" ? (

@@ -386,11 +386,13 @@ function AnnotationPanelInner({
     } catch { /* ignore */ }
   };
 
-  const frameHeight = readingMode || isFullscreen ? "82vh" : "640px";
+  const frameHeight = readingMode || isFullscreen
+    ? "calc(100vh - 9rem)"
+    : "clamp(420px, calc(100vh - 18rem), 1180px)";
   const frameWidth = Math.min(1500, Math.round(980 * (zoom / 100)));
 
   return (
-    <div ref={panelRef} className="overflow-hidden rounded-[28px] border border-white/15 bg-slate-950/90 shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
+    <div ref={panelRef} className="flex min-h-0 flex-col overflow-hidden rounded-[28px] border border-white/15 bg-slate-950/90 shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
       <div className="border-b border-white/10 px-4 pt-3 md:px-5">
         <div className="flex items-center gap-6 text-sm">
           <button type="button" className="border-b-2 border-blue-500 pb-2 font-medium text-blue-300">Annotation</button>
@@ -451,12 +453,12 @@ function AnnotationPanelInner({
         </div>
       )}
 
-      <div className={`overflow-auto p-3 md:p-5 ${darkMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`}
+      <div className={`min-h-0 flex-1 overflow-auto p-3 md:p-5 ${darkMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`}
            onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>
-        <div className="mx-auto flex w-full justify-center">
+        <div className="mx-auto flex min-h-full w-full justify-center">
           <div ref={containerRef}
                className={`relative overflow-hidden rounded-[24px] border border-white/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] ${darkMode ? "[filter:invert(1)_hue-rotate(180deg)]" : ""}`}
-               style={{ width: `min(100%, ${frameWidth}px)` }}>
+               style={{ width: `min(100%, ${frameWidth}px)`, minHeight: frameHeight }}>
             {!annotationReady ? (
               <div className="grid place-items-center text-center text-sm text-slate-500" style={{ height: frameHeight }}>
                 <Loader2 className="h-5 w-5 animate-spin" />
