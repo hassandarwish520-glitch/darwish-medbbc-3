@@ -440,11 +440,56 @@ export default async function SubjectDashboardPage({
           </Link>
         </div>
 
-        {/* Q-Bank Blocks — Horizontal Carousel */}
-        {(detail.qbankSources.length > 0 || activeQbankDocuments.length > 0) && (
-          <div className="mt-4">
+        {/* Official Fixed Blocks — distinct from practice pool */}
+        {detail.officialBlocks.length > 0 && (
+          <div className="mt-6">
             <div className="mb-3 flex items-center justify-between">
-              <div className="text-xs uppercase tracking-wider text-slate-500 font-medium">Question Pools &amp; Blocks</div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider" style={{ background: "rgba(220,38,38,0.2)", color: "#fca5a5" }}>Official</span>
+                <div className="text-xs uppercase tracking-wider text-slate-300 font-semibold">Fixed QBank Blocks</div>
+              </div>
+              <div className="text-xs text-slate-400">{detail.officialBlocks.length} blocks · {detail.officialBlockQuestionTotal} questions</div>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-3 flex-row-reverse" style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", direction: "rtl" }}>
+              {detail.officialBlocks.map((block) => (
+                <Link
+                  key={block.id}
+                  href={`/qbank?block=${block.id}&exam=${encodeURIComponent(detail.exam)}`}
+                  className="shrink-0 flex flex-col rounded-2xl border-2 p-4 hover:scale-[1.02] transition"
+                  style={{ width: "240px", minWidth: "240px", scrollSnapAlign: "start", background: "linear-gradient(135deg, rgba(220,38,38,0.12) 0%, rgba(15,23,42,0.95) 100%)", borderColor: "rgba(220,38,38,0.45)" }}
+                  dir="rtl"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold" style={{ background: "rgba(220,38,38,0.25)", color: "#fca5a5" }}>{block.blockNumber}</span>
+                    <span className="text-sm font-semibold text-white truncate flex-1">{block.title}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-xl bg-ink-900 px-2 py-1.5 text-center">
+                      <div className="text-base font-bold text-white">{block.questionCount}</div>
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">Questions</div>
+                    </div>
+                    <div className="rounded-xl bg-ink-900 px-2 py-1.5 text-center">
+                      <div className="text-base font-bold text-red-300">~{Math.round(block.questionCount * 1.5)}m</div>
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">Est. Time</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-semibold" style={{ background: "rgba(220,38,38,0.12)", borderColor: "rgba(220,38,38,0.5)", color: "#fca5a5" }}>
+                    <ChevronLeft className="h-3.5 w-3.5" /> ابدأ البلوك
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Practice Pool — random-style sessions (separate section) */}
+        {(detail.qbankSources.length > detail.officialBlocks.length || activeQbankDocuments.length > 0) && (
+          <div className="mt-6">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Layers className="h-3.5 w-3.5 text-slate-400" />
+                <div className="text-xs uppercase tracking-wider text-slate-500 font-medium">Practice Pool &amp; Random Sessions</div>
+              </div>
               <div className="text-xs text-slate-600">Swipe to explore →</div>
             </div>
 

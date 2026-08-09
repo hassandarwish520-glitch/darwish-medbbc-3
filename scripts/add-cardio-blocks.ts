@@ -127,6 +127,10 @@ async function main() {
           skip_auto_import: true,
           imported_from: blk.file,
           question_count: parsed.length,
+          is_official_block: true,
+          fixed_block: true,
+          block_kind: "official",
+          exam: "IFOM_CSE",
         },
       })
       .select("id")
@@ -145,7 +149,7 @@ async function main() {
         answer_key: q.answer_key,
         explanation: q.explanation,
         difficulty,
-        tags: Array.from(new Set([...(q.tags ?? []), subject, "Cardiology", "Block", topic])),
+        tags: Array.from(new Set([...(q.tags ?? []), subject, "Cardiology", "Block", "Official", "FixedBlock", topic])),
         image_path: q.image_path || null,
         image_caption: q.image_caption || null,
         ai_generated: false,

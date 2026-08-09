@@ -41,6 +41,9 @@ type SubjectOverview = SubjectMeta & {
   qbankCount: number;
   keyPointCount: number;
   blockPreviews: Array<{ id: string; title: string; questionCount: number }>;
+  officialBlocks: Array<{ id: string; title: string; questionCount: number; blockNumber: number }>;
+  practicePoolCount: number;
+  officialBlockQuestionTotal: number;
 };
 
 type SubjectDetail = {
@@ -51,6 +54,9 @@ type SubjectDetail = {
   qbankSources: Array<{ id: string; title: string; questionCount: number }>;
   qbankQuestionCount: number;
   keyPoints: FlashcardRow[];
+  officialBlocks: Array<{ id: string; title: string; questionCount: number; blockNumber: number }>;
+  practicePoolCount: number;
+  officialBlockQuestionTotal: number;
 };
 
 const SUBJECT_HINTS: Record<string, string[]> = {
@@ -215,6 +221,14 @@ export async function getSubjectOverviews(exam = "IFOM_CSE"): Promise<SubjectOve
 
     const qbankSources = [...sourceMap.values()].sort((a, b) => b.questionCount - a.questionCount || a.title.localeCompare(b.title));
     const keyPoints = flashcards.filter((card) => matchesSubject(subject.title, flashcardText(card), card.tags));
+    const officialBlocks = qbankSources
+      .filter((src) => {
+        const lesson = lessons.find((l) => l.id === src.id);
+        return Boolean(lesson?.meta?.is_official_block) || lesson?.meta?.fixed_block === true || lesson?.meta?.block_kind === "official";
+      })
+      .map((src, idx) => ({ id: src.id, title: src.title, questionCount: src.questionCount, blockNumber: idx + 1 }));
+    const officialBlockQuestionTotal = officialBlocks.reduce((acc, b) => acc + b.questionCount, 0);
+    const practicePoolCount = Math.max(0, qbankSources.length - officialBlocks.length);
 
     return {
       ...subject,
@@ -223,7 +237,10 @@ export async function getSubjectOverviews(exam = "IFOM_CSE"): Promise<SubjectOve
       documentCount: documents.length,
       qbankCount: qbankSources.length,
       keyPointCount: keyPoints.length,
-      blockPreviews: qbankSources.slice(0, 4),
+      blockPreviews: officialBlocks.length > 0 ? officialBlocks.slice(0, 4) : qbankSources.slice(0, 4),
+      officialBlocks,
+      practicePoolCount,
+      officialBlockQuestionTotal,
     };
   });
 }
@@ -260,15 +277,27 @@ export async function getSubjectDetail(slug: string, exam = "IFOM_CSE"): Promise
   }
 
   const keyPoints = flashcards.filter((card) => matchesSubject(subject.title, flashcardText(card), card.tags));
+  const qbankSources = [...sourceMap.values()].sort((a, b) => b.questionCount - a.questionCount || a.title.localeCompare(b.title));
+  const officialBlocks = qbankSources
+    .filter((src) => {
+      const lesson = lessons.find((l) => l.id === src.id);
+      return Boolean(lesson?.meta?.is_official_block) || lesson?.meta?.fixed_block === true || lesson?.meta?.block_kind === "official";
+    })
+    .map((src, idx) => ({ id: src.id, title: src.title, questionCount: src.questionCount, blockNumber: idx + 1 }));
+  const officialBlockQuestionTotal = officialBlocks.reduce((acc, b) => acc + b.questionCount, 0);
+  const practicePoolCount = Math.max(0, qbankSources.length - officialBlocks.length);
 
   return {
     exam,
     subject,
     videos,
     documents,
-    qbankSources: [...sourceMap.values()].sort((a, b) => b.questionCount - a.questionCount || a.title.localeCompare(b.title)),
+    qbankSources,
     qbankQuestionCount: relevantQuestions.length,
     keyPoints,
+    officialBlocks,
+    practicePoolCount,
+    officialBlockQuestionTotal,
   };
 }
 
