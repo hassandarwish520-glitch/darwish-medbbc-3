@@ -17,9 +17,26 @@
  * questions before adding fresh ones, so you can re-run safely after edits.
  */
 
-import { config } from "dotenv";
-config({ path: ".env.local" });
-config({ path: ".env" });
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+// Lightweight .env / .env.local reader — avoids adding a `dotenv` dependency.
+function loadEnvFile(p: string) {
+  if (!fs.existsSync(p)) return;
+  for (const line of fs.readFileSync(p, "utf-8").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let val = trimmed.slice(eq + 1).trim();
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    if (!process.env[key]) process.env[key] = val;
+  }
+}
+for (const f of [".env.local", ".env"]) loadEnvFile(path.resolve(process.cwd(), f));
 
 import { createClient } from "@supabase/supabase-js";
 import { parseDirectImportFile } from "../src/lib/import/direct-import";
