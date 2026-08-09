@@ -22,10 +22,17 @@ const STEP_ITEMS = [
   { id: 3, title: "Choose Plan", subtitle: "Start your 2-day free trial" },
 ] as const;
 
-const PLAN_OPTIONS = [
+const PLAN_OPTIONS: ReadonlyArray<{
+  id: string;
+  name: string;
+  price: string;
+  period: string;
+  highlight: boolean;
+  badge?: string;
+}> = [
   { id: "1_month", name: "1 Month Plan", price: "$10", period: "/ month", highlight: false },
   { id: "3_months", name: "3 Months Plan", price: "$25", period: "/ 3 months", badge: "Best Value", highlight: true },
-] as const;
+];
 
 const PREPARATION_TYPES = [
   "USMLE",
