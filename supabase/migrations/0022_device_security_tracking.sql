@@ -1,6 +1,8 @@
 -- 0022_device_security_tracking.sql
 -- Device registration, device-limit enforcement telemetry, and admin security audit trail.
 
+create extension if not exists pgcrypto;
+
 create table if not exists public.user_devices (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -47,7 +49,9 @@ create table if not exists public.security_events (
   event_type text not null check (event_type in (
     'device_registered',
     'device_limit_blocked',
+    'device_revoked',
     'admin_new_device_login',
+    'admin_file_view',
     'admin_file_download'
   )),
   device_key text,

@@ -1,7 +1,7 @@
 // Secure internal viewer — streams lesson bytes without exposing storage URLs.
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient, createClient, isAdminProfile, requireActive } from "@/lib/supabase/server";
-import { logSecurityEvent } from "@/lib/security-monitor";
+import { getClientIp, logSecurityEvent } from "@/lib/security-monitor";
 
 /**
  * Sniff content-type from the storage path when the lesson.kind hint is missing
@@ -41,16 +41,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!lesson || (!lesson.visible && !canPreviewHidden)) return new NextResponse("Not found", { status: 404 });
 
   const wantDownload = new URL(req.url).searchParams.get("download") === "1";
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers.get("user-agent") || "";
 
-  if (wantDownload && canPreviewHidden) {
+  if (canPreviewHidden) {
     await logSecurityEvent({
       userId: ctx.user.id,
-      eventType: "admin_file_download",
+      eventType: wantDownload ? "admin_file_download" : "admin_file_view",
       metadata: {
         lesson_id: id,
         file_name: lesson.title,
         format: fmt,
         source: "viewer_route",
+        path: lesson.storage_path || null,
+        ip_address: ipAddress,
+        user_agent: userAgent,
       },
     });
   }

@@ -5,7 +5,9 @@ export type DeviceType = "mobile" | "tablet" | "laptop";
 export type SecurityEventType =
   | "device_registered"
   | "device_limit_blocked"
+  | "device_revoked"
   | "admin_new_device_login"
+  | "admin_file_view"
   | "admin_file_download";
 
 export function detectDeviceType(userAgent: string): DeviceType {

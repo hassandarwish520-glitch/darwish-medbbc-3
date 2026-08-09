@@ -17,45 +17,69 @@ function getDeviceKey() {
   return next;
 }
 
+async function enforceRegistration(pathname: string, force = false) {
+  const deviceKey = getDeviceKey();
+  const sessionToken = `${deviceKey}:${pathname}`;
+  if (!force && window.sessionStorage.getItem(DEVICE_REGISTERED_SESSION) === sessionToken) return;
+
+  const response = await fetch("/api/security/register-device", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_key: deviceKey, path: pathname }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (response.status === 403) {
+    try {
+      await createClient().auth.signOut();
+    } catch {}
+    const message = typeof payload?.error === "string"
+      ? payload.error
+      : "This account can no longer use this device.";
+    window.location.href = `/sign-in?authError=${encodeURIComponent(message)}`;
+    return;
+  }
+
+  if (response.ok) {
+    window.sessionStorage.setItem(DEVICE_REGISTERED_SESSION, sessionToken);
+  }
+}
+
 export default function DeviceRegistrationGuard() {
   const pathname = usePathname();
 
   useEffect(() => {
-    let active = true;
-    const deviceKey = getDeviceKey();
-    const sessionToken = `${deviceKey}:${pathname}`;
-    if (window.sessionStorage.getItem(DEVICE_REGISTERED_SESSION) === sessionToken) return;
+    let cancelled = false;
 
-    fetch("/api/security/register-device", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ device_key: deviceKey, path: pathname }),
-    })
-      .then(async (response) => {
-        const payload = await response.json().catch(() => ({}));
-        if (!active) return;
+    const run = async (force = false) => {
+      try {
+        if (!cancelled) await enforceRegistration(pathname, force);
+      } catch {
+        // Silent fail — do not block browsing when telemetry is unavailable.
+      }
+    };
 
-        if (response.status === 403) {
-          try {
-            await createClient().auth.signOut();
-          } catch {}
-          const message = typeof payload?.error === "string"
-            ? payload.error
-            : "This account has reached the maximum number of allowed devices.";
-          window.location.href = `/sign-in?authError=${encodeURIComponent(message)}`;
-          return;
-        }
+    void run(false);
 
-        if (response.ok) {
-          window.sessionStorage.setItem(DEVICE_REGISTERED_SESSION, sessionToken);
-        }
-      })
-      .catch(() => {
-        // Silent fail — do not block normal browsing if telemetry is temporarily unavailable.
-      });
+    const interval = window.setInterval(() => {
+      void run(true);
+    }, 45000);
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void run(true);
+      }
+    };
+
+    window.addEventListener("focus", onVisibility);
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
-      active = false;
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onVisibility);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [pathname]);
 

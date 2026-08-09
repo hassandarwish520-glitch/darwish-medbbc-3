@@ -36,13 +36,17 @@ export async function POST(req: NextRequest) {
 
   const { data: existingRows } = await admin
     .from("user_devices")
-    .select("id,user_id,device_key,device_type,label,last_seen_at,is_active")
+    .select("id,user_id,device_key,device_type,label,last_seen_at,is_active,platform,browser,last_ip,user_agent,meta")
     .eq("user_id", ctx.user.id)
     .order("last_seen_at", { ascending: false });
 
   const devices = existingRows ?? [];
   const current = devices.find((row: any) => row.device_key === deviceKey) ?? null;
   const activeDevices = devices.filter((row: any) => row.is_active !== false);
+
+  if (current && current.is_active === false) {
+    return NextResponse.json({ error: "تم إلغاء هذا الجهاز من الحساب. سجّل الدخول من جهازك المصرّح به فقط." }, { status: 403 });
+  }
 
   if (!current && activeDevices.length >= MAX_DEVICES) {
     await logSecurityEvent({
@@ -55,6 +59,9 @@ export async function POST(req: NextRequest) {
         attempted_label: label,
         ip_address: ipAddress,
         active_device_count: activeDevices.length,
+        browser,
+        platform,
+        user_agent: userAgent,
       },
     });
     return NextResponse.json({ error: "تم الوصول للحد الأقصى المسموح به: 3 أجهزة فقط لهذا الحساب." }, { status: 403 });
@@ -71,7 +78,10 @@ export async function POST(req: NextRequest) {
         label,
         last_seen_at: now,
         last_ip: ipAddress,
-        meta: { last_path: path },
+        meta: {
+          ...(current.meta && typeof current.meta === "object" ? current.meta : {}),
+          last_path: path,
+        },
         is_active: true,
       })
       .eq("id", current.id);
@@ -88,7 +98,7 @@ export async function POST(req: NextRequest) {
       last_seen_at: now,
       last_ip: ipAddress,
       is_active: true,
-      meta: { first_path: path },
+      meta: { first_path: path, last_path: path },
     });
 
     await logSecurityEvent({
@@ -102,6 +112,7 @@ export async function POST(req: NextRequest) {
         platform,
         browser,
         ip_address: ipAddress,
+        user_agent: userAgent,
       },
     });
 
@@ -117,14 +128,15 @@ export async function POST(req: NextRequest) {
           platform,
           browser,
           ip_address: ipAddress,
+          user_agent: userAgent,
           email: ctx.profile?.email || ctx.user.email || null,
         },
       });
 
       await sendSecurityAlertEmail({
         subject: "Admin account login from a new device",
-        text: `A new device accessed the admin account.\n\nEmail: ${ctx.profile?.email || ctx.user.email || "unknown"}\nDevice: ${label}\nPath: ${path || "/"}\nIP: ${ipAddress || "unknown"}\nTime: ${now}`,
-        html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h2>Admin account login from a new device</h2><p><strong>Email:</strong> ${ctx.profile?.email || ctx.user.email || "unknown"}</p><p><strong>Device:</strong> ${label}</p><p><strong>Path:</strong> ${path || "/"}</p><p><strong>IP:</strong> ${ipAddress || "unknown"}</p><p><strong>Time:</strong> ${now}</p></div>`,
+        text: `A new device accessed the admin account.\n\nEmail: ${ctx.profile?.email || ctx.user.email || "unknown"}\nDevice: ${label}\nPath: ${path || "/"}\nIP: ${ipAddress || "unknown"}\nBrowser: ${browser}\nPlatform: ${platform}\nTime: ${now}`,
+        html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h2>Admin account login from a new device</h2><p><strong>Email:</strong> ${ctx.profile?.email || ctx.user.email || "unknown"}</p><p><strong>Device:</strong> ${label}</p><p><strong>Path:</strong> ${path || "/"}</p><p><strong>IP:</strong> ${ipAddress || "unknown"}</p><p><strong>Browser:</strong> ${browser}</p><p><strong>Platform:</strong> ${platform}</p><p><strong>Time:</strong> ${now}</p></div>`,
       });
     }
   }

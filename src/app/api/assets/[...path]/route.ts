@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient, isAdminProfile, requireActive } from "@/lib/supabase/server";
-import { logSecurityEvent } from "@/lib/security-monitor";
+import { getClientIp, logSecurityEvent } from "@/lib/security-monitor";
 
 export const runtime = "nodejs";
 
@@ -31,16 +31,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
 
   const download = new URL(req.url).searchParams.get("download") === "1";
   const filename = path.split("/").pop() || "file";
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers.get("user-agent") || "";
 
-  if (download && isAdminProfile(ctx.profile)) {
+  if (isAdminProfile(ctx.profile)) {
     await logSecurityEvent({
       userId: ctx.user.id,
-      eventType: "admin_file_download",
+      eventType: download ? "admin_file_download" : "admin_file_view",
       metadata: {
         path,
         file_name: filename,
         mime_type: inferType(path),
         source: "assets_route",
+        ip_address: ipAddress,
+        user_agent: userAgent,
       },
     });
   }

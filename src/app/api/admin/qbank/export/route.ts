@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getClientIp } from "@/lib/security-monitor";
 import { requireAdmin } from "@/lib/supabase/server";
 import { buildQuestionExport, ExportFormat } from "@/lib/ai/question-export";
 import { logSecurityEvent } from "@/lib/security-monitor";
@@ -28,6 +29,7 @@ function bool(value: string | null, defaultValue: boolean) {
 }
 
 async function handle(request: {
+  req?: NextRequest;
   actorUserId?: string;
   format: ExportFormat;
   questionIds?: string[];
@@ -70,6 +72,8 @@ async function handle(request: {
         lesson_id: request.lessonId ?? null,
         question_count: result.manifest.totals.questions,
         image_count: result.manifest.totals.images,
+        ip_address: request.req ? getClientIp(request.req) : null,
+        user_agent: request.req?.headers.get("user-agent") || null,
       },
     });
   }
@@ -101,7 +105,7 @@ export async function GET(req: NextRequest) {
   const lessonId = url.searchParams.get("lesson_id") || undefined;
 
   try {
-    return await handle({ actorUserId: ctx.user.id, format, questionIds, lessonId, includeFlashcards, includeNotes, meta });
+    return await handle({ req, actorUserId: ctx.user.id, format, questionIds, lessonId, includeFlashcards, includeNotes, meta });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "export failed" }, { status: 500 });
   }
@@ -120,7 +124,7 @@ export async function POST(req: NextRequest) {
   const lessonId = typeof body?.lesson_id === "string" ? body.lesson_id : undefined;
 
   try {
-    return await handle({ actorUserId: ctx.user.id, format, questionIds, lessonId, includeFlashcards, includeNotes, meta });
+    return await handle({ req, actorUserId: ctx.user.id, format, questionIds, lessonId, includeFlashcards, includeNotes, meta });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "export failed" }, { status: 500 });
   }

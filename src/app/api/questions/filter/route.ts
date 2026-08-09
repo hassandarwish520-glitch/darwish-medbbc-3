@@ -76,6 +76,10 @@ export async function GET(req: NextRequest) {
     return examSpecificTags.some((t) => normalizeToken(t) === examNormalized);
   };
 
+  if (block) {
+    return NextResponse.json({ questions: normalizedPool });
+  }
+
   let eligibleQuestionIds: Set<string> | null = null;
 
   if (filter === "incorrect") {
