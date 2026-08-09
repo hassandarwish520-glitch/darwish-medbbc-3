@@ -33,6 +33,9 @@ async function ensureProfile(admin: ReturnType<typeof createAdminClient>, id: st
     institution:
       existing?.institution ??
       (typeof meta.institution === "string" && meta.institution.trim() ? meta.institution.trim() : null),
+    current_level:
+      existing?.current_level ??
+      (typeof meta.current_level === "string" && meta.current_level.trim() ? meta.current_level.trim() : null),
     role: inferRole(authUser.email, meta.role, existing?.role),
     status: existing?.status ?? (authUser.email === "hassandarwish520@gmail.com" ? "active" : "pending"),
     activated_at: existing?.activated_at ?? (authUser.email === "hassandarwish520@gmail.com" ? new Date().toISOString() : null),

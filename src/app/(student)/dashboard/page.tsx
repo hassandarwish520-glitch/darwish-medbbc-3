@@ -1,4 +1,5 @@
 import Link from "next/link";
+import TrialActivationCards from "@/components/TrialActivationCards";
 import { createClient, requireUser } from "@/lib/supabase/server";
 import {
   BookOpen,
@@ -113,11 +114,16 @@ export default async function DashboardPage() {
 
   const lessonsData = (recentLessons ?? []) as LessonRow[];
 
+  const activatedAt = typeof ctx?.profile?.activated_at === "string" ? ctx.profile.activated_at : null;
+  const activationTime = activatedAt ? new Date(activatedAt).getTime() : Number.NaN;
+  const showTrialActivationCards = Number.isFinite(activationTime) && Date.now() - activationTime < 2 * 24 * 60 * 60 * 1000;
+
   const greetingHour = today.getHours();
   const greeting = greetingHour < 12 ? "Good morning" : greetingHour < 17 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="page-shell space-y-5">
+      {showTrialActivationCards && activatedAt ? <TrialActivationCards activatedAt={activatedAt} /> : null}
 
       {/* ── WELCOME BACK ── */}
       <section

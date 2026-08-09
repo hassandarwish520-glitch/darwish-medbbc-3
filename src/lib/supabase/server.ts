@@ -9,6 +9,7 @@ type Profile = {
   email?: string | null;
   full_name?: string | null;
   institution?: string | null;
+  current_level?: string | null;
   role?: string | null;
   status?: string | null;
   activated_at?: string | null;

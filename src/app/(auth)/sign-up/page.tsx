@@ -11,10 +11,13 @@ const PLANS = [
   { name: "3 Months", price: "$25", period: "/ 3 months", badge: "Best Value", highlight: true },
 ];
 
+const CURRENT_LEVEL_OPTIONS = ["Medical Student", "Medical Graduate", "Resident", "Other"] as const;
+
 export default function SignUp() {
   const router = useRouter();
   const [form, setForm] = useState({
     role: "student",
+    current_level: "",
     full_name: "",
     email: "",
     institution: "",
@@ -34,6 +37,7 @@ export default function SignUp() {
 
     if (!form.full_name.trim()) return setErr("Full name is required.");
     if (!form.email.trim()) return setErr("Email is required.");
+    if (!form.current_level.trim()) return setErr("Current level is required.");
     if (form.password.length < 8) return setErr("Password must be at least 8 characters.");
     if (form.password !== form.confirm) return setErr("Passwords do not match.");
     if (!agree) return setErr("Please accept the Terms and Privacy Policy.");
@@ -47,6 +51,7 @@ export default function SignUp() {
         password: form.password,
         full_name: form.full_name.trim(),
         institution: form.institution.trim(),
+        current_level: form.current_level,
         role: form.role,
       }),
     });
@@ -135,22 +140,27 @@ export default function SignUp() {
 
           <div>
             <label className="label">I am a</label>
-            <div className="grid grid-cols-2 gap-2 mt-1">
-              {([
-                { value: "student", label: "Student", desc: "USMLE / MBBS prep" },
-                { value: "educator", label: "Instructor", desc: "Content management" },
-              ] as const).map((r) => (
-                <button
-                  type="button"
-                  key={r.value}
-                  onClick={() => set("role", r.value)}
-                  className={`px-3 py-3 rounded-xl border text-left text-sm ${form.role === r.value ? "border-brand bg-ink-800" : "border-ink-700 bg-ink-900"}`}
-                >
-                  <div className="font-medium">{r.label}</div>
-                  <div className="text-xs text-slate-400">{r.desc}</div>
-                </button>
-              ))}
+            <div className="mt-1 flex justify-center">
+              <div className="w-full max-w-[220px] rounded-xl border border-brand bg-ink-800 px-3 py-3 text-left text-sm">
+                <div className="font-medium">Student</div>
+                <div className="text-xs text-slate-400">USMLE / MBBS prep</div>
+              </div>
             </div>
+          </div>
+
+          <div>
+            <label className="label">Current level</label>
+            <select
+              className="input mt-1"
+              required
+              value={form.current_level}
+              onChange={(e) => set("current_level", e.target.value)}
+            >
+              <option value="">Select current level</option>
+              {CURRENT_LEVEL_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
           </div>
 
           <div><label className="label">Full name</label><input className="input mt-1" required value={form.full_name} onChange={(e) => set("full_name", e.target.value)} placeholder="Dr. Ahmed Al-Hassan" /></div>

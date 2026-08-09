@@ -8,13 +8,14 @@ type RegisterBody = {
   password?: string;
   full_name?: string;
   institution?: string;
+  current_level?: string;
   role?: string;
 };
 
-function inferRole(email: string, requested?: string) {
+const VALID_CURRENT_LEVELS = new Set(["Medical Student", "Medical Graduate", "Resident", "Other"]);
+
+function inferRole(email: string) {
   if (email === "hassandarwish520@gmail.com") return "admin";
-  const raw = (requested || "").toLowerCase().trim();
-  if (raw === "educator" || raw === "instructor") return "educator";
   return "student";
 }
 
@@ -30,13 +31,17 @@ export async function POST(req: NextRequest) {
   const password = body.password || "";
   const full_name = (body.full_name || "").trim();
   const institution = (body.institution || "").trim();
-  const role = inferRole(email, body.role);
+  const current_level = (body.current_level || "").trim();
+  const role = inferRole(email);
 
   if (!email || !password) {
     return NextResponse.json({ error: "email and password are required" }, { status: 400 });
   }
   if (password.length < 8) {
     return NextResponse.json({ error: "password must be at least 8 characters" }, { status: 400 });
+  }
+  if (!VALID_CURRENT_LEVELS.has(current_level)) {
+    return NextResponse.json({ error: "current level is required" }, { status: 400 });
   }
 
   const admin = createAdminClient();
@@ -48,6 +53,7 @@ export async function POST(req: NextRequest) {
     user_metadata: {
       full_name: full_name || email.split("@")[0],
       institution: institution || null,
+      current_level,
       role,
     },
   });
@@ -70,6 +76,7 @@ export async function POST(req: NextRequest) {
         email,
         full_name: full_name || email.split("@")[0],
         institution: institution || null,
+        current_level,
         role,
         status,
         activated_at,
