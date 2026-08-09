@@ -43,7 +43,7 @@ export default function TrialActivationCards({ activatedAt }: { activatedAt: str
         </div>
         <h2 className="mt-4 text-2xl font-bold" style={{ color: "var(--c-text-1)" }}>Your account is approved!</h2>
         <p className="mt-2 text-sm leading-6" style={{ color: "var(--c-text-3)" }}>
-          You now have full access to the Medical Q-Bank.
+          Welcome to Darwish MedBBC. You now have full access to the Q-Bank.
         </p>
         <div className="mt-5 space-y-3 text-left">
           {[
@@ -62,7 +62,7 @@ export default function TrialActivationCards({ activatedAt }: { activatedAt: str
             Go to Dashboard
           </Link>
           <Link href="/qbank" className="btn-ghost w-full justify-center">
-            Explore Features
+            Explore Q-Bank
           </Link>
         </div>
         <div className="mt-5 flex items-center gap-3 rounded-2xl px-4 py-3 text-left" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(148,163,184,0.10)" }}>
@@ -82,7 +82,7 @@ export default function TrialActivationCards({ activatedAt }: { activatedAt: str
         </div>
         <h2 className="mt-4 text-2xl font-bold" style={{ color: "var(--c-text-1)" }}>Your trial ends soon</h2>
         <p className="mt-2 text-sm leading-6" style={{ color: "var(--c-text-3)" }}>
-          Your 2-day free trial will end automatically unless you continue your access.
+          Your 2-day free trial will end soon. Subscribe now to continue your access without interruption.
         </p>
         <div className="mt-5 grid grid-cols-3 gap-3">
           {[
@@ -110,7 +110,7 @@ export default function TrialActivationCards({ activatedAt }: { activatedAt: str
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <Link href="/" className="btn-primary w-full justify-center">
-            Continue My Access
+            Choose a Plan
           </Link>
           <Link href="/" className="btn-ghost w-full justify-center">
             View Plans

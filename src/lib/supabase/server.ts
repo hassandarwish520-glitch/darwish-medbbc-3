@@ -9,7 +9,10 @@ type Profile = {
   email?: string | null;
   full_name?: string | null;
   institution?: string | null;
+  preparation_type?: string | null;
   current_level?: string | null;
+  purpose_of_access?: string | null;
+  selected_plan?: string | null;
   role?: string | null;
   status?: string | null;
   activated_at?: string | null;

@@ -25,21 +25,23 @@ export default async function StudentLayout({ children }: { children: React.Reac
           </p>
           <div className="mt-6 space-y-3 text-left">
             {[
-              { label: "Account review", state: "In progress", icon: UserRoundCheck },
-              { label: "Eligibility verification", state: "Pending", icon: ShieldCheck },
-              { label: "Access activation", state: "Pending", icon: Clock3 },
+              { label: "Registration Received", state: "Completed", icon: ShieldCheck },
+              { label: "Information Verification", state: "In progress", icon: UserRoundCheck },
+              { label: "Admin Review", state: "Pending", icon: ShieldCheck },
+              { label: "Account Activation", state: "Pending", icon: Clock3 },
             ].map((item, index) => {
               const Icon = item.icon;
-              const active = index === 0;
+              const active = index === 1;
+              const completed = index === 0;
               return (
                 <div key={item.label} className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(148,163,184,0.12)" }}>
                   <div className="flex items-center gap-3">
-                    <div className="grid h-9 w-9 place-items-center rounded-full" style={{ background: active ? "rgba(16,185,129,0.14)" : "rgba(148,163,184,0.10)", color: active ? "#10b981" : "#94a3b8" }}>
+                    <div className="grid h-9 w-9 place-items-center rounded-full" style={{ background: completed || active ? "rgba(16,185,129,0.14)" : "rgba(148,163,184,0.10)", color: completed || active ? "#10b981" : "#94a3b8" }}>
                       <Icon className="h-4 w-4" />
                     </div>
                     <span className="text-sm font-medium" style={{ color: "var(--c-text-2)" }}>{item.label}</span>
                   </div>
-                  <span className="text-xs font-semibold" style={{ color: active ? "#f59e0b" : "var(--c-text-4)" }}>{item.state}</span>
+                  <span className="text-xs font-semibold" style={{ color: completed ? "#10b981" : active ? "#f59e0b" : "var(--c-text-4)" }}>{item.state}</span>
                 </div>
               );
             })}
@@ -47,7 +49,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
           <div className="mt-6 rounded-2xl border px-4 py-4 text-left" style={{ background: "rgba(255,255,255,0.03)", borderColor: "rgba(148,163,184,0.12)" }}>
             <div className="text-sm font-semibold" style={{ color: "var(--c-text-1)" }}>Why do we review accounts?</div>
             <p className="mt-2 text-sm leading-6" style={{ color: "var(--c-text-3)" }}>
-              To protect the course content and prevent unauthorized sharing or misuse. This process usually takes 6–24 hours.
+              To protect the course content and prevent unauthorized sharing or misuse. This process usually takes 6–24 hours. You will be notified by email.
             </p>
           </div>
           <p className="mt-5 text-xs" style={{ color: "var(--c-text-4)" }}>Signed in as {ctx.profile?.email ?? ctx.user.email}</p>
