@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import DeviceRegistrationGuard from "@/components/DeviceRegistrationGuard";
 import {
   BarChart2,
   Bell,
@@ -72,7 +73,7 @@ export default function AppShell({
   const router = useRouter();
   const searchParams = useSearchParams();
   const isAdmin = profile?.role === "admin";
-  const isQbankSession = path === "/qbank" && Boolean(searchParams.get("subject"));
+  const isQbankSession = path === "/qbank" && (Boolean(searchParams.get("subject")) || Boolean(searchParams.get("block")));
   const [searchValue, setSearchValue] = useState(searchParams.get("q") || "");
   const [notificationCount, setNotificationCount] = useState(0);
   const [isDark, setIsDark] = useState(true);
@@ -149,6 +150,7 @@ export default function AppShell({
       className="min-h-screen"
       style={{ background: "var(--c-bg)", color: "var(--c-text-1)" }}
     >
+      <DeviceRegistrationGuard />
       {/* ── Top Header ── */}
       <header
         className={`glass-bar sticky top-0 z-30 ${isQbankSession ? "hidden md:block" : ""}`}

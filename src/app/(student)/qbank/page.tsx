@@ -130,14 +130,16 @@ function QBankPageInner() {
   const selectedSubject = sp.get("subject") || "";
   const selectedCourse = sp.get("course") || "";
   const selectedFilter = sp.get("filter") || "";
+  const selectedBlock = sp.get("block") || "";
+  const selectedBlockTitle = sp.get("blockTitle") || "";
   const selectedSessionId = sp.get("session") || "";
-  const hasSessionRequest = sp.has("count") || sp.has("mode") || sp.has("difficulty") || Boolean(selectedFilter) || Boolean(selectedSessionId);
-  const count = parseInt(sp.get("count") || "20", 10);
+  const hasSessionRequest = sp.has("count") || sp.has("mode") || sp.has("difficulty") || Boolean(selectedFilter) || Boolean(selectedBlock) || Boolean(selectedSessionId);
+  const count = parseInt(sp.get("count") || (selectedBlock ? "500" : "20"), 10);
   const mode = (sp.get("mode") || "tutor") as "tutor" | "exam" | "timed";
   const difficulty = (sp.get("difficulty") || "all").toLowerCase();
   const fallbackReturnTo = `/qbank?exam=${encodeURIComponent(selectedExam)}${selectedSubject ? `&subject=${encodeURIComponent(selectedSubject)}` : ""}${selectedCourse ? `&course=${encodeURIComponent(selectedCourse)}` : ""}`;
   const returnTo = sp.get("returnTo") || fallbackReturnTo;
-  const shouldAutoStart = Boolean(selectedSessionId || ((selectedSubject || selectedCourse || selectedFilter) && hasSessionRequest));
+  const shouldAutoStart = Boolean(selectedSessionId || selectedBlock || ((selectedSubject || selectedCourse || selectedFilter) && hasSessionRequest));
 
   const [subjects, setSubjects] = useState<SubjectOverview[]>([]);
   const [search, setSearch] = useState("");
@@ -170,7 +172,9 @@ function QBankPageInner() {
   useEffect(() => {
     const label = selectedSessionId
       ? "Resumed Session"
-      : selectedSubject || (selectedCourse ? "Course Session" : selectedFilter ? `${selectedFilter[0]?.toUpperCase() || ""}${selectedFilter.slice(1)} Session` : "");
+      : selectedBlock
+        ? (selectedBlockTitle || selectedSubject || "Official Fixed Block")
+        : selectedSubject || (selectedCourse ? "Course Session" : selectedFilter ? `${selectedFilter[0]?.toUpperCase() || ""}${selectedFilter.slice(1)} Session` : "");
 
     if (!shouldAutoStart) {
       setSession({ status: "idle", questions: [], label: "", message: "" });
@@ -203,6 +207,7 @@ function QBankPageInner() {
         if (selectedCourse) params.set("course", selectedCourse);
         if (selectedExam) params.set("exam", selectedExam);
         if (selectedFilter) params.set("filter", selectedFilter);
+        if (selectedBlock) params.set("block", selectedBlock);
         params.set("count", String(count));
         if (difficulty && difficulty !== "all") params.set("difficulty", difficulty);
 
@@ -230,7 +235,7 @@ function QBankPageInner() {
 
     void load();
     return () => { active = false; controller.abort(); };
-  }, [selectedSubject, selectedCourse, selectedExam, count, difficulty, shouldAutoStart, selectedFilter, selectedSessionId]);
+  }, [selectedSubject, selectedCourse, selectedExam, count, difficulty, shouldAutoStart, selectedFilter, selectedSessionId, selectedBlock, selectedBlockTitle]);
 
   const filtered = useMemo(() => {
     return subjects.filter((subject) => `${subject.title} ${subject.description}`.toLowerCase().includes(search.toLowerCase()));

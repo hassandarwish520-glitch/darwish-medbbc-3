@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient, requireActive } from "@/lib/supabase/server";
+import { createAdminClient, isAdminProfile, requireActive } from "@/lib/supabase/server";
+import { logSecurityEvent } from "@/lib/security-monitor";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
 
   const download = new URL(req.url).searchParams.get("download") === "1";
   const filename = path.split("/").pop() || "file";
+
+  if (download && isAdminProfile(ctx.profile)) {
+    await logSecurityEvent({
+      userId: ctx.user.id,
+      eventType: "admin_file_download",
+      metadata: {
+        path,
+        file_name: filename,
+        mime_type: inferType(path),
+        source: "assets_route",
+      },
+    });
+  }
 
   const isPdf = inferType(path) === "application/pdf";
 

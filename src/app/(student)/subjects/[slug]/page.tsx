@@ -454,7 +454,7 @@ export default async function SubjectDashboardPage({
               {detail.officialBlocks.map((block) => (
                 <Link
                   key={block.id}
-                  href={`/qbank?block=${block.id}&exam=${encodeURIComponent(detail.exam)}`}
+                  href={`/qbank?block=${block.id}&blockTitle=${encodeURIComponent(block.title)}&subject=${encodeURIComponent(detail.subject.title)}&exam=${encodeURIComponent(detail.exam)}&returnTo=${encodeURIComponent(`/subjects/${detail.subject.slug}?exam=${detail.exam}`)}`}
                   className="shrink-0 flex flex-col rounded-2xl border-2 p-4 hover:scale-[1.02] transition"
                   style={{ width: "240px", minWidth: "240px", scrollSnapAlign: "start", background: "linear-gradient(135deg, rgba(220,38,38,0.12) 0%, rgba(15,23,42,0.95) 100%)", borderColor: "rgba(220,38,38,0.45)" }}
                   dir="rtl"

@@ -9,7 +9,8 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const subject = url.searchParams.get("subject") || "";
   const course = url.searchParams.get("course") || "";
-  const count = Math.min(parseInt(url.searchParams.get("count") || "40", 10), 120);
+  const block = url.searchParams.get("block") || "";
+  const count = Math.min(parseInt(url.searchParams.get("count") || "40", 10), block ? 1000 : 120);
   const exam = url.searchParams.get("exam") || "";
   const difficulty = (url.searchParams.get("difficulty") || "all").toLowerCase();
   const filter = (url.searchParams.get("filter") || "").toLowerCase();
@@ -22,8 +23,12 @@ export async function GET(req: NextRequest) {
 
   let query = admin
     .from("questions")
-    .select("id, stem, choices, answer_key, explanation, difficulty, tags, image_path, image_caption, video_url, lesson_id")
-    .limit(Math.max(count * 6, 240));
+    .select("id, stem, choices, answer_key, explanation, difficulty, tags, image_path, image_caption, video_url, lesson_id, created_at")
+    .limit(block ? 1000 : Math.max(count * 6, 240));
+
+  if (block) {
+    query = query.eq("lesson_id", block).order("created_at", { ascending: true });
+  }
 
   if (course) {
     const { data: lessons, error: lessonsError } = await admin.from("lessons").select("id").eq("course_id", course);
@@ -112,11 +117,13 @@ export async function GET(req: NextRequest) {
     return true;
   });
 
-  for (let k = filteredPool.length - 1; k > 0; k--) {
-    const j = Math.floor(Math.random() * (k + 1));
-    [filteredPool[k], filteredPool[j]] = [filteredPool[j], filteredPool[k]];
+  if (!block) {
+    for (let k = filteredPool.length - 1; k > 0; k--) {
+      const j = Math.floor(Math.random() * (k + 1));
+      [filteredPool[k], filteredPool[j]] = [filteredPool[j], filteredPool[k]];
+    }
   }
 
-  const filtered = filteredPool.slice(0, count);
+  const filtered = block ? filteredPool : filteredPool.slice(0, count);
   return NextResponse.json({ questions: filtered });
 }

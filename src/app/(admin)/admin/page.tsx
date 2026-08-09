@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
 import StudentsTable from "./StudentsTable";
 
@@ -15,9 +16,19 @@ type StudentRow = {
 
 type AttemptRow = { user_id: string; correct: boolean; created_at: string };
 type FlashSessionRow = { user_id: string; total: number | null; xp: number | null; duration_seconds: number | null; started_at: string | null };
-type ActivityRow = { user_id: string; activity_type: string; lesson_id: string | null; metadata: Record<string, unknown> | null; created_at: string };
+
+type ActivityRow = {
+  user_id: string;
+  activity_type: string;
+  lesson_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
 type ExamSettingRow = { user_id: string; exam_date: string | null; reminder_slot: string | null; updated_at: string | null };
 type LessonRow = { id: string; title: string };
+type DeviceRow = { user_id: string; device_type: string; label: string | null; last_seen_at: string | null; is_active: boolean | null };
+type SecurityEventRow = { user_id: string; event_type: string; metadata: Record<string, unknown> | null; created_at: string };
 
 type StudentMetric = {
   id: string;
@@ -36,6 +47,8 @@ type StudentMetric = {
   daysLeft: number | null;
   lastPdfViewAt: string | null;
   blockedDownloadAttempts: number;
+  deviceCount: number;
+  deviceSummary: string;
 };
 
 function inferRole(email: string | null | undefined, metaRole: unknown, fallbackRole: string | null | undefined) {
@@ -82,13 +95,15 @@ function fmtDateTime(value: string | null) {
 
 export default async function AdminStudents() {
   const admin = createAdminClient();
-  const [profilesRes, authUsersRes, attemptsRes, flashSessionsRes, activityRes, examSettingsRes] = await Promise.all([
+  const [profilesRes, authUsersRes, attemptsRes, flashSessionsRes, activityRes, examSettingsRes, devicesRes, securityRes] = await Promise.all([
     admin.from("profiles").select("id,email,full_name,institution,role,status,created_at,activated_at").order("created_at", { ascending: false }),
     admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     admin.from("question_attempts").select("user_id,correct,created_at").order("created_at", { ascending: false }).limit(10000),
     admin.from("flashcard_sessions").select("user_id,total,xp,duration_seconds,started_at").order("started_at", { ascending: false }).limit(5000),
     admin.from("student_activity_logs").select("user_id,activity_type,lesson_id,metadata,created_at").order("created_at", { ascending: false }).limit(2000),
     admin.from("student_exam_settings").select("user_id,exam_date,reminder_slot,updated_at").order("updated_at", { ascending: false }).limit(1000),
+    admin.from("user_devices").select("user_id,device_type,label,last_seen_at,is_active").order("last_seen_at", { ascending: false }).limit(3000),
+    admin.from("security_events").select("user_id,event_type,metadata,created_at").order("created_at", { ascending: false }).limit(300),
   ]);
 
   const students = profilesRes.data ?? [];
@@ -97,6 +112,8 @@ export default async function AdminStudents() {
   const flashSessions = (flashSessionsRes.data ?? []) as FlashSessionRow[];
   const activities = (activityRes.data ?? []) as ActivityRow[];
   const examSettings = (examSettingsRes.data ?? []) as ExamSettingRow[];
+  const devices = (devicesRes.data ?? []) as DeviceRow[];
+  const securityEvents = (securityRes.data ?? []) as SecurityEventRow[];
 
   const lessonIds = Array.from(new Set(activities.map((row) => row.lesson_id).filter((v): v is string => typeof v === "string" && v.length > 0)));
   const lessonMap = new Map<string, string>();
@@ -122,31 +139,40 @@ export default async function AdminStudents() {
     };
   });
 
-  const missingOnlyProfiles = (students ?? []).filter((row) => !(authUsers ?? []).some((user) => user.id === row.id)).map((row) => ({
-    ...row,
-    email_confirmed_at: null,
-  }));
+  const missingOnlyProfiles = (students ?? [])
+    .filter((row) => !(authUsers ?? []).some((user) => user.id === row.id))
+    .map((row) => ({ ...row, email_confirmed_at: null }));
 
   const allRows = [...rows, ...missingOnlyProfiles];
+
   const attemptsByUser = new Map<string, AttemptRow[]>();
   attempts.forEach((row) => {
     const list = attemptsByUser.get(row.user_id) ?? [];
     list.push(row);
     attemptsByUser.set(row.user_id, list);
   });
+
   const flashByUser = new Map<string, FlashSessionRow[]>();
   flashSessions.forEach((row) => {
     const list = flashByUser.get(row.user_id) ?? [];
     list.push(row);
     flashByUser.set(row.user_id, list);
   });
+
   const activityByUser = new Map<string, ActivityRow[]>();
   activities.forEach((row) => {
     const list = activityByUser.get(row.user_id) ?? [];
     list.push(row);
     activityByUser.set(row.user_id, list);
   });
+
   const examByUser = new Map(examSettings.map((row) => [row.user_id, row]));
+  const devicesByUser = new Map<string, DeviceRow[]>();
+  devices.forEach((row) => {
+    const list = devicesByUser.get(row.user_id) ?? [];
+    list.push(row);
+    devicesByUser.set(row.user_id, list);
+  });
 
   const now = startOfUtcDay();
   const sevenDaysAgo = now - (7 * 86400000);
@@ -158,6 +184,7 @@ export default async function AdminStudents() {
       const userAttempts = attemptsByUser.get(row.id) ?? [];
       const userFlash = flashByUser.get(row.id) ?? [];
       const userActivity = activityByUser.get(row.id) ?? [];
+      const userDevices = (devicesByUser.get(row.id) ?? []).filter((item) => item.is_active !== false);
       const exam = examByUser.get(row.id) ?? null;
       const correct = userAttempts.filter((item) => item.correct).length;
       const attempts7d = userAttempts.filter((item) => new Date(item.created_at).getTime() >= sevenDaysAgo).length;
@@ -176,11 +203,16 @@ export default async function AdminStudents() {
         ...userAttempts.map((item) => item.created_at),
         ...userFlash.map((item) => item.started_at ?? ""),
         ...userActivity.map((item) => item.created_at),
+        ...userDevices.map((item) => item.last_seen_at ?? ""),
       ].filter(Boolean).sort().reverse();
       const lastPdfViewAt = (userActivity.find((item) => item.activity_type === "pdf_view") ?? null)?.created_at ?? null;
       const blockedDownloadAttempts = userActivity.filter((item) => item.activity_type === "pdf_download_blocked").length;
       const accuracy = userAttempts.length ? Math.round((correct / userAttempts.length) * 100) : 0;
       const activeDays30 = activeDays.size;
+      const deviceSummary = userDevices.length
+        ? userDevices.map((item) => item.device_type).slice(0, 3).join(" · ")
+        : "No devices yet";
+
       return {
         id: row.id,
         name: row.full_name || row.email,
@@ -198,10 +230,13 @@ export default async function AdminStudents() {
         daysLeft: daysUntil(exam?.exam_date ?? null),
         lastPdfViewAt,
         blockedDownloadAttempts,
+        deviceCount: userDevices.length,
+        deviceSummary,
       };
     })
     .sort((a, b) => {
       if (a.blockedDownloadAttempts !== b.blockedDownloadAttempts) return b.blockedDownloadAttempts - a.blockedDownloadAttempts;
+      if (a.deviceCount !== b.deviceCount) return b.deviceCount - a.deviceCount;
       if (a.attempts7d !== b.attempts7d) return b.attempts7d - a.attempts7d;
       return (b.lastSeenAt ?? "").localeCompare(a.lastSeenAt ?? "");
     });
@@ -226,32 +261,55 @@ export default async function AdminStudents() {
       };
     });
 
+  const adminSecurityAlerts = securityEvents
+    .filter((row) => row.event_type === "admin_new_device_login" || row.event_type === "admin_file_download")
+    .slice(0, 12)
+    .map((row) => {
+      const profile = allRows.find((item) => item.id === row.user_id);
+      return {
+        id: `${row.user_id}-${row.created_at}-${row.event_type}`,
+        user: profile?.full_name || profile?.email || row.user_id,
+        email: profile?.email || "—",
+        action: row.event_type,
+        fileName: typeof row.metadata?.file_name === "string" ? row.metadata.file_name : null,
+        label: typeof row.metadata?.label === "string" ? row.metadata.label : null,
+        at: row.created_at,
+      };
+    });
+
   const totals = {
     students: metrics.length,
     activeThisWeek: metrics.filter((row) => row.attempts7d > 0 || row.lastSeenAt).length,
     blockedDownloads: metrics.reduce((sum, row) => sum + row.blockedDownloadAttempts, 0),
     examsSoon: examAlerts.filter((row) => (row.daysLeft ?? 9999) <= 14).length,
+    registeredDevices: devices.filter((item) => item.is_active !== false).length,
+    adminAlerts: adminSecurityAlerts.length,
   };
 
   return (
     <div className="p-6 max-w-7xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Admin Control Center</h1>
-        <p className="text-slate-400 text-sm">Real student activity, protected PDF audit trail, IFOM exam dates, and account control in one page.</p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Admin Control Center</h1>
+          <p className="text-slate-400 text-sm">Student performance, protected file audit trail, device tracking, and admin security alerts in one page.</p>
+        </div>
+        <Link href="/admin/security" className="btn-ghost text-sm">Open Security & Device Center</Link>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-6">
         <div className="card p-4"><div className="text-xs uppercase tracking-[0.18em] text-slate-400">Tracked students</div><div className="mt-2 text-3xl font-semibold text-white">{totals.students}</div></div>
         <div className="card p-4"><div className="text-xs uppercase tracking-[0.18em] text-slate-400">Active this week</div><div className="mt-2 text-3xl font-semibold text-emerald-300">{totals.activeThisWeek}</div></div>
         <div className="card p-4"><div className="text-xs uppercase tracking-[0.18em] text-slate-400">Blocked PDF download attempts</div><div className="mt-2 text-3xl font-semibold text-amber-300">{totals.blockedDownloads}</div></div>
         <div className="card p-4"><div className="text-xs uppercase tracking-[0.18em] text-slate-400">IFOM exams within 14 days</div><div className="mt-2 text-3xl font-semibold text-cyan-300">{totals.examsSoon}</div></div>
+        <div className="card p-4"><div className="text-xs uppercase tracking-[0.18em] text-slate-400">Registered devices</div><div className="mt-2 text-3xl font-semibold text-fuchsia-300">{totals.registeredDevices}</div></div>
+        <div className="card p-4"><div className="text-xs uppercase tracking-[0.18em] text-slate-400">Admin security alerts</div><div className="mt-2 text-3xl font-semibold text-rose-300">{totals.adminAlerts}</div></div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
         <section className="card overflow-hidden p-0">
           <div className="border-b border-ink-800 px-4 py-3">
-            <div className="text-sm font-semibold text-white">Student performance and activity</div>
-            <div className="text-xs text-slate-400">Level and effectiveness are calculated from real question attempts, recent active days, and flashcard study sessions.</div>
+            <div className="text-sm font-semibold text-white">Student performance, activity, and devices</div>
+            <div className="text-xs text-slate-400">Level and effectiveness are calculated from real question attempts, recent active days, flashcard sessions, and the registered device footprint.</div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -263,6 +321,7 @@ export default async function AdminStudents() {
                   <th className="p-3">Attempts</th>
                   <th className="p-3">Accuracy</th>
                   <th className="p-3">7d</th>
+                  <th className="p-3">Devices</th>
                   <th className="p-3">PDF alerts</th>
                   <th className="p-3">Exam</th>
                 </tr>
@@ -276,11 +335,12 @@ export default async function AdminStudents() {
                     <td className="p-3">{row.attempts}</td>
                     <td className="p-3">{row.accuracy}%</td>
                     <td className="p-3">{row.attempts7d}</td>
+                    <td className="p-3"><div>{row.deviceCount}/3</div><div className="text-[11px] text-slate-500">{row.deviceSummary}</div></td>
                     <td className="p-3"><div>{row.blockedDownloadAttempts} blocked</div><div className="text-[11px] text-slate-500">Last PDF view: {fmtDateTime(row.lastPdfViewAt)}</div></td>
                     <td className="p-3">{row.examDate ? <><div>{row.examDate}</div><div className="text-[11px] text-slate-500">{row.daysLeft === null ? "—" : row.daysLeft === 0 ? "Today" : `${row.daysLeft} day(s)`}</div></> : <span className="text-slate-500">—</span>}</td>
                   </tr>
                 ))}
-                {!metrics.length ? <tr><td colSpan={8} className="p-8 text-center text-slate-500">No student analytics yet.</td></tr> : null}
+                {!metrics.length ? <tr><td colSpan={9} className="p-8 text-center text-slate-500">No student analytics yet.</td></tr> : null}
               </tbody>
             </table>
           </div>
@@ -308,6 +368,35 @@ export default async function AdminStudents() {
                 </div>
               ))}
               {!examAlerts.length ? <div className="px-4 py-8 text-center text-sm text-slate-500">No saved IFOM exam dates yet.</div> : null}
+            </div>
+          </section>
+
+          <section className="card overflow-hidden p-0">
+            <div className="border-b border-ink-800 px-4 py-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-white">Admin security alerts</div>
+                <div className="text-xs text-slate-400">New-device admin logins and admin-side file downloads.</div>
+              </div>
+              <Link href="/admin/security" className="text-xs text-brand">Full history</Link>
+            </div>
+            <div className="divide-y divide-ink-800">
+              {adminSecurityAlerts.map((row) => (
+                <div key={row.id} className="px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-medium text-white">{row.user}</div>
+                      <div className="text-xs text-slate-500">{row.email}</div>
+                    </div>
+                    <div className="text-right text-xs text-slate-400">{fmtDateTime(row.at)}</div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="rounded-full bg-ink-800 px-2 py-1 text-slate-300">{row.action}</span>
+                    {row.label ? <span className="text-slate-400">{row.label}</span> : null}
+                    {row.fileName ? <span className="text-amber-300">{row.fileName}</span> : null}
+                  </div>
+                </div>
+              ))}
+              {!adminSecurityAlerts.length ? <div className="px-4 py-8 text-center text-sm text-slate-500">No admin security alerts yet.</div> : null}
             </div>
           </section>
 

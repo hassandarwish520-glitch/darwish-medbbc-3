@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/server";
 import { buildQuestionExport, ExportFormat } from "@/lib/ai/question-export";
+import { logSecurityEvent } from "@/lib/security-monitor";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -27,6 +28,7 @@ function bool(value: string | null, defaultValue: boolean) {
 }
 
 async function handle(request: {
+  actorUserId?: string;
   format: ExportFormat;
   questionIds?: string[];
   lessonId?: string;
@@ -56,6 +58,22 @@ async function handle(request: {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const filename = `qbank-export-${stamp}.${result.extension}`;
   const body = new Uint8Array(result.body);
+
+  if (request.actorUserId) {
+    await logSecurityEvent({
+      userId: request.actorUserId,
+      eventType: "admin_file_download",
+      metadata: {
+        source: "qbank_export",
+        file_name: filename,
+        format: request.format,
+        lesson_id: request.lessonId ?? null,
+        question_count: result.manifest.totals.questions,
+        image_count: result.manifest.totals.images,
+      },
+    });
+  }
+
   return new NextResponse(body, {
     status: 200,
     headers: {
@@ -83,7 +101,7 @@ export async function GET(req: NextRequest) {
   const lessonId = url.searchParams.get("lesson_id") || undefined;
 
   try {
-    return await handle({ format, questionIds, lessonId, includeFlashcards, includeNotes, meta });
+    return await handle({ actorUserId: ctx.user.id, format, questionIds, lessonId, includeFlashcards, includeNotes, meta });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "export failed" }, { status: 500 });
   }
@@ -102,7 +120,7 @@ export async function POST(req: NextRequest) {
   const lessonId = typeof body?.lesson_id === "string" ? body.lesson_id : undefined;
 
   try {
-    return await handle({ format, questionIds, lessonId, includeFlashcards, includeNotes, meta });
+    return await handle({ actorUserId: ctx.user.id, format, questionIds, lessonId, includeFlashcards, includeNotes, meta });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "export failed" }, { status: 500 });
   }

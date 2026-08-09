@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireUser, isAdminProfile } from "@/lib/supabase/server";
-import { Users, FileText, HelpCircle, Layers, Video, BookOpen, Brain, MessageSquare, Shield, Package } from "lucide-react";
+import { Users, FileText, HelpCircle, Layers, Video, BookOpen, Brain, MessageSquare, Shield, Package, Laptop } from "lucide-react";
+import DeviceRegistrationGuard from "@/components/DeviceRegistrationGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +26,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin/messages", label: "Messages", icon: MessageSquare },
     { href: "/admin/flashcards", label: "Flashcards", icon: Layers },
     { href: "/admin/videos", label: "Videos", icon: Video },
+    { href: "/admin/security", label: "Security", icon: Laptop },
     { href: "/admin/ai", label: "AI Studio", icon: Brain },
   ];
 
   return (
     <div className="min-h-screen flex" style={{ background: "var(--c-bg)", color: "var(--c-text-1)" }}>
+      <DeviceRegistrationGuard />
       <aside
         className="w-60 shrink-0 border-r p-4 flex flex-col gap-2"
         style={{ background: "var(--c-sidebar-bg)", borderColor: "var(--c-border)" }}
