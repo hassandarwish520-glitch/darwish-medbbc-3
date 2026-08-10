@@ -114,12 +114,14 @@ function AnnotationPanelInner({
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [readingMode, setReadingMode] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [htmlFrameHeight, setHtmlFrameHeight] = useState<string>("0px");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
   const panelRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const htmlFrameRef = useRef<HTMLIFrameElement | null>(null);
   const drawingRef = useRef(false);
   const currentStrokeRef = useRef<AnnotationStroke | null>(null);
   const strokesRef = useRef<AnnotationStroke[]>([]);
@@ -391,6 +393,34 @@ function AnnotationPanelInner({
     : "clamp(420px, calc(100vh - 18rem), 1180px)";
   const frameWidth = Math.min(1500, Math.round(980 * (zoom / 100)));
 
+  useEffect(() => {
+    if (!isHtml || !htmlSource) return;
+    const iframe = htmlFrameRef.current;
+    if (!iframe) return;
+
+    const syncHtmlHeight = () => {
+      try {
+        const doc = iframe.contentDocument;
+        const bodyHeight = doc?.body?.scrollHeight ?? 0;
+        const rootHeight = doc?.documentElement?.scrollHeight ?? 0;
+        const nextHeight = Math.max(bodyHeight, rootHeight, 640);
+        setHtmlFrameHeight(`${nextHeight}px`);
+        window.setTimeout(() => resizeOverlay(), 0);
+      } catch {
+        setHtmlFrameHeight(frameHeight);
+      }
+    };
+
+    const handleLoad = () => syncHtmlHeight();
+    iframe.addEventListener("load", handleLoad);
+    syncHtmlHeight();
+    const retry = window.setTimeout(syncHtmlHeight, 250);
+    return () => {
+      iframe.removeEventListener("load", handleLoad);
+      window.clearTimeout(retry);
+    };
+  }, [frameHeight, htmlSource, isHtml, resizeOverlay]);
+
   return (
     <div ref={panelRef} className="flex min-h-0 flex-col overflow-hidden rounded-[28px] border border-white/15 bg-slate-950/90 shadow-[0_20px_70px_rgba(3,7,18,0.45)]">
       <div className="border-b border-white/10 px-4 pt-3 md:px-5">
@@ -457,15 +487,15 @@ function AnnotationPanelInner({
            onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>
         <div className="mx-auto flex min-h-full w-full justify-center">
           <div ref={containerRef}
-               className={`relative overflow-hidden rounded-[24px] border border-white/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] ${darkMode ? "[filter:invert(1)_hue-rotate(180deg)]" : ""}`}
+               className={`relative rounded-[24px] border border-white/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] ${darkMode ? "[filter:invert(1)_hue-rotate(180deg)]" : ""}`}
                style={{ width: `min(100%, ${frameWidth}px)`, minHeight: frameHeight }}>
             {!annotationReady ? (
               <div className="grid place-items-center text-center text-sm text-slate-500" style={{ height: frameHeight }}>
                 <Loader2 className="h-5 w-5 animate-spin" />
               </div>
             ) : isImage ? (
-              <img src={attachment.href} alt={attachment.name} className="block w-full object-contain"
-                   style={{ minHeight: frameHeight, maxHeight: frameHeight }} draggable={false} />
+              <img src={attachment.href} alt={attachment.name} className="block w-full object-contain object-top"
+                   style={{ height: "auto" }} draggable={false} />
             ) : isPdf ? (
               <iframe src={`${attachment.href}#toolbar=0&navpanes=0&statusbar=0&view=FitH`}
                       className="block w-full bg-white" style={{ height: frameHeight }} title={attachment.name}
@@ -476,8 +506,8 @@ function AnnotationPanelInner({
               ) : failedHtml ? (
                 <div className="grid place-items-center px-6 text-center text-sm text-rose-400" style={{ height: frameHeight }}>Unable to render this HTML document. Please refresh.</div>
               ) : (
-                <iframe srcDoc={htmlSource} sandbox="allow-same-origin allow-scripts allow-forms"
-                        className="block w-full bg-white" style={{ height: frameHeight }} title={attachment.name} />
+                <iframe ref={htmlFrameRef} srcDoc={htmlSource} sandbox="allow-same-origin allow-scripts allow-forms"
+                        className="block w-full bg-white" style={{ height: htmlFrameHeight || frameHeight }} title={attachment.name} />
               )
             ) : isVideo ? (
               <video src={attachment.href} controls className="block w-full bg-black"

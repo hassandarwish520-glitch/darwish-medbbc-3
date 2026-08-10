@@ -95,7 +95,7 @@ function cleanStem(s: string): string {
 
 /** Does this chunk of text/HTML contain at least 2 answer-choice lines? */
 function hasChoices(text: string): boolean {
-  const choiceCount = (text.match(/^\s*[A-E][\s.)\-:]/gm) || []).length;
+  const choiceCount = (text.match(/^\s*[A-Z][\s.)\-:]/gm) || []).length;
   return choiceCount >= 2;
 }
 
@@ -280,7 +280,7 @@ function parseChoicesFromText(text: string): { key: string; text: string }[] {
     const line = cleanLine(lines[i]);
     // Match: "A. text", "A) text", "A: text", "(A) text"
     // Also handles "• A. text" (when li bullet prefix survives), "- A. text"
-    const m = line.match(/^[•\-\*]?\s*\(?([A-E])\)?[.):\s]\s*(.+)$/i);
+    const m = line.match(/^[•\-\*]?\s*\(?([A-Z])\)?[.):\s]\s*(.+)$/i);
     if (!m) continue;
     const key = m[1].toUpperCase();
     if (seen.has(key)) continue;
@@ -292,7 +292,7 @@ function parseChoicesFromText(text: string): { key: string; text: string }[] {
       const next = cleanLine(lines[j]);
       if (!next) { j++; continue; }
       // Stop if next line starts a new choice or a section
-      if (/^[A-E][.):\s]/i.test(next)) break;
+      if (/^[A-Z][.):\s]/i.test(next)) break;
       if (/^(Correct|Answer|Explanation|Educational\s*objective|Learning\s*objective|Subject|System|Topic|Rationale|Reference)/i.test(next)) break;
       choiceText += " " + next;
       j++;
@@ -317,7 +317,7 @@ function extractAnswerKey(blockHtml: string, text: string, choices: { key: strin
   if (correctClassMatch) {
     const choiceText = htmlToText(correctClassMatch[1]).trim();
     // Extract the key letter
-    const keyM = choiceText.match(/^([A-E])[.):\s]/i);
+    const keyM = choiceText.match(/^([A-Z])[.):\s]/i);
     if (keyM) return keyM[1].toUpperCase();
     // Match against choice texts
     for (const c of choices) {
@@ -326,17 +326,17 @@ function extractAnswerKey(blockHtml: string, text: string, choices: { key: strin
   }
 
   // 2. data-correct / aria-checked / data-answer attributes
-  const dataAttrM = blockHtml.match(/data-(?:correct|answer|key)=["']([A-E])["']/i);
+  const dataAttrM = blockHtml.match(/data-(?:correct|answer|key)=["']([A-Z])["']/i);
   if (dataAttrM) return dataAttrM[1].toUpperCase();
 
   // 3. "Correct Answer: B" / "Answer: B" / "Key: B" in text
   const textPatterns = [
-    /correct\s*answer\s*[:\-]\s*([A-E])/i,
-    /answer\s*key\s*[:\-]\s*([A-E])/i,
-    /(?:^|\n)\s*answer\s*[:\-]\s*([A-E])/im,
-    /option\s+([A-E])\s+is\s+correct/i,
-    /\(([A-E])\)\s+is\s+(?:the\s+)?correct/i,
-    /(?:the\s+)?correct\s+(?:choice|option|answer)\s+is\s+([A-E])/i,
+    /correct\s*answer\s*[:\-]\s*([A-Z])/i,
+    /answer\s*key\s*[:\-]\s*([A-Z])/i,
+    /(?:^|\n)\s*answer\s*[:\-]\s*([A-Z])/im,
+    /option\s+([A-Z])\s+is\s+correct/i,
+    /\(([A-Z])\)\s+is\s+(?:the\s+)?correct/i,
+    /(?:the\s+)?correct\s+(?:choice|option|answer)\s+is\s+([A-Z])/i,
   ];
   for (const p of textPatterns) {
     const m = text.match(p);
@@ -344,7 +344,7 @@ function extractAnswerKey(blockHtml: string, text: string, choices: { key: strin
   }
 
   // 4. Bold/highlighted text matching a choice key
-  const boldM = blockHtml.match(/<(?:strong|b)[^>]*>\s*([A-E])\s*<\/(?:strong|b)>/i);
+  const boldM = blockHtml.match(/<(?:strong|b)[^>]*>\s*([A-Z])\s*<\/(?:strong|b)>/i);
   if (boldM) return boldM[1].toUpperCase();
 
   return choices[0]?.key || "A";
@@ -359,7 +359,7 @@ function extractStem(text: string): string {
     .trim();
 
   // Cut off at the first choice (handles "A." and "• A." prefixed lines)
-  const choiceIdx = stem.search(/^\s*[•\-\*]?\s*\(?[A-E]\)?[.):\s]/m);
+  const choiceIdx = stem.search(/^\s*[•\-\*]?\s*\(?[A-Z]\)?[.):\s]/m);
   if (choiceIdx > 0) stem = stem.slice(0, choiceIdx).trim();
 
   // Also cut at section markers

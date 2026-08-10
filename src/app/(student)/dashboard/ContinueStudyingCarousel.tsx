@@ -16,6 +16,8 @@ type LessonRow = {
   title: string;
   kind: string;
   course_id?: string | null;
+  progressPercent?: number | null;
+  stateLabel?: string | null;
 };
 
 const kindStyles: Record<string, { color: string; bg: string }> = {
@@ -34,9 +36,6 @@ function KindIcon({ kind }: { kind: string }) {
   if (kind === "qbank")  return <BookOpen   className="h-5 w-5" />;
   return                        <FileText   className="h-5 w-5" />;
 }
-
-// Deterministic fake progress so server/client SSR always match
-const FAKE_PROGRESS = [64, 40, 20, 80, 15, 55, 72, 38];
 
 export function ContinueStudyingCarousel({ lessons }: { lessons: LessonRow[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -70,10 +69,10 @@ export function ContinueStudyingCarousel({ lessons }: { lessons: LessonRow[] }) 
         className="flex gap-4 overflow-x-auto pb-2 px-1"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
-        {lessons.map((lesson, idx) => {
-          const styles  = kindStyles[lesson.kind] ?? kindStyles.default;
-          const progress = FAKE_PROGRESS[idx % FAKE_PROGRESS.length];
-          const isNew    = idx >= lessons.length - 2; // last 2 cards are "New"
+        {lessons.map((lesson) => {
+          const styles = kindStyles[lesson.kind] ?? kindStyles.default;
+          const progress = typeof lesson.progressPercent === "number" ? Math.max(0, Math.min(100, Math.round(lesson.progressPercent))) : null;
+          const isNew = progress === null && (!lesson.stateLabel || lesson.stateLabel.toLowerCase() === "new");
 
           return (
             <Link
@@ -114,30 +113,18 @@ export function ContinueStudyingCarousel({ lessons }: { lessons: LessonRow[] }) 
 
               {/* Progress or New badge */}
               {isNew ? (
-                <span
-                  className="text-[11px] font-bold"
-                  style={{ color: styles.color }}
-                >
-                  ✦ New
-                </span>
-              ) : (
+                <span className="text-[11px] font-bold" style={{ color: styles.color }}>✦ New</span>
+              ) : progress !== null ? (
                 <div>
-                  <div
-                    className="flex justify-between text-[11px] mb-1.5"
-                    style={{ color: "var(--c-text-4)" }}
-                  >
+                  <div className="mb-1.5 flex justify-between text-[11px]" style={{ color: "var(--c-text-4)" }}>
                     <span>{progress}% complete</span>
                   </div>
-                  <div
-                    className="h-1.5 rounded-full overflow-hidden"
-                    style={{ background: "var(--c-elevated)" }}
-                  >
-                    <div
-                      className="h-1.5 rounded-full"
-                      style={{ width: `${progress}%`, background: styles.color }}
-                    />
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--c-elevated)" }}>
+                    <div className="h-1.5 rounded-full" style={{ width: `${progress}%`, background: styles.color }} />
                   </div>
                 </div>
+              ) : (
+                <span className="text-[11px] font-semibold" style={{ color: styles.color }}>{lesson.stateLabel || "In progress"}</span>
               )}
 
               {/* CTA */}

@@ -37,6 +37,27 @@ type LessonRow = {
   course_id?: string | null;
 };
 
+type QuestionLessonRow = {
+  id: string;
+  lesson_id: string | null;
+};
+
+type ActivityRow = {
+  lesson_id: string | null;
+  activity_type: string;
+  created_at: string;
+};
+
+type FlashSessionRow = {
+  total: number | null;
+  started_at: string | null;
+};
+
+type ContinueLessonRow = LessonRow & {
+  progressPercent: number | null;
+  stateLabel: string | null;
+};
+
 export default async function DashboardPage() {
   const ctx = await requireUser();
   const s = await createClient();
@@ -52,6 +73,8 @@ export default async function DashboardPage() {
     { count: videoCount },
     { data: attempts },
     { data: recentLessons },
+    { data: flashSessions },
+    { data: activityRows },
   ] = await Promise.all([
     s.from("questions").select("*", { count: "exact", head: true }),
     s.from("flashcards").select("*", { count: "exact", head: true }),
@@ -65,6 +88,8 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false })
       .limit(400),
     s.from("lessons").select("id,title,kind,course_id").eq("visible", true).limit(12),
+    s.from("flashcard_sessions").select("total,started_at").eq("user_id", ctx!.user.id).order("started_at", { ascending: false }).limit(200),
+    s.from("student_activity_logs").select("lesson_id,activity_type,created_at").eq("user_id", ctx!.user.id).order("created_at", { ascending: false }).limit(400),
   ]);
 
   const firstName = (ctx?.profile?.full_name || ctx?.profile?.email || "Doctor").split(" ")[0];
@@ -88,6 +113,12 @@ export default async function DashboardPage() {
   const todayTotal = todayAttempts.length;
   const todayGoalQ = 30;
   const todayGoalFlash = 20;
+  const flashSessionRows = (flashSessions ?? []) as FlashSessionRow[];
+  const activity = (activityRows ?? []) as ActivityRow[];
+  const todayFlashDone = flashSessionRows
+    .filter((row) => row.started_at?.startsWith(todayStr))
+    .reduce((sum, row) => sum + Math.max(0, row.total ?? 0), 0);
+  const todayVideoDone = 0;
 
   // Subject performance
   const byTag = new Map<string, { total: number; correct: number }>();
@@ -113,6 +144,55 @@ export default async function DashboardPage() {
   const recommended = weakest[0]?.tag || "Question Bank";
 
   const lessonsData = (recentLessons ?? []) as LessonRow[];
+  const lessonIds = lessonsData.map((lesson) => lesson.id).filter(Boolean);
+
+  const [{ data: lessonQuestionRows }, { data: attemptLessonRows }] = lessonIds.length
+    ? await Promise.all([
+        s.from("questions").select("id,lesson_id").in("lesson_id", lessonIds),
+        s
+          .from("question_attempts")
+          .select("question_id,questions(lesson_id)")
+          .eq("user_id", ctx!.user.id)
+          .order("created_at", { ascending: false })
+          .limit(2000),
+      ])
+    : [{ data: [] as QuestionLessonRow[] }, { data: [] as Array<{ question_id?: string | null; questions?: { lesson_id?: string | null } | null }> }];
+
+  const questionsByLesson = new Map<string, Set<string>>();
+  for (const row of (lessonQuestionRows ?? []) as QuestionLessonRow[]) {
+    if (!row.lesson_id || !row.id) continue;
+    const set = questionsByLesson.get(row.lesson_id) ?? new Set<string>();
+    set.add(row.id);
+    questionsByLesson.set(row.lesson_id, set);
+  }
+
+  const attemptedByLesson = new Map<string, Set<string>>();
+  for (const row of (attemptLessonRows ?? []) as Array<{ question_id?: string | null; questions?: { lesson_id?: string | null } | null }>) {
+    const lessonId = row.questions?.lesson_id ?? null;
+    const questionId = row.question_id ?? null;
+    if (!lessonId || !questionId || !lessonIds.includes(lessonId)) continue;
+    const set = attemptedByLesson.get(lessonId) ?? new Set<string>();
+    set.add(questionId);
+    attemptedByLesson.set(lessonId, set);
+  }
+
+  const touchedLessonIds = new Set(activity.map((row) => row.lesson_id).filter((value): value is string => Boolean(value)));
+
+  const continueLessons: ContinueLessonRow[] = lessonsData.map((lesson) => {
+    const totalQuestions = questionsByLesson.get(lesson.id)?.size ?? 0;
+    const attemptedQuestions = attemptedByLesson.get(lesson.id)?.size ?? 0;
+    if (totalQuestions > 0 && attemptedQuestions > 0) {
+      return {
+        ...lesson,
+        progressPercent: Math.min(100, Math.round((attemptedQuestions / totalQuestions) * 100)),
+        stateLabel: null,
+      };
+    }
+    if (touchedLessonIds.has(lesson.id)) {
+      return { ...lesson, progressPercent: null, stateLabel: "In progress" };
+    }
+    return { ...lesson, progressPercent: null, stateLabel: "New" };
+  });
 
   const activatedAt = typeof ctx?.profile?.activated_at === "string" ? ctx.profile.activated_at : null;
   const activationTime = activatedAt ? new Date(activatedAt).getTime() : Number.NaN;
@@ -195,8 +275,8 @@ export default async function DashboardPage() {
         <div className="space-y-3">
           {[
             { label: "Practice Questions", done: todayTotal, goal: todayGoalQ, unit: "questions", icon: <BookOpen className="h-3.5 w-3.5" />, color: "#60a5fa" },
-            { label: "Flashcard Review", done: Math.min(flashCount ?? 0, todayGoalFlash), goal: todayGoalFlash, unit: "cards", icon: <Layers className="h-3.5 w-3.5" />, color: "#f59e0b" },
-            { label: "Watch a Video Lesson", done: (videoCount ?? 0) > 0 ? 1 : 0, goal: 1, unit: "video", icon: <PlaySquare className="h-3.5 w-3.5" />, color: "#34d399" },
+            { label: "Flashcard Review", done: Math.min(todayFlashDone, todayGoalFlash), goal: todayGoalFlash, unit: "cards", icon: <Layers className="h-3.5 w-3.5" />, color: "#f59e0b" },
+            { label: "Watch a Video Lesson", done: todayVideoDone, goal: 1, unit: "video", icon: <PlaySquare className="h-3.5 w-3.5" />, color: "#34d399" },
           ].map((g) => {
             const pct = g.goal > 0 ? Math.min(100, Math.round((g.done / g.goal) * 100)) : 0;
             return (
@@ -235,7 +315,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* Horizontal scrollable carousel */}
-          <ContinueStudyingCarousel lessons={lessonsData} />
+          <ContinueStudyingCarousel lessons={continueLessons} />
         </section>
       )}
 

@@ -158,6 +158,7 @@ const LAB_PANEL_LABELS = [
   "wbc", "hemoglobin", "platelets", "hematocrit", "mcv",
   "ast", "alt", "alp", "total bilirubin", "bilirubin", "albumin", "ck", "troponin i", "troponin", "amylase", "lipase",
   "pt", "inr", "aptt", "paco2", "pao2", "ph",
+  "total cholesterol", "cholesterol", "ldl", "hdl", "triglycerides", "tg",
 ];
 
 function toDisplayText(value: string) {
@@ -269,6 +270,14 @@ function extractClinicalSections(stem: string): ClinicalSection[] {
   ].filter((item) => item.value);
   pushSection("ABG", gases);
 
+  const lipids: ClinicalDatum[] = [
+    datum("Total cholesterol", /(?:total cholesterol|cholesterol)[\s:=]*([^•;,]+?(?:mg\/dl))/i, "< 200 mg/dL"),
+    datum("LDL", /(?:\bldl\b|ldl cholesterol)[\s:=]*([^•;,]+?(?:mg\/dl))/i, "< 100 mg/dL"),
+    datum("HDL", /(?:\bhdl\b|hdl cholesterol)[\s:=]*([^•;,]+?(?:mg\/dl))/i, "> 40 mg/dL"),
+    datum("Triglycerides", /(?:triglycerides|\btg\b)[\s:=]*([^•;,]+?(?:mg\/dl))/i, "< 150 mg/dL"),
+  ].filter((item) => item.value);
+  pushSection("Lipid profile", lipids);
+
   return sections;
 }
 
@@ -276,23 +285,40 @@ type StemPresentation = {
   title: string | null;
   stemBody: string;
   labSections: ClinicalSection[];
+  derivedSections: ClinicalSection[];
   hasExplicitLabPanel: boolean;
 };
 
 function splitQuestionTitle(stemBody: string) {
-  const lines = stemBody.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-  if (lines.length < 2) return { title: null, stemBody: stemBody.trim() };
-  const first = lines[0];
-  const second = lines[1];
-  const looksLikeTitle =
-    first.length >= 24 &&
-    first.length <= 140 &&
-    first.split(/\s+/).length >= 4 &&
-    first.split(/\s+/).length <= 18 &&
-    !/[?.:]$/.test(first) &&
-    /\b(\d{1,2}-year-old|man|woman|patient|presents|comes|brought)\b/i.test(second);
-  if (!looksLikeTitle) return { title: null, stemBody: stemBody.trim() };
-  return { title: first, stemBody: lines.slice(1).join("\n\n").trim() };
+  const cleaned = stemBody.trim();
+  const lines = cleaned.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const looksLikeScenarioStart = (value: string) => /^(?:A|An|The)?\s*(?:\d{1,2}-year-old\b|man\b|woman\b|patient\b|infant\b|child\b|newborn\b|pregnant woman\b|person\b|he\b|she\b|they\b|this patient\b|presents\b|comes\b|is brought\b)/i.test(value.trim());
+  const looksLikeTitleLine = (value: string) => {
+    const normalized = value.replace(/[.:!?]+$/g, "").trim();
+    const words = normalized.split(/\s+/).filter(Boolean);
+    return (
+      normalized.length >= 12 &&
+      normalized.length <= 140 &&
+      words.length >= 2 &&
+      words.length <= 18 &&
+      !/\b(\d{1,2}-year-old|comes to|presents to|history of|physical exam|which of the following)\b/i.test(normalized)
+    );
+  };
+
+  if (lines.length >= 2 && looksLikeTitleLine(lines[0]) && looksLikeScenarioStart(lines[1])) {
+    return { title: lines[0].replace(/[.:]+$/g, "").trim(), stemBody: lines.slice(1).join("\n\n").trim() };
+  }
+
+  const inlineMatch = cleaned.match(/^(.{12,140}?)[.:]\s+(?=(?:A|An|The)?\s*(?:\d{1,2}-year-old\b|man\b|woman\b|patient\b|infant\b|child\b|newborn\b|pregnant woman\b|person\b|he\b|she\b|they\b|this patient\b|presents\b|comes\b|is brought\b))([\s\S]+)$/i);
+  if (inlineMatch) {
+    const title = inlineMatch[1].trim();
+    const remainder = inlineMatch[2].trim();
+    if (looksLikeTitleLine(title) && remainder) {
+      return { title, stemBody: remainder };
+    }
+  }
+
+  return { title: null, stemBody: cleaned };
 }
 
 function extractExplicitLabPanel(displayText: string) {
@@ -366,10 +392,12 @@ function getStemPresentation(stem: string): StemPresentation {
   const displayText = toDisplayText(stem);
   const labPanel = extractExplicitLabPanel(displayText);
   const titled = splitQuestionTitle(labPanel.stemBody);
+  const derivedSections = extractClinicalSections(titled.stemBody);
   return {
     title: titled.title,
     stemBody: titled.stemBody,
     labSections: labPanel.labSections,
+    derivedSections,
     hasExplicitLabPanel: labPanel.hasExplicitLabPanel,
   };
 }
@@ -699,7 +727,9 @@ export default function QBankRunner({
   const questionTitle = stemPresentation.title;
   const questionStemBody = stemPresentation.stemBody;
   const clinicalSections = stemPresentation.labSections;
+  const derivedSections = stemPresentation.derivedSections;
   const hasQuestionSpecificData = stemPresentation.hasExplicitLabPanel && clinicalSections.length > 0;
+  const hasDerivedClinicalData = !hasQuestionSpecificData && derivedSections.length > 0;
   const progressPct = ((i + 1) / questions.length) * 100;
   const isCorrectAnswer = picked === q.answer_key;
   const wrongChoices = q.choices.filter((choice) => choice.key !== q.answer_key);
@@ -1021,12 +1051,15 @@ export default function QBankRunner({
             </div>
 
             {questionTitle ? (
-              <div className="mt-5 max-w-[1040px] text-[19px] font-semibold leading-[1.45] tracking-[-0.02em] md:text-[24px]" style={{ color: "var(--qb-panel-title)" }}>
-                {questionTitle}
+              <div className="mt-5 max-w-[1040px] rounded-[24px] border px-4 py-4 md:px-5" style={{ borderColor: "rgba(59,130,246,0.18)", background: "var(--qb-blue-soft)" }}>
+                <div className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "var(--qb-blue-text)" }}>Topic title</div>
+                <div className="mt-2 text-[20px] font-semibold leading-[1.45] tracking-[-0.02em] md:text-[26px]" style={{ color: "var(--qb-panel-title)" }}>
+                  {questionTitle}
+                </div>
               </div>
             ) : null}
 
-            <div className="mt-4 max-w-[1040px] whitespace-pre-wrap text-[22px] font-semibold leading-[1.6] tracking-[-0.02em] md:text-[31px]" style={{ color: "var(--qb-question-text)" }}>
+            <div className="mt-4 max-w-[1040px] whitespace-pre-wrap text-[20px] font-semibold leading-[1.7] tracking-[-0.02em] md:text-[28px]" style={{ color: "var(--qb-question-text)" }}>
               {questionStemBody}
             </div>
 
@@ -1058,6 +1091,14 @@ export default function QBankRunner({
                   sections={clinicalSections}
                   title="Question data"
                   subtitle="Only the explicit lab panel is shown here to avoid repeating the same values in the stem."
+                />
+              </div>
+            ) : hasDerivedClinicalData ? (
+              <div className="mt-5">
+                <ClinicalDataTables
+                  sections={derivedSections}
+                  title="Clinical data snapshot"
+                  subtitle="Key numeric values were extracted from the vignette and organized for faster reading."
                 />
               </div>
             ) : null}

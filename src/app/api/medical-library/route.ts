@@ -55,7 +55,6 @@ export async function POST(req: NextRequest) {
     quote: typeof quote === "string" ? quote.trim() || null : null,
     color: typeof color === "string" && color.trim() ? color.trim() : "#facc15",
     data: data && typeof data === "object" ? data : {},
-    image_paths: [] as string[],
   };
 
   if (id) {
