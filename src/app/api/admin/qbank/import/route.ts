@@ -1,14 +1,9 @@
 /**
  * QBank import — verbatim extraction, no AI, no reformulation.
  *
- * Processing order:
- *  1. JSON / JS / TS  → structured direct parse (exact field mapping)
- *  2. HTML / HTM      → DOM-aware HTML parser (images scoped per block)
- *  3. PDF             → text extraction → text-block parser
- *  4. DOCX/PPTX/EPUB/ZIP/MHTML/MD/TXT → doc-parser → text-block parser
- *
- * Supported formats: JSON, JS, TS, PDF, DOCX, PPTX, EPUB, ZIP, MHTML, MHT,
- *                    HTML, HTM, TXT, MD, and any other text-like file.
+ * For HTML / JS / JSON / text-based sources, parsing is delegated to the
+ * shared importQuestionsFromFileBuffer helper so every QBank-block import path
+ * preserves question↔image consistency in exactly the same way.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
@@ -37,7 +32,7 @@ export async function POST(req: NextRequest) {
   const difficulty = String(fd.get("difficulty") || "intermediate");
   const tagsRaw = String(fd.get("tags") || "");
   const selectedSubject = String(fd.get("subject") || "").trim();
-  const extraTags = tagsRaw.split(",").map(t => t.trim()).filter(Boolean);
+  const extraTags = tagsRaw.split(",").map((t) => t.trim()).filter(Boolean);
   const lessonIdRaw = String(fd.get("lesson_id") || "").trim();
   const lesson_id = lessonIdRaw || null;
 
@@ -89,61 +84,11 @@ export async function POST(req: NextRequest) {
   }
 
   if (!questions.length) {
-    const parsed = parseDocumentBuffer(bytes, filename);
-
-    if (!parsed.isEmpty) {
-      // If the doc-parser produced HTML-like output, try HTML path first
-      const isHtmlLike = /<[a-z][^>]+>/i.test(parsed.text.slice(0, 2000));
-      const rawHtml = isHtmlLike ? parsed.text : "";
-
-      const extracted = extractQuestionsFromImportedSource(parsed.text, {
-        preferredDifficulty: difficulty,
-        count: 1000,
-        rawHtml,
-      });
-      questions = extracted.map(q => ({
-        stem: q.stem,
-        choices: q.choices,
-        answer_key: q.answer_key,
-        explanation: q.explanation,
-        image_path: q.image_path ?? null,
-        image_caption: q.image_caption ?? null,
-        difficulty: q.difficulty,
-        tags: q.tags,
-        subject: q.subject ?? "",
-        system: q.system ?? "",
-        topic: q.topic ?? "",
-      }));
-    }
-  }
-
-  // ── Also try JSON structured parse on any format as last resort ──────────
-  if (!questions.length) {
-    const rawText = bytes.toString("utf-8");
-    const direct = parseDirectImportFile(rawText, filename, difficulty);
-    if (direct.length) {
-      questions = direct.map(q => ({
-        stem: q.stem,
-        choices: q.choices,
-        answer_key: q.answer_key,
-        explanation: q.explanation,
-        image_path: q.image_path,
-        image_caption: q.image_caption,
-        difficulty: q.difficulty,
-        tags: q.tags,
-        subject: q.subject,
-        system: q.system,
-        topic: q.topic,
-      }));
-    }
-  }
-
-  if (!questions.length) {
     return NextResponse.json(
       {
         error: `No questions found in this ${ext.toUpperCase() || "file"}.\n\nThe import engine looks for:\n• Stems followed by choices labelled A. B. C. D. E.\n• A "Correct Answer: X" marker\n• An "Explanation:" section\n\nFor HTML exports from Active QBank or similar: export as HTML and upload that file directly.`,
       },
-      { status: 422 }
+      { status: 422 },
     );
   }
 
@@ -161,7 +106,7 @@ export async function POST(req: NextRequest) {
   }
 
   const defaultSubject = selectedSubject || lessonSubject;
-  const rows = questions.map(q => {
+  const rows = questions.map((q) => {
     const subject = q.subject || defaultSubject || detectIfomSubject(`${q.stem}\n${q.explanation}`) || "";
     const system = q.system || subject;
     const topic = q.topic || (subject ? detectTopic(`${q.stem}\n${q.explanation}`, subject) : "");
@@ -182,6 +127,8 @@ export async function POST(req: NextRequest) {
 
   const { data: inserted, error } = await admin.from("questions").insert(rows).select("id");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  revalidateTag("subject-base-data");
 
   return NextResponse.json({
     imported: inserted?.length ?? rows.length,
