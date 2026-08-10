@@ -182,7 +182,7 @@ const loadBaseDataCached = unstable_cache(
     };
   },
   ["subject-base-data"],
-  { revalidate: 300 }, // 5 minutes
+  { revalidate: 300, tags: ["subject-base-data"] }, // 5 minutes
 );
 
 async function loadBaseData(exam = "IFOM_CSE") {
@@ -207,7 +207,13 @@ export async function getSubjectOverviews(exam = "IFOM_CSE"): Promise<SubjectOve
       return type !== "video" && documentKinds.has(lesson.kind) && subjectTitleMatches(assignedSubject, subject.title);
     });
 
-    const relevantQuestions = questions.filter((question) => matchesSubject(subject.title, questionText(question), question.tags));
+    const lessonMap = new Map(lessons.map((lesson) => [lesson.id, lesson] as const));
+    const relevantQuestions = questions.filter((question) => {
+      const lesson = question.lesson_id ? lessonMap.get(question.lesson_id) : null;
+      const assignedSubject = lesson ? lessonAssignedSubject(lesson) : "";
+      if (assignedSubject) return subjectTitleMatches(assignedSubject, subject.title);
+      return matchesSubject(subject.title, questionText(question), question.tags);
+    });
     const lessonName = new Map(lessons.map((lesson) => [lesson.id, lesson.title]));
     const sourceMap = new Map<string, { id: string; title: string; questionCount: number }>();
 

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { createAdminClient, requireAdmin } from "@/lib/supabase/server";
 import { indexSource } from "@/lib/ai/rag";
 import { extractPdfTextFromBuffer } from "@/lib/ai/pdf";
@@ -212,6 +213,7 @@ export async function POST(req: NextRequest) {
     imported = await autoImportQbankQuestions(lesson as LessonRow, admin, ctx.user.id);
   } catch {}
 
+  revalidateTag("subject-base-data");
   return NextResponse.json({ lesson, imported });
 }
 
@@ -246,6 +248,7 @@ export async function PATCH(req: NextRequest) {
     imported = await autoImportQbankQuestions(data as LessonRow, admin, ctx.user.id);
   } catch {}
 
+  revalidateTag("subject-base-data");
   return NextResponse.json({ lesson: data, imported });
 }
 

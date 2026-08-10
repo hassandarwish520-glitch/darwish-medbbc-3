@@ -11,6 +11,7 @@
  *                    HTML, HTM, TXT, MD, and any other text-like file.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { createAdminClient, requireAdmin } from "@/lib/supabase/server";
 import { parseDirectImportFile } from "@/lib/import/direct-import";
 import { extractQuestionsFromImportedSource } from "@/lib/ai/question-import";
