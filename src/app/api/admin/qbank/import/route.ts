@@ -13,10 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { createAdminClient, requireAdmin } from "@/lib/supabase/server";
-import { parseDirectImportFile } from "@/lib/import/direct-import";
-import { extractQuestionsFromImportedSource } from "@/lib/ai/question-import";
-import { parseDocumentBuffer } from "@/lib/import/doc-parser";
-import { parseHtmlQuestions } from "@/lib/import/html-question-parser";
+import { importQuestionsFromFileBuffer } from "@/lib/import/qbank-block-import";
 import { detectIfomSubject, detectTopic } from "@/lib/ai/ifom";
 
 export const runtime = "nodejs";
@@ -64,112 +61,19 @@ export async function POST(req: NextRequest) {
     topic: string;
   };
 
-  let questions: Q[] = [];
+  let questions: Q[] = importQuestionsFromFileBuffer({
+    bytes,
+    filename,
+    difficulty,
+  });
 
-  // ── Path 1: JSON / JS / TS structured parse ──────────────────────────────
-  if (["json", "js", "ts", "jsx", "tsx", "mjs", "cjs"].includes(ext)) {
-    const rawText = bytes.toString("utf-8");
-    const direct = parseDirectImportFile(rawText, filename, difficulty);
-    if (direct.length) {
-      questions = direct.map(q => ({
-        stem: q.stem,
-        choices: q.choices,
-        answer_key: q.answer_key,
-        explanation: q.explanation,
-        image_path: q.image_path,
-        image_caption: q.image_caption,
-        difficulty: q.difficulty,
-        tags: q.tags,
-        subject: q.subject,
-        system: q.system,
-        topic: q.topic,
-      }));
-    }
-  }
-
-  // ── Path 2: HTML / HTM — quiz-app exports store questions in inline <script> ─
-  if (!questions.length && ["html", "htm"].includes(ext)) {
-    const rawHtml = bytes.toString("utf-8");
-
-    // Path 2a: extract any inline <script> containing `const questions = [...]`
-    // before falling back to DOM parsing. These quiz-app exports keep all
-    // question data (including embedded base64 images) inside the script tag,
-    // so the visible DOM contains no question markup at all.
-    const scriptBodies: string[] = [];
-    const scriptRe = /<script\b(?![^>]*\bsrc\s*=)[^>]*>([\s\S]*?)<\/script>/gi;
-    let scriptMatch: RegExpExecArray | null;
-    while ((scriptMatch = scriptRe.exec(rawHtml)) !== null) {
-      const body = (scriptMatch[1] || "").trim();
-      if (body.length > 2 && /\[\s*\{/.test(body)) scriptBodies.push(body);
-    }
-    for (const body of scriptBodies) {
-      const direct = parseDirectImportFile(body, `${filename}#script`, difficulty);
-      if (direct.length) {
-        questions = direct.map(q => ({
-          stem: q.stem,
-          choices: q.choices,
-          answer_key: q.answer_key,
-          explanation: q.explanation,
-          image_path: q.image_path,
-          image_caption: q.image_caption,
-          difficulty: q.difficulty,
-          tags: q.tags,
-          subject: q.subject,
-          system: q.system,
-          topic: q.topic,
-        }));
-        break;
-      }
-    }
-
-    // Path 2b: DOM-level HTML parser (images scoped per block)
-    const htmlParsed = questions.length ? [] : parseHtmlQuestions(rawHtml, { count: 1000, difficulty });
-    if (htmlParsed.length) {
-      questions = htmlParsed.map(q => ({
-        stem: q.stem,
-        choices: q.choices,
-        answer_key: q.answer_key,
-        explanation: q.explanation,
-        image_path: q.image_path,
-        image_caption: q.image_caption,
-        difficulty: q.difficulty,
-        tags: q.tags,
-        subject: q.subject,
-        system: q.subject,
-        topic: q.topic,
-      }));
-    } else {
-      // Fallback: text-based parser on the cleaned HTML text
-      const parsed = parseDocumentBuffer(bytes, filename);
-      const extracted = extractQuestionsFromImportedSource(parsed.text, {
-        preferredDifficulty: difficulty,
-        count: 1000,
-        rawHtml,
-      });
-      questions = extracted.map(q => ({
-        stem: q.stem,
-        choices: q.choices,
-        answer_key: q.answer_key,
-        explanation: q.explanation,
-        image_path: q.image_path ?? null,
-        image_caption: q.image_caption ?? null,
-        difficulty: q.difficulty,
-        tags: q.tags,
-        subject: q.subject ?? "",
-        system: q.system ?? "",
-        topic: q.topic ?? "",
-      }));
-    }
-  }
-
-  // ── Path 3: PDF ──────────────────────────────────────────────────────────
   if (!questions.length && ext === "pdf") {
     const pdfText = await extractPdfText(bytes);
-    const extracted = extractQuestionsFromImportedSource(pdfText, {
+    const { extractQuestionsFromImportedSource } = await import("@/lib/ai/question-import");
+    questions = extractQuestionsFromImportedSource(pdfText, {
       preferredDifficulty: difficulty,
       count: 1000,
-    });
-    questions = extracted.map(q => ({
+    }).map((q) => ({
       stem: q.stem,
       choices: q.choices,
       answer_key: q.answer_key,
@@ -184,7 +88,6 @@ export async function POST(req: NextRequest) {
     }));
   }
 
-  // ── Path 4: All other formats (DOCX, PPTX, EPUB, ZIP, MHTML, MD, TXT) ───
   if (!questions.length) {
     const parsed = parseDocumentBuffer(bytes, filename);
 

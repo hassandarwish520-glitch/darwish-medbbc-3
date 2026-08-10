@@ -24,7 +24,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import { parseDirectImportFile } from "../src/lib/import/direct-import";
+import { importQuestionsFromFileBuffer } from "../src/lib/import/qbank-block-import";
 import { detectDifficulty, detectIfomSubject, detectTopic } from "../src/lib/ai/ifom";
 
 function loadEnvFile(p: string) {
@@ -98,18 +98,13 @@ async function deleteOldBlocks() {
 }
 
 function extractQuestionsFromHtml(filePath: string) {
-  const html = fs.readFileSync(filePath, "utf-8");
-  const scriptBodies: string[] = [];
-  const re = /<script\b(?![^>]*\bsrc\s*=)[^>]*>([\s\S]*?)<\/script>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    const b = (m[1] || "").trim();
-    if (b.length > 2 && /\[\s*\{/.test(b)) scriptBodies.push(b);
-  }
-  for (const body of scriptBodies) {
-    const parsed = parseDirectImportFile(body, filePath, "intermediate");
-    if (parsed.length) return parsed;
-  }
+  const bytes = fs.readFileSync(filePath);
+  const parsed = importQuestionsFromFileBuffer({
+    bytes,
+    filename: path.basename(filePath),
+    difficulty: "intermediate",
+  });
+  if (parsed.length) return parsed;
   throw new Error(`No embedded questions found in ${filePath}`);
 }
 
