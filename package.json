@@ -10,7 +10,10 @@
     "prepare:subject-imports": "npx --yes tsx scripts/prepare-import-bundles.ts",
     "import:subject-content": "npx --yes tsx scripts/bulk-import-subject-content.ts",
     "import:subject-content:dry": "npx --yes tsx scripts/bulk-import-subject-content.ts --dry-run",
-    "import:cardio-blocks": "npx --yes tsx scripts/add-cardio-blocks.ts"
+    "import:cardio-blocks": "npx --yes tsx scripts/add-cardio-blocks.ts",
+    "diagnose:qbank-images": "npx --yes tsx scripts/diagnose-qbank-images.ts",
+    "migrate:images-to-bucket": "npx --yes tsx scripts/extract-images-to-bucket.ts",
+    "reimport:cardio-blocks": "npx --yes tsx scripts/reimport-cardio-blocks.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
