@@ -153,6 +153,46 @@ function normalizeCapturedValue(value: string) {
   return value.replace(/^[\s:=,-]+|[\s,;:.]+$/g, "").replace(/\s+/g, " ").trim();
 }
 
+const LAB_PANEL_LABELS = [
+  "na+", "na", "k+", "k", "cl-", "cl", "hco3", "hco3-", "bun", "creatinine", "glucose", "calcium",
+  "wbc", "hemoglobin", "platelets", "hematocrit", "mcv",
+  "ast", "alt", "alp", "total bilirubin", "bilirubin", "albumin", "ck", "troponin i", "troponin", "amylase", "lipase",
+  "pt", "inr", "aptt", "paco2", "pao2", "ph",
+];
+
+function toDisplayText(value: string) {
+  return value
+    .replace(/<br\s*\/?/gi, "<br")
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\r/g, "")
+    .replace(/[ 	]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function normalizeLineKey(value: string) {
+  return value.toLowerCase().replace(/[–—−]/g, "-").replace(/\s+/g, " ").trim();
+}
+
+function isLabHeadingLine(value: string) {
+  return /^(lab|labs|laboratory|laboratory data|laboratory studies|lab value|lab values|value)$/i.test(value.trim());
+}
+
+function isLabSectionHeading(value: string) {
+  return /^(cbc|chemistry|enzymes|coagulation|abg|bmp|cmp|lfts?|cardiac enzymes)$/i.test(value.trim());
+}
+
+function isLabLabelLine(value: string) {
+  const normalized = normalizeLineKey(value).replace(/[():]/g, "");
+  return LAB_PANEL_LABELS.some((label) => normalized === label || normalized.startsWith(`${label} `))
+}
+
+function isLabValueLine(value: string) {
+  return /\d/.test(value) && /(m?eq\/l|mmol\/l|mg\/dl|g\/dl|u\/l|units?\/l|ng\/ml|ng\/l|mm\s*hg|%|\/μ?l|\/u?l|fl|s(?:econds?)?\b)/i.test(value);
+}
+
 function extractClinicalSections(stem: string): ClinicalSection[] {
   const text = stem.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   if (!text) return [];
@@ -181,8 +221,6 @@ function extractClinicalSections(stem: string): ClinicalSection[] {
     tone: "normal",
   });
 
-  // Keep vitals as plain narrative text in the stem to stay close to NBME/UWorld.
-  // Only lab panels are extracted into tables.
   const chemistries: ClinicalDatum[] = [
     datum("Na⁺", /(?:\bna(?:\+)?\b|sodium)[\s:=]*([^•;,]+?(?:m?eq\/l|mmol\/l))/i, "135 – 145 mEq/L"),
     datum("K⁺", /(?:\bk(?:\+)?\b|potassium)[\s:=]*([^•;,]+?(?:m?eq\/l|mmol\/l))/i, "3.5 – 5.0 mEq/L"),
@@ -234,6 +272,108 @@ function extractClinicalSections(stem: string): ClinicalSection[] {
   return sections;
 }
 
+type StemPresentation = {
+  title: string | null;
+  stemBody: string;
+  labSections: ClinicalSection[];
+  hasExplicitLabPanel: boolean;
+};
+
+function splitQuestionTitle(stemBody: string) {
+  const lines = stemBody.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 2) return { title: null, stemBody: stemBody.trim() };
+  const first = lines[0];
+  const second = lines[1];
+  const looksLikeTitle =
+    first.length >= 24 &&
+    first.length <= 140 &&
+    first.split(/\s+/).length >= 4 &&
+    first.split(/\s+/).length <= 18 &&
+    !/[?.:]$/.test(first) &&
+    /\b(\d{1,2}-year-old|man|woman|patient|presents|comes|brought)\b/i.test(second);
+  if (!looksLikeTitle) return { title: null, stemBody: stemBody.trim() };
+  return { title: first, stemBody: lines.slice(1).join("\n\n").trim() };
+}
+
+function extractExplicitLabPanel(displayText: string) {
+  const lines = displayText.split("\n").map((line) => line.trim());
+  let start = -1;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!line) continue;
+    if (isLabHeadingLine(line)) {
+      start = i;
+      break;
+    }
+    if (isLabLabelLine(line) && isLabValueLine(lines[i + 1] || "")) {
+      let pairs = 0;
+      let j = i;
+      while (j < lines.length) {
+        if (isLabHeadingLine(lines[j]) || isLabSectionHeading(lines[j]) || !lines[j]) {
+          j += 1;
+          continue;
+        }
+        if (isLabLabelLine(lines[j]) && isLabValueLine(lines[j + 1] || "")) {
+          pairs += 1;
+          j += 2;
+          continue;
+        }
+        break;
+      }
+      if (pairs >= 3) {
+        start = i;
+        break;
+      }
+    }
+  }
+
+  if (start === -1) {
+    return { stemBody: displayText.trim(), labSections: [], hasExplicitLabPanel: false };
+  }
+
+  let end = start;
+  let pairs = 0;
+  while (end < lines.length) {
+    const line = lines[end];
+    if (!line || isLabHeadingLine(line) || isLabSectionHeading(line)) {
+      end += 1;
+      continue;
+    }
+    if (isLabLabelLine(line) && isLabValueLine(lines[end + 1] || "")) {
+      pairs += 1;
+      end += 2;
+      continue;
+    }
+    if (pairs >= 3) break;
+    end += 1;
+  }
+
+  if (pairs < 3) {
+    return { stemBody: displayText.trim(), labSections: [], hasExplicitLabPanel: false };
+  }
+
+  const panelText = lines.slice(start, end).filter(Boolean).join("\n");
+  const stemBody = [...lines.slice(0, start), ...lines.slice(end)]
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  const labSections = extractClinicalSections(panelText);
+  return { stemBody, labSections, hasExplicitLabPanel: labSections.length > 0 };
+}
+
+function getStemPresentation(stem: string): StemPresentation {
+  const displayText = toDisplayText(stem);
+  const labPanel = extractExplicitLabPanel(displayText);
+  const titled = splitQuestionTitle(labPanel.stemBody);
+  return {
+    title: titled.title,
+    stemBody: titled.stemBody,
+    labSections: labPanel.labSections,
+    hasExplicitLabPanel: labPanel.hasExplicitLabPanel,
+  };
+}
+
 function ClinicalDataTables({
   sections,
   title,
@@ -256,15 +396,16 @@ function ClinicalDataTables({
             <div className="border-b px-4 py-3 text-sm font-semibold" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-title)" }}>
               {section.title}
             </div>
-            <div className="grid grid-cols-[1fr_1fr] gap-3 border-b px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] md:grid-cols-[1.1fr_1fr_1fr]" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-muted)" }}>
+            <div className="grid grid-cols-[1.15fr_0.85fr] gap-3 border-b px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] md:grid-cols-[1.1fr_1fr_1fr]" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-muted)" }}>
               <div>Item</div>
               <div>Value</div>
               <div className="hidden md:block">Reference</div>
             </div>
             {section.items.map((item) => (
-              <div key={`${section.title}-${item.label}`} className="grid grid-cols-[1fr_1fr] gap-3 border-b px-4 py-3 text-sm last:border-b-0 md:grid-cols-[1.1fr_1fr_1fr]" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-text)" }}>
-                <div>{item.label}</div>
-                <div style={{ color: item.tone === "abnormal" ? "#fca5a5" : "#86efac" }}>{item.value}</div>
+              <div key={`${section.title}-${item.label}`} className="grid grid-cols-[1.15fr_0.85fr] gap-3 border-b px-4 py-3 text-sm last:border-b-0 md:grid-cols-[1.1fr_1fr_1fr]" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-text)" }}>
+                <div className="font-medium">{item.label}</div>
+                <div className="text-right font-semibold md:text-left" style={{ color: item.tone === "abnormal" ? "#fca5a5" : "#86efac" }}>{item.value}</div>
+                <div className="col-span-2 text-[12px] md:hidden" style={{ color: "var(--qb-panel-muted)" }}>Reference: {item.ref || "—"}</div>
                 <div className="hidden md:block" style={{ color: "var(--qb-panel-muted)" }}>{item.ref || "—"}</div>
               </div>
             ))}
@@ -554,8 +695,11 @@ export default function QBankRunner({
   const topic = getTopic(q.tags);
   const diff = difficultyStyle(q.difficulty);
   const details = splitExplanation(q.explanation);
-  const clinicalSections = extractClinicalSections(q.stem);
-  const hasQuestionSpecificData = clinicalSections.length > 0;
+  const stemPresentation = getStemPresentation(q.stem);
+  const questionTitle = stemPresentation.title;
+  const questionStemBody = stemPresentation.stemBody;
+  const clinicalSections = stemPresentation.labSections;
+  const hasQuestionSpecificData = stemPresentation.hasExplicitLabPanel && clinicalSections.length > 0;
   const progressPct = ((i + 1) / questions.length) * 100;
   const isCorrectAnswer = picked === q.answer_key;
   const wrongChoices = q.choices.filter((choice) => choice.key !== q.answer_key);
@@ -714,6 +858,14 @@ export default function QBankRunner({
     }
   }
 
+  function openNoteComposer(prefill?: string) {
+    setNoteOpen(true);
+    setToolStatus("Write your note, then press Save note.");
+    if (prefill) {
+      setNoteText((prev) => (prev.trim() ? prev : prefill));
+    }
+  }
+
   function next() {
     setI((x) => x + 1);
     setSeconds(0);
@@ -868,8 +1020,14 @@ export default function QBankRunner({
               {q.difficulty ? <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: diff.border, background: isDarkTheme ? diff.bg : "#fff8e8", color: diff.color }}>{q.difficulty}</span> : null}
             </div>
 
-            <div className="mt-5 max-w-[1040px] whitespace-pre-wrap text-[25px] font-semibold leading-[1.55] tracking-[-0.02em] md:text-[33px]" style={{ color: "var(--qb-question-text)" }}>
-              {q.stem}
+            {questionTitle ? (
+              <div className="mt-5 max-w-[1040px] text-[19px] font-semibold leading-[1.45] tracking-[-0.02em] md:text-[24px]" style={{ color: "var(--qb-panel-title)" }}>
+                {questionTitle}
+              </div>
+            ) : null}
+
+            <div className="mt-4 max-w-[1040px] whitespace-pre-wrap text-[22px] font-semibold leading-[1.6] tracking-[-0.02em] md:text-[31px]" style={{ color: "var(--qb-question-text)" }}>
+              {questionStemBody}
             </div>
 
             {imageHref ? (
@@ -899,7 +1057,7 @@ export default function QBankRunner({
                 <ClinicalDataTables
                   sections={clinicalSections}
                   title="Question data"
-                  subtitle="Only lab panels from the stem are structured here; vitals remain inline in the question text."
+                  subtitle="Only the explicit lab panel is shown here to avoid repeating the same values in the stem."
                 />
               </div>
             ) : null}
@@ -999,7 +1157,8 @@ export default function QBankRunner({
 
             {noteOpen ? (
               <div className="mt-5 rounded-[22px] border p-4" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
-                <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={4} className="input w-full resize-none rounded-2xl text-sm" placeholder="Add a review note for this question…" />
+                <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--qb-blue-text)" }}>Medical Library note</div>
+                <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={4} className="input w-full resize-none rounded-2xl text-sm" placeholder="Write a note to save in Medical Library…" />
                 <div className="mt-3 flex gap-2">
                   <button className="btn-primary text-sm" disabled={!noteText.trim()} onClick={() => void saveLibraryEntry("note", { body: noteText })}>Save note</button>
                   <button className="btn-ghost text-sm" onClick={() => { setNoteOpen(false); setNoteText(""); }}>Cancel</button>
@@ -1044,8 +1203,8 @@ export default function QBankRunner({
                         <img src={imageHref} alt={q.image_caption || "Figure"} className="max-h-[520px] w-full object-contain" />
                       </button>
                       <div className="flex items-center justify-between border-t px-4 py-3 text-sm" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-text)" }}>
-                        <button onClick={() => void saveLibraryEntry("note", { body: `Figure note for question ${i + 1}` })} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
-                          <PencilLine className="h-3.5 w-3.5" /> Add to notes
+                        <button onClick={() => openNoteComposer(`Figure note for question ${i + 1}`)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
+                          <PencilLine className="h-3.5 w-3.5" /> Add note
                         </button>
                         <button onClick={() => setImageOpen(true)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
                           <Expand className="h-3.5 w-3.5" /> Enlarge
@@ -1061,11 +1220,9 @@ export default function QBankRunner({
               {contextTab === "labs" ? (
                 <div className="mt-4 space-y-4">
                   {hasQuestionSpecificData ? (
-                    <ClinicalDataTables
-                      sections={clinicalSections}
-                      title="Question-specific data"
-                      subtitle="Only CBC, chemistry, enzymes, coagulation, and ABG values are tabulated here; vitals stay in the stem."
-                    />
+                    <div className="rounded-[22px] border p-4 text-sm" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-text)" }}>
+                      The question lab panel is already displayed above the stem. Use the cards below only for quick reference ranges.
+                    </div>
                   ) : null}
 
                   <div className="grid gap-3 lg:grid-cols-[190px_minmax(0,1fr)]">
@@ -1183,7 +1340,7 @@ export default function QBankRunner({
                 <button onClick={() => setImageZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)))} className="grid h-10 w-10 place-items-center rounded-2xl border" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-text-2)" }}><Plus className="h-4 w-4" /></button>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => void saveLibraryEntry("note", { body: `Image note for question ${i + 1}` })} className="rounded-2xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-text-2)" }}>Add to notes</button>
+                <button onClick={() => openNoteComposer(`Image note for question ${i + 1}`)} className="rounded-2xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-text-2)" }}>Add note</button>
                 <button onClick={() => void saveLibraryEntry("bookmark")} className="rounded-2xl border px-4 py-2 text-sm font-semibold" style={{ borderColor: "var(--c-border)", background: "var(--c-elevated)", color: "var(--c-blue)" }}>Bookmark</button>
               </div>
             </div>
@@ -1198,8 +1355,8 @@ export default function QBankRunner({
             <button onClick={prev} disabled={i <= 0} className="flex h-12 items-center justify-center gap-1.5 rounded-2xl border px-4 text-sm font-semibold transition disabled:opacity-40 md:min-w-[180px]" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-text)" }}>
               <ChevronLeft className="h-4 w-4" /> Previous
             </button>
-            <button onClick={() => setNoteOpen((v) => !v)} className="flex h-12 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold md:min-w-[180px]" style={{ borderColor: noteOpen ? "rgba(28,90,161,0.22)" : "var(--qb-panel-soft-border)", background: noteOpen ? "var(--qb-blue-soft)" : "var(--qb-panel-soft)", color: noteOpen ? "var(--qb-blue-text)" : "var(--qb-panel-text)" }}>
-              <PencilLine className="h-4 w-4" /> Review
+            <button onClick={() => openNoteComposer()} className="flex h-12 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold md:min-w-[180px]" style={{ borderColor: noteOpen ? "rgba(28,90,161,0.22)" : "var(--qb-panel-soft-border)", background: noteOpen ? "var(--qb-blue-soft)" : "var(--qb-panel-soft)", color: noteOpen ? "var(--qb-blue-text)" : "var(--qb-panel-text)" }}>
+              <PencilLine className="h-4 w-4" /> Add note
             </button>
             <div className="md:flex-1" />
             {!revealed ? (
