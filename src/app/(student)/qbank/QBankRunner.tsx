@@ -191,7 +191,12 @@ export default function QBankRunner({
   const [reportOpen, setReportOpen] = useState(false);
   const [questionMapOpen, setQuestionMapOpen] = useState(true);
   const [contextVisible, setContextVisible] = useState(true);
-  const [contextTab, setContextTab] = useState<ContextTab>("labs");
+  // Show the medical figure immediately when the current question has one.
+  // Previously the runner always opened on Labs, so images were present but hidden
+  // behind the Figure tab and looked like they were missing.
+  const [contextTab, setContextTab] = useState<ContextTab>(() =>
+    questions[0]?.image_path ? "figure" : "labs",
+  );
   const [labCategory, setLabCategory] = useState<string>("CBC");
   const [imageOpen, setImageOpen] = useState(false);
   const [imageZoom, setImageZoom] = useState(1);
@@ -209,6 +214,13 @@ export default function QBankRunner({
   const resultsRef = useRef<Result[]>([]);
   const iRef = useRef(0);
   const secondsRef = useRef(0);
+
+  useEffect(() => {
+    const currentImage = questions[i]?.image_path;
+    setContextTab(currentImage ? "figure" : "labs");
+    setImageOpen(false);
+    setImageZoom(1);
+  }, [i, questions]);
 
   useEffect(() => {
     resultsRef.current = results;
