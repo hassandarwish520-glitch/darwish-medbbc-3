@@ -390,12 +390,11 @@ function AddModal({ lessons, onClose, onCreated }: { lessons: LessonOption[]; on
 
 /** ─── Direct Import Modal — no AI required ──────────────────────────────── */
 function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; onClose: () => void; onDone: () => void }) {
-  const [tab, setTab] = useState<"direct" | "text" | "blocks">("direct");
+  const [tab, setTab] = useState<"direct" | "text" | "blocks">("blocks");
   const [file, setFile] = useState<File | null>(null);
   const [difficulty, setDifficulty] = useState("intermediate");
   const [tags, setTags] = useState("");
   const [directSubject, setDirectSubject] = useState("");
-  const [lessonId, setLessonId] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: true; count: number } | { ok: false; msg: string } | null>(null);
 
@@ -407,98 +406,82 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
   const [textBusy, setTextBusy] = useState(false);
   const [textOut, setTextOut] = useState("");
 
-  // Blocks import state — creates a named QBank lesson block with auto-extracted questions
-  const [blocksFiles, setBlocksFiles] = useState<File[]>([]);
+  // Single block import flow — clearer admin workflow
+  const [blockFile, setBlockFile] = useState<File | null>(null);
   const [blocksSubject, setBlocksSubject] = useState("");
+  const [blocksTitle, setBlocksTitle] = useState("");
+  const [blocksOfficial, setBlocksOfficial] = useState(true);
   const [blocksDifficulty, setBlocksDifficulty] = useState("intermediate");
   const [blocksBusy, setBlocksBusy] = useState(false);
-  const [blocksOut, setBlocksOut] = useState<Array<{ name: string; ok: boolean; count?: number; msg?: string }>>([]);
+  const [blocksResult, setBlocksResult] = useState<{ ok: true; name: string; count: number } | { ok: false; msg: string } | null>(null);
 
   async function runBlocks() {
-    if (!blocksFiles.length || !blocksSubject.trim()) return;
+    if (!blockFile || !blocksSubject.trim() || !blocksTitle.trim()) return;
     setBlocksBusy(true);
-    setBlocksOut([]);
-    const results: Array<{ name: string; ok: boolean; count?: number; msg?: string }> = [];
+    setBlocksResult(null);
+    try {
+      const lower = blockFile.name.toLowerCase();
+      const fd = new FormData();
+      fd.set("title", blocksTitle.trim());
+      fd.set(
+        "meta",
+        JSON.stringify({
+          type: "qbank",
+          subject: blocksSubject.trim(),
+          section: "qbank",
+          skip_auto_import: true,
+          is_official_block: blocksOfficial,
+          fixed_block: blocksOfficial,
+          block_kind: blocksOfficial ? "official" : "practice",
+        }),
+      );
 
-    for (const blockFile of blocksFiles) {
-      const title = blockFile.name.replace(/\.[^.]+$/, "");
-      try {
-        const lower = blockFile.name.toLowerCase();
-
-        // ── Step 1: Create the lesson block (for viewing).
-        // We set skip_auto_import: true so the lesson API does NOT run its own
-        // question extraction — we use /api/admin/qbank/import below instead,
-        // which correctly handles every file format (PDF, HTML, PPTX, TXT, etc.).
-        const fd = new FormData();
-        fd.set("title", title);
-        fd.set(
-          "meta",
-          JSON.stringify({
-            type: "qbank",
-            subject: blocksSubject.trim(),
-            section: "qbank",
-            skip_auto_import: true,
-            is_official_block: true,
-            fixed_block: true,
-            block_kind: "official",
-          }),
-        );
-
-        if (lower.endsWith(".pdf")) {
-          fd.set("kind", "pdf");
-          fd.set("file", blockFile);
-        } else if (lower.endsWith(".pptx") || lower.endsWith(".ppt")) {
-          fd.set("kind", "pptx");
-          fd.set("file", blockFile);
-        } else if (lower.endsWith(".html") || lower.endsWith(".htm")) {
-          fd.set("kind", "html-file");
-          fd.set("file", blockFile);
-        } else {
-          // txt, md, etc. — inline HTML
-          const raw = await blockFile.text();
-          function escHtml(s: string) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-          const html = `<!doctype html><html><body style="font-family:Inter,Arial,sans-serif;padding:24px;background:#020617;color:#e2e8f0;"><pre style="white-space:pre-wrap;line-height:1.7">${escHtml(raw)}</pre></body></html>`;
-          fd.set("kind", "html-inline");
-          fd.set("html", html);
-          fd.set("index_text", raw);
-        }
-
-        const lessonResp = await fetch("/api/admin/lessons", { method: "POST", body: fd });
-        const lessonData = await lessonResp.json().catch(() => ({}));
-        if (!lessonResp.ok) throw new Error(lessonData?.error || "Upload failed");
-        const lessonId: string | undefined = lessonData?.lesson?.id;
-
-        // ── Step 2: Extract all questions via the dedicated qbank/import route.
-        // This route uses the full HTML DOM parser + PDF text extractor, which
-        // correctly handles every format and always imports ALL questions.
-        const importFd = new FormData();
-        importFd.set("file", blockFile);
-        importFd.set("difficulty", blocksDifficulty);
-        importFd.set("tags", blocksSubject.trim());
-        importFd.set("subject", blocksSubject.trim());
-        if (lessonId) importFd.set("lesson_id", lessonId);
-
-        const importResp = await fetch("/api/admin/qbank/import", { method: "POST", body: importFd });
-        const importData = await importResp.json().catch(() => ({}));
-
-        let importedCount = 0;
-        if (importResp.ok) {
-          importedCount = importData?.imported ?? importData?.total ?? 0;
-        } else if (importResp.status !== 422) {
-          // 422 = no questions found in this file — not a fatal error, just report 0
-          throw new Error(importData?.error || "Question extraction failed");
-        }
-
-        results.push({ name: title, ok: true, count: importedCount });
-        setBlocksOut([...results]);
-      } catch (e: unknown) {
-        results.push({ name: blockFile.name, ok: false, msg: e instanceof Error ? e.message : "Failed" });
-        setBlocksOut([...results]);
+      if (lower.endsWith(".pdf")) {
+        fd.set("kind", "pdf");
+        fd.set("file", blockFile);
+      } else if (lower.endsWith(".pptx") || lower.endsWith(".ppt")) {
+        fd.set("kind", "pptx");
+        fd.set("file", blockFile);
+      } else if (lower.endsWith(".html") || lower.endsWith(".htm")) {
+        fd.set("kind", "html-file");
+        fd.set("file", blockFile);
+      } else {
+        const raw = await blockFile.text();
+        const html = `<!doctype html><html><body style="font-family:Inter,Arial,sans-serif;padding:24px;background:#020617;color:#e2e8f0;"><pre style="white-space:pre-wrap;line-height:1.7">${escapeHtml(raw)}</pre></body></html>`;
+        fd.set("kind", "html-inline");
+        fd.set("html", html);
+        fd.set("index_text", raw);
       }
-    }
 
-    setBlocksBusy(false);
-    if (results.some((r) => r.ok)) setTimeout(onDone, 1800);
+      const lessonResp = await fetch("/api/admin/lessons", { method: "POST", body: fd });
+      const lessonData = await lessonResp.json().catch(() => ({}));
+      if (!lessonResp.ok) throw new Error(lessonData?.error || "Upload failed");
+      const lessonId: string | undefined = lessonData?.lesson?.id;
+
+      const importFd = new FormData();
+      importFd.set("file", blockFile);
+      importFd.set("difficulty", blocksDifficulty);
+      importFd.set("tags", [blocksSubject.trim(), blocksTitle.trim(), blocksOfficial ? "Official Fixed Block" : "Practice Pool"].join(", "));
+      importFd.set("subject", blocksSubject.trim());
+      if (lessonId) importFd.set("lesson_id", lessonId);
+
+      const importResp = await fetch("/api/admin/qbank/import", { method: "POST", body: importFd });
+      const importData = await importResp.json().catch(() => ({}));
+
+      let importedCount = 0;
+      if (importResp.ok) {
+        importedCount = importData?.imported ?? importData?.total ?? 0;
+      } else if (importResp.status !== 422) {
+        throw new Error(importData?.error || "Question extraction failed");
+      }
+
+      setBlocksResult({ ok: true, name: blocksTitle.trim(), count: importedCount });
+      setTimeout(onDone, 1500);
+    } catch (e: unknown) {
+      setBlocksResult({ ok: false, msg: e instanceof Error ? e.message : "Failed to import block" });
+    } finally {
+      setBlocksBusy(false);
+    }
   }
 
   async function runDirect() {
@@ -511,7 +494,6 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
       fd.set("difficulty", difficulty);
       fd.set("tags", [tags, directSubject].filter(Boolean).join(", "));
       if (directSubject.trim()) fd.set("subject", directSubject.trim());
-      if (lessonId) fd.set("lesson_id", lessonId);
       const r = await fetch("/api/admin/qbank/import", { method: "POST", body: fd });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "Import failed");
@@ -557,13 +539,12 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
           Questions are imported exactly as they appear in your document — stems, choices, correct answers, explanations, and medical images — no modifications.
         </p>
 
-        {/* Tab switcher */}
         <div className="mt-4 flex rounded-xl border border-ink-700 overflow-hidden text-sm">
           <button
-            className={`flex-1 py-2 font-medium transition ${tab === "direct" ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
-            onClick={() => setTab("direct")}
+            className={`flex-1 py-2 font-medium transition ${tab === "blocks" ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
+            onClick={() => setTab("blocks")}
           >
-            JSON / JS
+            QBank Blocks
           </button>
           <button
             className={`flex-1 py-2 font-medium transition ${tab === "text" ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
@@ -572,18 +553,108 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
             PDF / HTML
           </button>
           <button
-            className={`flex-1 py-2 font-medium transition ${tab === "blocks" ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
-            onClick={() => setTab("blocks")}
+            className={`flex-1 py-2 font-medium transition ${tab === "direct" ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
+            onClick={() => setTab("direct")}
           >
-            QBank Blocks
+            JSON / JS
           </button>
         </div>
+
+        {tab === "blocks" && (
+          <div className="mt-4 space-y-4">
+            <div className="rounded-xl border border-brand/20 bg-brand/5 p-3 text-xs text-slate-300 leading-5">
+              <span className="font-semibold text-brand">Clear block workflow:</span> choose the subject, decide whether this file should appear as an official fixed block, enter the block title, then upload the source file. The imported questions will be linked directly to that block under the selected subject.
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-ink-700 bg-ink-950/50 p-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand">Step 1</div>
+                <label className="label mt-2">Subject <span className="text-red-400">*</span></label>
+                <input
+                  className="input mt-1"
+                  value={blocksSubject}
+                  onChange={(e) => setBlocksSubject(e.target.value)}
+                  placeholder="e.g. Cardiology"
+                />
+              </div>
+              <div className="rounded-xl border border-ink-700 bg-ink-950/50 p-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand">Step 2</div>
+                <label className="label mt-2">Fixed official block</label>
+                <label className="mt-2 flex items-center gap-3 rounded-xl border border-ink-700 px-3 py-3 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={blocksOfficial}
+                    onChange={(e) => setBlocksOfficial(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  <span>{blocksOfficial ? "Yes — show it in Official Fixed Blocks" : "No — keep it as a practice-pool source"}</span>
+                </label>
+              </div>
+              <div className="rounded-xl border border-ink-700 bg-ink-950/50 p-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand">Step 3</div>
+                <label className="label mt-2">Title of the block <span className="text-red-400">*</span></label>
+                <input
+                  className="input mt-1"
+                  value={blocksTitle}
+                  onChange={(e) => setBlocksTitle(e.target.value)}
+                  placeholder="e.g. Cardio Block 01"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Upload file <span className="text-red-400">*</span></label>
+              <input
+                className="input mt-1"
+                type="file"
+                accept=".pdf,.html,.htm,.txt,.md,.pptx,.ppt"
+                onChange={(e) => {
+                  const next = e.target.files?.[0] ?? null;
+                  setBlockFile(next);
+                  if (next && !blocksTitle.trim()) {
+                    setBlocksTitle(next.name.replace(/\.[^.]+$/, ""));
+                  }
+                  setBlocksResult(null);
+                }}
+              />
+              {blockFile ? (
+                <div className="mt-2 rounded-xl border border-ink-700 bg-ink-950/60 px-3 py-2 text-xs text-slate-300">
+                  File selected: <span className="font-medium text-white">{blockFile.name}</span>
+                </div>
+              ) : null}
+            </div>
+
+            <div>
+              <label className="label">Default difficulty</label>
+              <select className="input" value={blocksDifficulty} onChange={(e) => setBlocksDifficulty(e.target.value)}>
+                {["foundation", "intermediate", "advanced", "expert"].map((d) => <option key={d}>{d}</option>)}
+              </select>
+            </div>
+
+            {blocksResult && (
+              <div className={`flex items-start gap-2 rounded-xl border p-3 text-sm ${blocksResult.ok ? "border-green-700/50 bg-green-950/40 text-green-300" : "border-red-700/50 bg-red-950/40 text-red-300"}`}>
+                {blocksResult.ok ? <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" /> : null}
+                {blocksResult.ok ? `Block "${blocksResult.name}" imported successfully with ${blocksResult.count} questions.` : blocksResult.msg}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button className="btn-ghost" onClick={onClose}>Close</button>
+              <button
+                className="btn-primary"
+                disabled={blocksBusy || !blockFile || !blocksSubject.trim() || !blocksTitle.trim()}
+                onClick={() => void runBlocks()}
+              >
+                {blocksBusy ? "Importing block…" : <><FileUp className="h-4 w-4" /> Create Block</>}
+              </button>
+            </div>
+          </div>
+        )}
 
         {tab === "direct" && (
           <div className="mt-4 space-y-3">
             <div className="rounded-xl border border-ink-700 bg-ink-950/60 p-3 text-xs text-slate-400 leading-5">
-              Upload a <span className="text-slate-200">.json</span>, <span className="text-slate-200">.js</span>,{" "}
-              <span className="text-slate-200">.ts</span>, or any file whose questions are already structured. Each question needs a stem, answer choices, correct answer, and optionally an explanation and image path.
+              Upload a <span className="text-slate-200">.json</span>, <span className="text-slate-200">.js</span>, <span className="text-slate-200">.ts</span>, or any file whose questions are already structured. Each question needs a stem, answer choices, correct answer, and optionally an explanation and image path.
             </div>
             <div>
               <label className="label">Question file</label>
@@ -605,12 +676,8 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
                 <input className="input mt-1" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="e.g. IFOM, Block 1" />
               </div>
             </div>
-            <div>
-              <label className="label">Attach to lesson (optional)</label>
-              <select className="input mt-1" value={lessonId} onChange={(e) => setLessonId(e.target.value)}>
-                <option value="">— None —</option>
-                {lessons.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}
-              </select>
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-100">
+              This advanced import no longer asks you to attach the file to an existing lesson, to avoid mixing standalone imports with fixed-block imports.
             </div>
             {result && (
               <div className={`flex items-start gap-2 rounded-xl border p-3 text-sm ${result.ok ? "border-green-700/50 bg-green-950/40 text-green-300" : "border-red-700/50 bg-red-950/40 text-red-300"}`}>
@@ -667,73 +734,10 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
             </div>
           </div>
         )}
-
-        {tab === "blocks" && (
-          <div className="mt-4 space-y-3">
-            <div className="rounded-xl border border-brand/20 bg-brand/5 p-3 text-xs text-slate-300 leading-5">
-              <span className="font-semibold text-brand">QBank Blocks Import</span> — Upload one or more files (PDF, HTML, PPTX, TXT). Each file is saved as a separate official fixed block under the subject you specify, with all questions auto-extracted, linked to the block, and still counted inside the subject&apos;s random QBank pool. This does not replace existing blocks.
-            </div>
-            <div>
-              <label className="label">Subject <span className="text-red-400">*</span></label>
-              <input
-                className="input mt-1"
-                value={blocksSubject}
-                onChange={(e) => setBlocksSubject(e.target.value)}
-                placeholder="e.g. Hematology, Cardiology, Pharmacology"
-              />
-            </div>
-            <div>
-              <label className="label">Upload files (PDF, HTML, PPTX, TXT — one block per file)</label>
-              <input
-                className="input mt-1"
-                type="file"
-                accept=".pdf,.html,.htm,.txt,.md,.pptx,.ppt"
-                multiple
-                onChange={(e) => setBlocksFiles(Array.from(e.target.files ?? []))}
-              />
-              {blocksFiles.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {blocksFiles.map((f) => (
-                    <span key={f.name} className="rounded-full bg-ink-800 px-2.5 py-1 text-xs text-slate-300">{f.name}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div>
-              <label className="label">Default difficulty</label>
-              <select className="input" value={blocksDifficulty} onChange={(e) => setBlocksDifficulty(e.target.value)}>
-                {["foundation", "intermediate", "advanced", "expert"].map((d) => <option key={d}>{d}</option>)}
-              </select>
-            </div>
-            {blocksOut.length > 0 && (
-              <div className="space-y-1.5 rounded-xl border border-ink-700 bg-ink-950/60 p-3">
-                {blocksOut.map((r, i) => (
-                  <div key={i} className={`flex items-center gap-2 text-xs ${r.ok ? "text-green-400" : "text-red-400"}`}>
-                    <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${r.ok ? "bg-green-400" : "bg-red-400"}`} />
-                    <span className="font-medium truncate max-w-[180px]">{r.name}</span>
-                    <span className="text-slate-400">{r.ok ? `— ${r.count ?? 0} questions extracted` : `— ${r.msg}`}</span>
-                  </div>
-                ))}
-                {blocksBusy && <div className="text-xs text-slate-400 mt-1">Processing…</div>}
-              </div>
-            )}
-            <div className="flex justify-end gap-2 pt-1">
-              <button className="btn-ghost" onClick={onClose}>Close</button>
-              <button
-                className="btn-primary"
-                disabled={blocksBusy || !blocksFiles.length || !blocksSubject.trim()}
-                onClick={() => void runBlocks()}
-              >
-                {blocksBusy ? "Importing blocks…" : <><FileUp className="h-4 w-4" /> Create QBank Blocks</>}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
 }
-
 /** ─── Edit Video Modal ─────────────────────────────────────────────────── */
 function EditVideoModal({
   id,
