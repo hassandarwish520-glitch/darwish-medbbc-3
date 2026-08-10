@@ -65,6 +65,18 @@ type LabItem = {
   tone?: "normal" | "abnormal";
 };
 
+type ClinicalDatum = {
+  label: string;
+  value: string;
+  ref?: string;
+  tone?: "normal" | "abnormal";
+};
+
+type ClinicalSection = {
+  title: string;
+  items: ClinicalDatum[];
+};
+
 const LAB_REFERENCE: Record<string, LabItem[]> = {
   CBC: [
     { test: "WBC", value: "6.8 ×10³/µL", ref: "4.0 – 10.0" },
@@ -137,6 +149,113 @@ function splitExplanation(value?: string | null) {
   };
 }
 
+function normalizeCapturedValue(value: string) {
+  return value.replace(/^[\s:=,-]+|[\s,;:.]+$/g, "").replace(/\s+/g, " ").trim();
+}
+
+function extractClinicalSections(stem: string): ClinicalSection[] {
+  const text = stem.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) return [];
+
+  const sections: ClinicalSection[] = [];
+  const pushSection = (title: string, items: ClinicalDatum[]) => {
+    const seen = new Set<string>();
+    const unique = items.filter((item) => {
+      const key = item.label.toLowerCase();
+      if (!item.value || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (unique.length) sections.push({ title, items: unique });
+  };
+
+  const capture = (regex: RegExp) => {
+    const match = text.match(regex);
+    return match?.[1] ? normalizeCapturedValue(match[1]) : "";
+  };
+
+  const vitals: ClinicalDatum[] = [
+    { label: "Temperature", value: capture(/(?:temp(?:erature)?)[\s:]*([^•;,.]+?(?:°[CF]|deg(?:rees)?\s*[CF]|F|C))/i), tone: "normal" as const },
+    { label: "Pulse", value: capture(/(?:pulse|heart rate|hr)[\s:]*([^•;,.]+?(?:\/min|bpm))/i), tone: "normal" as const },
+    { label: "Respiratory rate", value: capture(/(?:resp(?:iratory rate)?|rr)[\s:]*([^•;,.]+?(?:\/min|breaths?\/?min))/i), tone: "normal" as const },
+    { label: "Blood pressure", value: capture(/(?:bp|blood pressure)[\s:]*([^•;,.]+?(?:mm\s*hg))/i), tone: "normal" as const },
+    { label: "O₂ saturation", value: capture(/(?:o2\s*sat(?:uration)?|spo2)[\s:]*([^•;,.]+?(?:%[^•;,.]*))/i), tone: "normal" as const },
+    { label: "JVP", value: capture(/(?:jugular venous pressure|jvp)[\s:]*([^•;,.]+?(?:cm\s*h2o|cm\s*h₂o))/i), tone: "normal" as const },
+  ].filter((item) => item.value);
+  pushSection("Vitals", vitals);
+
+  const chemistries: ClinicalDatum[] = [
+    { label: "Na⁺", value: capture(/(?:\bna(?:\+)?\b|sodium)[\s:=]*([^•;,]+?(?:m?eq\/l|mmol\/l))/i), ref: "135 – 145 mEq/L", tone: "normal" as const },
+    { label: "K⁺", value: capture(/(?:\bk(?:\+)?\b|potassium)[\s:=]*([^•;,]+?(?:m?eq\/l|mmol\/l))/i), ref: "3.5 – 5.0 mEq/L", tone: "normal" as const },
+    { label: "Cl⁻", value: capture(/(?:\bcl(?:-|−|⁻)?\b|chloride)[\s:=]*([^•;,]+?(?:m?eq\/l|mmol\/l))/i), ref: "98 – 106 mEq/L", tone: "normal" as const },
+    { label: "HCO₃⁻", value: capture(/(?:hco3|bicarbonate|co2)[\s:=]*([^•;,]+?(?:m?eq\/l|mmol\/l))/i), ref: "22 – 28 mEq/L", tone: "normal" as const },
+    { label: "BUN", value: capture(/(?:\bbun\b)[\s:=]*([^•;,]+?(?:mg\/dl))/i), ref: "7 – 20 mg/dL", tone: "normal" as const },
+    { label: "Creatinine", value: capture(/(?:creatinine|cr)[\s:=]*([^•;,]+?(?:mg\/dl))/i), ref: "0.6 – 1.3 mg/dL", tone: "normal" as const },
+    { label: "Glucose", value: capture(/(?:glucose)[\s:=]*([^•;,]+?(?:mg\/dl))/i), ref: "70 – 100 mg/dL", tone: "normal" as const },
+    { label: "Calcium", value: capture(/(?:calcium|ca\b)[\s:=]*([^•;,]+?(?:mg\/dl))/i), ref: "8.5 – 10.5 mg/dL", tone: "normal" as const },
+  ].filter((item) => item.value);
+  pushSection("Chemistry", chemistries);
+
+  const hematology: ClinicalDatum[] = [
+    { label: "WBC", value: capture(/(?:wbc|white blood cells?)[\s:=]*([^•;,]+?(?:×?10\^?3\/?μ?l|x10\^?3\/?u?l|\/μ?l|\/u?l))/i), ref: "4.0 – 10.0 ×10³/µL", tone: "normal" as const },
+    { label: "Hemoglobin", value: capture(/(?:hemoglobin|hgb)[\s:=]*([^•;,]+?(?:g\/dl))/i), ref: "12.0 – 15.5 g/dL", tone: "normal" as const },
+    { label: "Platelets", value: capture(/(?:platelets?|plt)[\s:=]*([^•;,]+?(?:×?10\^?3\/?μ?l|x10\^?3\/?u?l|\/μ?l|\/u?l))/i), ref: "150 – 400 ×10³/µL", tone: "normal" as const },
+    { label: "Hematocrit", value: capture(/(?:hematocrit|hct)[\s:=]*([^•;,]+?(?:%))/i), ref: "36 – 46 %", tone: "normal" as const },
+    { label: "MCV", value: capture(/(?:\bmcv\b)[\s:=]*([^•;,]+?(?:fl))/i), ref: "80 – 100 fL", tone: "normal" as const },
+  ].filter((item) => item.value);
+  pushSection("CBC", hematology);
+
+  const gases: ClinicalDatum[] = [
+    { label: "pH", value: capture(/(?:\bph\b)[\s:=]*([^•;,]+)/i), ref: "7.35 – 7.45", tone: "normal" as const },
+    { label: "PaCO₂", value: capture(/(?:paco2)[\s:=]*([^•;,]+?(?:mm\s*hg))/i), ref: "35 – 45 mmHg", tone: "normal" as const },
+    { label: "PaO₂", value: capture(/(?:pao2)[\s:=]*([^•;,]+?(?:mm\s*hg))/i), ref: "80 – 100 mmHg", tone: "normal" as const },
+  ].filter((item) => item.value);
+  pushSection("ABG", gases);
+
+  return sections;
+}
+
+function ClinicalDataTables({
+  sections,
+  title,
+  subtitle,
+}: {
+  sections: ClinicalSection[];
+  title: string;
+  subtitle?: string;
+}) {
+  if (!sections.length) return null;
+  return (
+    <div className="rounded-[22px] border p-4" style={{ borderColor: "rgba(37,99,235,0.20)", background: "var(--qb-blue-soft)" }}>
+      <div>
+        <div className="text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: "var(--qb-blue-text)" }}>{title}</div>
+        {subtitle ? <div className="mt-1 text-xs" style={{ color: "var(--qb-panel-muted)" }}>{subtitle}</div> : null}
+      </div>
+      <div className="mt-4 space-y-4">
+        {sections.map((section) => (
+          <div key={section.title} className="overflow-hidden rounded-[18px] border" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
+            <div className="border-b px-4 py-3 text-sm font-semibold" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-title)" }}>
+              {section.title}
+            </div>
+            <div className="grid grid-cols-[1fr_1fr] gap-3 border-b px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] md:grid-cols-[1.1fr_1fr_1fr]" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-muted)" }}>
+              <div>Item</div>
+              <div>Value</div>
+              <div className="hidden md:block">Reference</div>
+            </div>
+            {section.items.map((item) => (
+              <div key={`${section.title}-${item.label}`} className="grid grid-cols-[1fr_1fr] gap-3 border-b px-4 py-3 text-sm last:border-b-0 md:grid-cols-[1.1fr_1fr_1fr]" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-text)" }}>
+                <div>{item.label}</div>
+                <div style={{ color: item.tone === "abnormal" ? "#fca5a5" : "#86efac" }}>{item.value}</div>
+                <div className="hidden md:block" style={{ color: "var(--qb-panel-muted)" }}>{item.ref || "—"}</div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function getTopic(tags: string[]) {
   return tags.filter(Boolean).slice(1, 3).join(" · ") || "Clinical reasoning";
 }
@@ -191,12 +310,7 @@ export default function QBankRunner({
   const [reportOpen, setReportOpen] = useState(false);
   const [questionMapOpen, setQuestionMapOpen] = useState(true);
   const [contextVisible, setContextVisible] = useState(true);
-  // Show the medical figure immediately when the current question has one.
-  // Previously the runner always opened on Labs, so images were present but hidden
-  // behind the Figure tab and looked like they were missing.
-  const [contextTab, setContextTab] = useState<ContextTab>(() =>
-    questions[0]?.image_path ? "figure" : "labs",
-  );
+  const [contextTab, setContextTab] = useState<ContextTab>("labs");
   const [labCategory, setLabCategory] = useState<string>("CBC");
   const [imageOpen, setImageOpen] = useState(false);
   const [imageZoom, setImageZoom] = useState(1);
@@ -216,11 +330,10 @@ export default function QBankRunner({
   const secondsRef = useRef(0);
 
   useEffect(() => {
-    const currentImage = questions[i]?.image_path;
-    setContextTab(currentImage ? "figure" : "labs");
+    setContextTab("labs");
     setImageOpen(false);
     setImageZoom(1);
-  }, [i, questions]);
+  }, [i]);
 
   useEffect(() => {
     resultsRef.current = results;
@@ -422,6 +535,8 @@ export default function QBankRunner({
   const topic = getTopic(q.tags);
   const diff = difficultyStyle(q.difficulty);
   const details = splitExplanation(q.explanation);
+  const clinicalSections = extractClinicalSections(q.stem);
+  const hasQuestionSpecificData = clinicalSections.length > 0;
   const progressPct = ((i + 1) / questions.length) * 100;
   const isCorrectAnswer = picked === q.answer_key;
   const wrongChoices = q.choices.filter((choice) => choice.key !== q.answer_key);
@@ -734,9 +849,41 @@ export default function QBankRunner({
               {q.difficulty ? <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: diff.border, background: isDarkTheme ? diff.bg : "#fff8e8", color: diff.color }}>{q.difficulty}</span> : null}
             </div>
 
-            <div className="mt-5 max-w-[1040px] text-[25px] font-semibold leading-[1.55] tracking-[-0.02em] md:text-[33px]" style={{ color: "var(--qb-question-text)" }}>
+            <div className="mt-5 max-w-[1040px] whitespace-pre-wrap text-[25px] font-semibold leading-[1.55] tracking-[-0.02em] md:text-[33px]" style={{ color: "var(--qb-question-text)" }}>
               {q.stem}
             </div>
+
+            {imageHref ? (
+              <div className="mt-5 overflow-hidden rounded-[22px] border" style={{ borderColor: "rgba(37,99,235,0.20)", background: "var(--qb-panel-soft)" }}>
+                <div className="flex items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: "var(--qb-panel-soft-border)" }}>
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: "var(--qb-blue-text)" }}>Question figure</div>
+                    <div className="mt-1 text-xs" style={{ color: "var(--qb-panel-muted)" }}>Essential image from the question stem</div>
+                  </div>
+                  <button onClick={() => setImageOpen(true)} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft-alt)", color: "var(--qb-panel-text)" }}>
+                    <Expand className="h-3.5 w-3.5" /> Enlarge
+                  </button>
+                </div>
+                <button onClick={() => setImageOpen(true)} className="block w-full bg-black/10">
+                  <img src={imageHref} alt={q.image_caption || "Question figure"} className="max-h-[560px] w-full object-contain" />
+                </button>
+                {q.image_caption ? (
+                  <div className="border-t px-4 py-3 text-sm" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-muted)" }}>
+                    {q.image_caption}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {hasQuestionSpecificData ? (
+              <div className="mt-5">
+                <ClinicalDataTables
+                  sections={clinicalSections}
+                  title="Question data"
+                  subtitle="Structured values extracted from the question stem for faster reading."
+                />
+              </div>
+            ) : null}
 
             <div className="mt-6 space-y-3">
               {q.choices.map((choice) => {
@@ -862,7 +1009,7 @@ export default function QBankRunner({
                 </button>
                 <button onClick={() => setContextTab("labs")} className="flex items-center justify-center gap-2 rounded-[18px] border px-4 py-3 text-sm font-semibold transition" style={contextTab === "labs" ? { borderColor: "var(--qb-blue)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" } : { borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-text)" }}>
                   <FlaskConical className="h-4 w-4" /> Labs
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: "rgba(59,130,246,0.18)", color: "#bfdbfe" }}>3</span>
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: "rgba(59,130,246,0.18)", color: "#bfdbfe" }}>{hasQuestionSpecificData ? clinicalSections.length : Object.keys(LAB_REFERENCE).length}</span>
                 </button>
                 <button onClick={() => setContextTab("calculator")} className="flex items-center justify-center gap-2 rounded-[18px] border px-4 py-3 text-sm font-semibold transition" style={contextTab === "calculator" ? { borderColor: "var(--qb-blue)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" } : { borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)", color: "var(--qb-panel-text)" }}>
                   <Calculator className="h-4 w-4" /> Calculator
@@ -893,36 +1040,46 @@ export default function QBankRunner({
               ) : null}
 
               {contextTab === "labs" ? (
-                <div className="mt-4 grid gap-3 lg:grid-cols-[190px_minmax(0,1fr)]">
-                  <div className="rounded-[22px] border p-3" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
-                    <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--qb-panel-muted)" }}>Lab categories</div>
-                    <div className="space-y-2">
-                      {Object.entries(LAB_REFERENCE).map(([category, items]) => (
-                        <button key={category} onClick={() => setLabCategory(category)} className="flex w-full items-center justify-between rounded-[14px] px-3 py-2.5 text-sm font-medium transition" style={labCategory === category ? { borderColor: "rgba(28,90,161,0.18)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)", boxShadow: isDarkTheme ? "none" : "inset 0 0 0 1px rgba(28,90,161,0.14)" } : { background: "var(--qb-panel-soft-alt)", color: "var(--qb-panel-text)" }}>
-                          <span>{category}</span>
-                          <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: labCategory === category ? (isDarkTheme ? "rgba(147,197,253,0.18)" : "rgba(28,90,161,0.12)") : "var(--qb-panel-soft)", color: labCategory === category ? (isDarkTheme ? "#bfdbfe" : "var(--qb-blue-text)") : "var(--qb-panel-muted)" }}>{items.length}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                <div className="mt-4 space-y-4">
+                  {hasQuestionSpecificData ? (
+                    <ClinicalDataTables
+                      sections={clinicalSections}
+                      title="Question-specific data"
+                      subtitle="These values are pulled from the current stem and shown separately for easier solving."
+                    />
+                  ) : null}
 
-                  <div className="rounded-[22px] border p-3 md:p-4" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
-                    <div className="mb-3 text-base font-semibold" style={{ color: "var(--qb-panel-title)" }}>{labCategory}</div>
-                    <div className="overflow-hidden rounded-[18px] border" style={{ borderColor: "var(--qb-panel-soft-border)" }}>
-                      <div className="grid grid-cols-[1.1fr_1fr_1fr] gap-3 border-b px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-muted)" }}>
-                        <div>Test</div>
-                        <div>Your value</div>
-                        <div>Reference range</div>
+                  <div className="grid gap-3 lg:grid-cols-[190px_minmax(0,1fr)]">
+                    <div className="rounded-[22px] border p-3" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
+                      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--qb-panel-muted)" }}>Reference sets</div>
+                      <div className="space-y-2">
+                        {Object.entries(LAB_REFERENCE).map(([category, items]) => (
+                          <button key={category} onClick={() => setLabCategory(category)} className="flex w-full items-center justify-between rounded-[14px] px-3 py-2.5 text-sm font-medium transition" style={labCategory === category ? { borderColor: "rgba(28,90,161,0.18)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)", boxShadow: isDarkTheme ? "none" : "inset 0 0 0 1px rgba(28,90,161,0.14)" } : { background: "var(--qb-panel-soft-alt)", color: "var(--qb-panel-text)" }}>
+                            <span>{category}</span>
+                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: labCategory === category ? (isDarkTheme ? "rgba(147,197,253,0.18)" : "rgba(28,90,161,0.12)") : "var(--qb-panel-soft)", color: labCategory === category ? (isDarkTheme ? "#bfdbfe" : "var(--qb-blue-text)") : "var(--qb-panel-muted)" }}>{items.length}</span>
+                          </button>
+                        ))}
                       </div>
-                      {labItems.map((item) => (
-                        <div key={item.test} className="grid grid-cols-[1.1fr_1fr_1fr] gap-3 border-b px-4 py-3 text-sm last:border-b-0" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-text)" }}>
-                          <div>{item.test}</div>
-                          <div style={{ color: item.tone === "abnormal" ? "#fca5a5" : "#86efac" }}>{item.value}</div>
-                          <div style={{ color: "var(--qb-panel-muted)" }}>{item.ref}</div>
-                        </div>
-                      ))}
                     </div>
-                    <div className="mt-3 text-xs" style={{ color: "var(--qb-panel-muted)" }}>When question-specific labs are available, abnormal values are highlighted.</div>
+
+                    <div className="rounded-[22px] border p-3 md:p-4" style={{ borderColor: "var(--qb-panel-soft-border)", background: "var(--qb-panel-soft)" }}>
+                      <div className="mb-3 text-base font-semibold" style={{ color: "var(--qb-panel-title)" }}>{labCategory}</div>
+                      <div className="overflow-hidden rounded-[18px] border" style={{ borderColor: "var(--qb-panel-soft-border)" }}>
+                        <div className="grid grid-cols-[1.1fr_1fr_1fr] gap-3 border-b px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-muted)" }}>
+                          <div>Test</div>
+                          <div>Your value</div>
+                          <div>Reference range</div>
+                        </div>
+                        {labItems.map((item) => (
+                          <div key={item.test} className="grid grid-cols-[1.1fr_1fr_1fr] gap-3 border-b px-4 py-3 text-sm last:border-b-0" style={{ borderColor: "var(--qb-panel-soft-border)", color: "var(--qb-panel-text)" }}>
+                            <div>{item.test}</div>
+                            <div style={{ color: item.tone === "abnormal" ? "#fca5a5" : "#86efac" }}>{item.value}</div>
+                            <div style={{ color: "var(--qb-panel-muted)" }}>{item.ref}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 text-xs" style={{ color: "var(--qb-panel-muted)" }}>Question-specific values appear above when detected. This area stays as a quick reference set.</div>
+                    </div>
                   </div>
                 </div>
               ) : null}
