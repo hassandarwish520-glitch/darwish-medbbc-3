@@ -157,10 +157,14 @@ function normalizeOne(raw: Record<string, unknown>, fallbackDifficulty: string):
   }
   if (!explanation) explanation = "No explanation provided.";
 
-  // Image
-  const image_path = coerceString(
+  // Image — direct sources only; never accept template placeholders like "${q.image}"
+  const rawImage = coerceString(
     raw.image_path ?? raw.image ?? raw.imageUrl ?? raw.image_url ?? raw.img ?? raw.imageLink ?? raw.figure ?? ""
-  ) || null;
+  );
+  const image_path =
+    rawImage && !/\$\{/.test(rawImage) && /^(https?:|data:|blob:|\/)/i.test(rawImage.trim())
+      ? rawImage.trim()
+      : null;
   const image_caption = coerceString(
     raw.image_caption ?? raw.imageCaption ?? raw.caption ?? raw.img_caption ?? raw.figureCaption ?? ""
   ) || null;

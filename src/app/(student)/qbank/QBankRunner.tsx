@@ -122,6 +122,7 @@ const LAB_REFERENCE: Record<string, LabItem[]> = {
 
 function assetHref(path?: string | null) {
   if (!path) return "";
+  if (/\$\{/.test(path)) return "";
   if (/^(https?:|data:|blob:|\/)\/?/i.test(path)) return path;
   return `/api/assets/${path.split("/").map(encodeURIComponent).join("/")}`;
 }
