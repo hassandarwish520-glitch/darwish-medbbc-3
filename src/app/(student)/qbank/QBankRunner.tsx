@@ -181,25 +181,17 @@ function extractClinicalSections(stem: string): ClinicalSection[] {
     tone: "normal",
   });
 
-  const vitals: ClinicalDatum[] = [
-    datum("Temperature", /(?:temp(?:erature)?)[\s:]*([^•;,.]+?(?:°[CF]|deg(?:rees)?\s*[CF]|F|C))/i),
-    datum("Pulse", /(?:pulse|heart rate|hr)[\s:]*([^•;,.]+?(?:\/min|bpm))/i),
-    datum("Respiratory rate", /(?:resp(?:iratory rate)?|rr)[\s:]*([^•;,.]+?(?:\/min|breaths?\/?min))/i),
-    datum("Blood pressure", /(?:bp|blood pressure)[\s:]*([^•;,.]+?(?:mm\s*hg))/i),
-    datum("O₂ saturation", /(?:o2\s*sat(?:uration)?|spo2)[\s:]*([^•;,.]+?(?:%[^•;,.]*))/i),
-    datum("JVP", /(?:jugular venous pressure|jvp)[\s:]*([^•;,.]+?(?:cm\s*h2o|cm\s*h₂o))/i),
-  ].filter((item) => item.value);
-  pushSection("Vitals", vitals);
-
+  // Keep vitals as plain narrative text in the stem to stay close to NBME/UWorld.
+  // Only lab panels are extracted into tables.
   const chemistries: ClinicalDatum[] = [
     datum("Na⁺", /(?:\bna(?:\+)?\b|sodium)[\s:=]*([^•;,]+?(?:m?eq\/l|mmol\/l))/i, "135 – 145 mEq/L"),
     datum("K⁺", /(?:\bk(?:\+)?\b|potassium)[\s:=]*([^•;,]+?(?:m?eq\/l|mmol\/l))/i, "3.5 – 5.0 mEq/L"),
     datum("Cl⁻", /(?:\bcl(?:-|−|⁻)?\b|chloride)[\s:=]*([^•;,]+?(?:m?eq\/l|mmol\/l))/i, "98 – 106 mEq/L"),
     datum("HCO₃⁻", /(?:hco3|bicarbonate|co2)[\s:=]*([^•;,]+?(?:m?eq\/l|mmol\/l))/i, "22 – 28 mEq/L"),
-    datum("BUN", /(?:\bbun\b)[\s:=]*([^•;,]+?(?:mg\/dl))/i, "7 – 20 mg/dL"),
-    datum("Creatinine", /(?:creatinine|cr)[\s:=]*([^•;,]+?(?:mg\/dl))/i, "0.6 – 1.3 mg/dL"),
+    datum("BUN", /(?:\bbun\b|blood urea nitrogen)[\s:=]*([^•;,]+?(?:mg\/dl))/i, "7 – 20 mg/dL"),
+    datum("Creatinine", /(?:creatinine|\bcr\b)[\s:=]*([^•;,]+?(?:mg\/dl))/i, "0.6 – 1.3 mg/dL"),
     datum("Glucose", /(?:glucose)[\s:=]*([^•;,]+?(?:mg\/dl))/i, "70 – 100 mg/dL"),
-    datum("Calcium", /(?:calcium|ca\b)[\s:=]*([^•;,]+?(?:mg\/dl))/i, "8.5 – 10.5 mg/dL"),
+    datum("Calcium", /(?:calcium|\bca\b)[\s:=]*([^•;,]+?(?:mg\/dl))/i, "8.5 – 10.5 mg/dL"),
   ].filter((item) => item.value);
   pushSection("Chemistry", chemistries);
 
@@ -211,6 +203,26 @@ function extractClinicalSections(stem: string): ClinicalSection[] {
     datum("MCV", /(?:\bmcv\b)[\s:=]*([^•;,]+?(?:fl))/i, "80 – 100 fL"),
   ].filter((item) => item.value);
   pushSection("CBC", hematology);
+
+  const enzymes: ClinicalDatum[] = [
+    datum("AST", /(?:\bast\b|aspartate aminotransferase)[\s:=]*([^•;,]+?(?:u\/l|units?\/l))/i, "10 – 40 U/L"),
+    datum("ALT", /(?:\balt\b|alanine aminotransferase)[\s:=]*([^•;,]+?(?:u\/l|units?\/l))/i, "7 – 56 U/L"),
+    datum("ALP", /(?:\balp\b|alkaline phosphatase)[\s:=]*([^•;,]+?(?:u\/l|units?\/l))/i, "44 – 147 U/L"),
+    datum("Total bilirubin", /(?:total bilirubin|bilirubin)[\s:=]*([^•;,]+?(?:mg\/dl))/i, "0.2 – 1.2 mg/dL"),
+    datum("Albumin", /(?:albumin)[\s:=]*([^•;,]+?(?:g\/dl))/i, "3.5 – 5.0 g/dL"),
+    datum("CK", /(?:\bck\b|creatine kinase|creatine phosphokinase)[\s:=]*([^•;,]+?(?:u\/l|units?\/l))/i, "30 – 200 U/L"),
+    datum("Troponin I", /(?:troponin\s*i?)[\s:=]*([^•;,]+?(?:ng\/ml|ng\/l))/i, "< 0.04 ng/mL"),
+    datum("Amylase", /(?:amylase)[\s:=]*([^•;,]+?(?:u\/l|units?\/l))/i, "30 – 110 U/L"),
+    datum("Lipase", /(?:lipase)[\s:=]*([^•;,]+?(?:u\/l|units?\/l))/i, "0 – 160 U/L"),
+  ].filter((item) => item.value);
+  pushSection("Enzymes", enzymes);
+
+  const coagulation: ClinicalDatum[] = [
+    datum("PT", /(?:\bpt\b|prothrombin time)[\s:=]*([^•;,]+?(?:s(?:econds?)?\b|\d+(?:\.\d+)?))/i, "11 – 13.5 s"),
+    datum("INR", /(?:\binr\b)[\s:=]*([^•;,]+?(?:\d+(?:\.\d+)?))/i, "0.8 – 1.1"),
+    datum("aPTT", /(?:aptt|activated partial thromboplastin time)[\s:=]*([^•;,]+?(?:s(?:econds?)?\b|\d+(?:\.\d+)?))/i, "25 – 35 s"),
+  ].filter((item) => item.value);
+  pushSection("Coagulation", coagulation);
 
   const gases: ClinicalDatum[] = [
     datum("pH", /(?:\bph\b)[\s:=]*([^•;,]+)/i, "7.35 – 7.45"),
@@ -887,7 +899,7 @@ export default function QBankRunner({
                 <ClinicalDataTables
                   sections={clinicalSections}
                   title="Question data"
-                  subtitle="Structured values extracted from the question stem for faster reading."
+                  subtitle="Only lab panels from the stem are structured here; vitals remain inline in the question text."
                 />
               </div>
             ) : null}
@@ -1052,7 +1064,7 @@ export default function QBankRunner({
                     <ClinicalDataTables
                       sections={clinicalSections}
                       title="Question-specific data"
-                      subtitle="These values are pulled from the current stem and shown separately for easier solving."
+                      subtitle="Only CBC, chemistry, enzymes, coagulation, and ABG values are tabulated here; vitals stay in the stem."
                     />
                   ) : null}
 
