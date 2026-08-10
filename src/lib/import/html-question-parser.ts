@@ -384,9 +384,33 @@ function extractExplanation(text: string): { explanation: string; educationalObj
   return { explanation: explanation || "No explanation provided.", educationalObjective: educationalObjective || null };
 }
 
+
+// Extracts an explicit heading-style title for a question block.
+// Looks for the first <h1..h4> / .question-title / <strong> at the top
+// of the block before the stem paragraph.
+function extractBlockTitle(blockHtml: string): string | null {
+  const headingMatch = blockHtml.match(/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/i);
+  if (headingMatch) {
+    const txt = htmlToText(headingMatch[1]).trim();
+    if (txt.length >= 3 && txt.length <= 160) return txt;
+  }
+  const classMatch = blockHtml.match(/<(?:div|p|span)[^>]*class=["'][^"']*(?:question-title|q-title|title)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|p|span)>/i);
+  if (classMatch) {
+    const txt = htmlToText(classMatch[1]).trim();
+    if (txt.length >= 3 && txt.length <= 160) return txt;
+  }
+  const strongMatch = blockHtml.match(/^\s*<strong[^>]*>([\s\S]{3,160}?)<\/strong>/i);
+  if (strongMatch) {
+    const txt = htmlToText(strongMatch[1]).trim();
+    if (txt.length >= 3 && txt.length <= 160 && !/[?.!]/.test(txt)) return txt;
+  }
+  return null;
+}
+
 // ─── Parse a single question block ─────────────────────────────────────────
 function parseBlock(blockHtml: string, preferredDifficulty = "intermediate"): HtmlParsedQuestion | null {
   const text = htmlToText(blockHtml);
+  const blockTitle = extractBlockTitle(blockHtml);
 
   const choices = parseChoicesFromText(text);
   if (choices.length < 2) return null;
@@ -420,7 +444,7 @@ function parseBlock(blockHtml: string, preferredDifficulty = "intermediate"): Ht
     subject,
     topic,
     difficulty,
-    tags: [...new Set(["IFOM CSE", subject, topic, difficulty].filter(Boolean))],
+    tags: [...new Set([blockTitle ? `title:${blockTitle}` : "", "IFOM CSE", subject, topic, difficulty].filter(Boolean))],
   };
 }
 

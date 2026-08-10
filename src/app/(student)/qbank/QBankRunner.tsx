@@ -289,36 +289,72 @@ type StemPresentation = {
   hasExplicitLabPanel: boolean;
 };
 
+const SCENARIO_START_RE = /(?:A|An|The)?\s*(?:\d{1,3}[- ]?(?:year|month|week|day)-?old\b|infant\b|neonate\b|newborn\b|toddler\b|child\b|adolescent\b|teenager\b|man\b|woman\b|male\b|female\b|patient\b|pregnant\b|primigravida\b|multigravida\b|primipara\b|nulliparous\b|previously healthy\b|previously well\b|otherwise healthy\b|previously\b|presents\b|comes\b|is brought\b|is admitted\b|arrives\b|develops\b|returns\b|attends\b|complains\b|reports\b|has been\b)/i;
+
+function looksLikeTitleCandidate(value: string): boolean {
+  const normalized = value.replace(/[.:!?]+$/g, "").trim();
+  if (!normalized) return false;
+  const words = normalized.split(/\s+/).filter(Boolean);
+  if (words.length < 1 || words.length > 20) return false;
+  if (normalized.length < 3 || normalized.length > 160) return false;
+  if (/\b(\d{1,3}[- ]?(?:year|month|week|day)-?old|comes to|presents to|history of|physical exam|which of the following|is brought|is admitted)\b/i.test(normalized)) return false;
+  if (/[?]/.test(normalized)) return false;
+  return true;
+}
+
 function splitQuestionTitle(stemBody: string) {
   const cleaned = stemBody.trim();
-  const lines = cleaned.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-  const looksLikeScenarioStart = (value: string) => /^(?:A|An|The)?\s*(?:\d{1,2}-year-old\b|man\b|woman\b|patient\b|infant\b|child\b|newborn\b|pregnant woman\b|person\b|he\b|she\b|they\b|this patient\b|presents\b|comes\b|is brought\b)/i.test(value.trim());
-  const looksLikeTitleLine = (value: string) => {
-    const normalized = value.replace(/[.:!?]+$/g, "").trim();
-    const words = normalized.split(/\s+/).filter(Boolean);
-    return (
-      normalized.length >= 12 &&
-      normalized.length <= 140 &&
-      words.length >= 2 &&
-      words.length <= 18 &&
-      !/\b(\d{1,2}-year-old|comes to|presents to|history of|physical exam|which of the following)\b/i.test(normalized)
-    );
-  };
+  if (!cleaned) return { title: null as string | null, stemBody: cleaned };
 
-  if (lines.length >= 2 && looksLikeTitleLine(lines[0]) && looksLikeScenarioStart(lines[1])) {
+  // Split on newlines first
+  const lines = cleaned.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length >= 2 && looksLikeTitleCandidate(lines[0]) && SCENARIO_START_RE.test(lines[1])) {
     return { title: lines[0].replace(/[.:]+$/g, "").trim(), stemBody: lines.slice(1).join("\n\n").trim() };
   }
 
-  const inlineMatch = cleaned.match(/^(.{12,140}?)[.:]\s+(?=(?:A|An|The)?\s*(?:\d{1,2}-year-old\b|man\b|woman\b|patient\b|infant\b|child\b|newborn\b|pregnant woman\b|person\b|he\b|she\b|they\b|this patient\b|presents\b|comes\b|is brought\b))([\s\S]+)$/i);
+  // Inline: "Title. A 54-year-old ..." — first sentence before scenario start
+  const inlineMatch = cleaned.match(/^([^.:!?\n]{3,160})[.:]\s+([\s\S]+)$/);
   if (inlineMatch) {
     const title = inlineMatch[1].trim();
     const remainder = inlineMatch[2].trim();
-    if (looksLikeTitleLine(title) && remainder) {
+    if (looksLikeTitleCandidate(title) && SCENARIO_START_RE.test(remainder)) {
       return { title, stemBody: remainder };
     }
   }
 
-  return { title: null, stemBody: cleaned };
+  // Inline separated by " — " or " - "
+  const dashMatch = cleaned.match(/^([^\n]{3,160}?)\s+[—–-]\s+([\s\S]+)$/);
+  if (dashMatch) {
+    const title = dashMatch[1].trim();
+    const remainder = dashMatch[2].trim();
+    if (looksLikeTitleCandidate(title) && SCENARIO_START_RE.test(remainder)) {
+      return { title, stemBody: remainder };
+    }
+  }
+
+  return { title: null as string | null, stemBody: cleaned };
+}
+
+function extractTitleFromTags(tags: string[]): string | null {
+  if (!Array.isArray(tags)) return null;
+  for (const tag of tags) {
+    if (typeof tag !== "string") continue;
+    const m = tag.match(/^title\s*:\s*(.+)$/i);
+    if (m) {
+      const value = m[1].trim();
+      if (value) return value;
+    }
+  }
+  return null;
+}
+
+function stripTitleFromStem(title: string | null, stemBody: string): string {
+  if (!title) return stemBody;
+  const trimmedTitle = title.replace(/[.:!?—–-]+$/g, "").trim();
+  if (!trimmedTitle) return stemBody;
+  const escaped = trimmedTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^\\s*${escaped}\\s*[.:!?—–-]*\\s*`, "i");
+  return stemBody.replace(re, "").trim();
 }
 
 function extractExplicitLabPanel(displayText: string) {
@@ -388,14 +424,31 @@ function extractExplicitLabPanel(displayText: string) {
   return { stemBody, labSections, hasExplicitLabPanel: labSections.length > 0 };
 }
 
-function getStemPresentation(stem: string): StemPresentation {
+function getStemPresentation(stem: string, tags: string[] = []): StemPresentation {
   const displayText = toDisplayText(stem);
   const labPanel = extractExplicitLabPanel(displayText);
-  const titled = splitQuestionTitle(labPanel.stemBody);
-  const derivedSections = extractClinicalSections(titled.stemBody);
+  const tagTitle = extractTitleFromTags(tags);
+  let title: string | null = tagTitle;
+  let body = labPanel.stemBody;
+  if (title) {
+    body = stripTitleFromStem(title, body);
+  }
+  if (!title) {
+    const titled = splitQuestionTitle(body);
+    title = titled.title;
+    body = titled.stemBody;
+  } else {
+    // Even with tag-derived title, if the stem still starts with a stray title
+    // sentence before the scenario, strip it.
+    const titled = splitQuestionTitle(body);
+    if (titled.title && SCENARIO_START_RE.test(titled.stemBody)) {
+      body = titled.stemBody;
+    }
+  }
+  const derivedSections = extractClinicalSections(body);
   return {
-    title: titled.title,
-    stemBody: titled.stemBody,
+    title,
+    stemBody: body,
     labSections: labPanel.labSections,
     derivedSections,
     hasExplicitLabPanel: labPanel.hasExplicitLabPanel,
@@ -445,7 +498,8 @@ function ClinicalDataTables({
 }
 
 function getTopic(tags: string[]) {
-  return tags.filter(Boolean).slice(1, 3).join(" · ") || "Clinical reasoning";
+  const filtered = (tags ?? []).filter((t) => typeof t === "string" && t && !/^title\s*:/i.test(t));
+  return filtered.slice(1, 3).join(" · ") || "Clinical reasoning";
 }
 
 function excerpt(value: string, max = 90) {
@@ -723,7 +777,7 @@ export default function QBankRunner({
   const topic = getTopic(q.tags);
   const diff = difficultyStyle(q.difficulty);
   const details = splitExplanation(q.explanation);
-  const stemPresentation = getStemPresentation(q.stem);
+  const stemPresentation = getStemPresentation(q.stem, q.tags);
   const questionTitle = stemPresentation.title;
   const questionStemBody = stemPresentation.stemBody;
   const clinicalSections = stemPresentation.labSections;
@@ -933,7 +987,7 @@ export default function QBankRunner({
                 <span className="font-semibold">{subjectLabel}</span>
                 <span style={{ color: "#5f6f8d" }}>•</span>
                 <span>Question {i + 1} of {questions.length}</span>
-                <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ borderColor: "rgba(96,165,250,0.28)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" }}>{(q.tags[0] || subjectLabel).toUpperCase()}</span>
+                <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ borderColor: "rgba(96,165,250,0.28)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" }}>{(((q.tags ?? []).find((t) => typeof t === "string" && t && !/^title\s*:/i.test(t))) || subjectLabel).toUpperCase()}</span>
                 <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: diff.border, background: diff.bg, color: diff.color }}>{q.difficulty || "Intermediate"}</span>
               </div>
             </div>
@@ -1045,21 +1099,12 @@ export default function QBankRunner({
         <section className="overflow-hidden rounded-[26px] border" style={{ borderColor: "var(--qb-question-card-border)", background: "var(--qb-question-card-bg)", boxShadow: "var(--qb-question-card-shadow)" }}>
           <div className="px-4 py-4 md:px-5 md:py-5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: "rgba(96,165,250,0.24)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" }}>{(q.tags[0] || subjectLabel).toUpperCase()}</span>
+              <span className="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: "rgba(96,165,250,0.24)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" }}>{(((q.tags ?? []).find((t) => typeof t === "string" && t && !/^title\s*:/i.test(t))) || subjectLabel).toUpperCase()}</span>
               <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: isDarkTheme ? "var(--qb-panel-soft-border)" : "#e3eaf2", background: isDarkTheme ? "var(--qb-panel-soft)" : "#ffffff", color: isDarkTheme ? "var(--qb-panel-text)" : "#44586f" }}>{topic}</span>
               {q.difficulty ? <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: diff.border, background: isDarkTheme ? diff.bg : "#fff8e8", color: diff.color }}>{q.difficulty}</span> : null}
             </div>
 
-            {questionTitle ? (
-              <div className="mt-5 max-w-[1040px] rounded-[24px] border px-4 py-4 md:px-5" style={{ borderColor: "rgba(59,130,246,0.18)", background: "var(--qb-blue-soft)" }}>
-                <div className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "var(--qb-blue-text)" }}>Topic title</div>
-                <div className="mt-2 text-[20px] font-semibold leading-[1.45] tracking-[-0.02em] md:text-[26px]" style={{ color: "var(--qb-panel-title)" }}>
-                  {questionTitle}
-                </div>
-              </div>
-            ) : null}
-
-            <div className="mt-4 max-w-[1040px] whitespace-pre-wrap text-[20px] font-semibold leading-[1.7] tracking-[-0.02em] md:text-[28px]" style={{ color: "var(--qb-question-text)" }}>
+            <div className="mt-5 max-w-[1040px] whitespace-pre-wrap text-[20px] font-semibold leading-[1.7] tracking-[-0.02em] md:text-[28px]" style={{ color: "var(--qb-question-text)" }}>
               {questionStemBody}
             </div>
 
@@ -1160,6 +1205,12 @@ export default function QBankRunner({
                   <div className="mt-2 text-sm leading-7" style={{ color: isDarkTheme ? "#dce5f4" : "var(--qb-panel-text)" }}>
                     {isCorrectAnswer ? `You answered ${picked}.` : <>You answered <strong>{picked}</strong>. Correct answer: <strong>{q.answer_key}</strong>.</>}
                   </div>
+                  {questionTitle ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--qb-panel-muted)" }}>
+                      <span className="rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ borderColor: "rgba(96,165,250,0.28)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" }}>Topic</span>
+                      <span className="font-semibold" style={{ color: isDarkTheme ? "#e2e8f0" : "var(--qb-panel-title)" }}>{questionTitle}</span>
+                    </div>
+                  ) : null}
                 </div>
 
                 {details.explanation ? (

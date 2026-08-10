@@ -139,8 +139,16 @@ function normalizeOne(raw: Record<string, unknown>, fallbackDifficulty: string):
   if (/<[a-z][^>]*>/i.test(stem)) stem = htmlToPlainText(stem);
 
   const title = coerceString(raw.title ?? raw.heading ?? raw.name ?? "");
-  if (title && stem && !stem.toLowerCase().startsWith(title.toLowerCase().slice(0, 40))) {
-    stem = `${title}. ${stem}`;
+  // NOTE: we intentionally do NOT prepend the title to the stem anymore.
+  // The title is stored via tags (title:<value>) and rendered separately
+  // in the UI so it never bleeds into the question vignette.
+  if (title && stem) {
+    const lowerStem = stem.toLowerCase();
+    const lowerTitle = title.toLowerCase();
+    if (lowerStem.startsWith(lowerTitle + ".") || lowerStem.startsWith(lowerTitle + " —") || lowerStem.startsWith(lowerTitle + " -") || lowerStem.startsWith(lowerTitle + ":")) {
+      // Strip a previously-embedded title prefix so old imports also normalise cleanly.
+      stem = stem.slice(title.length).replace(/^[\s\-–—.:]+/, "").trim();
+    }
   }
 
   const choices = normalizeChoices(raw.choices ?? raw.options ?? raw.answers ?? raw.variants ?? raw.items ?? raw.opts);
@@ -184,7 +192,8 @@ function normalizeOne(raw: Record<string, unknown>, fallbackDifficulty: string):
   const system = coerceString(raw.system ?? raw.organ_system ?? raw.organSystem ?? subject ?? "");
   const topic = coerceString(raw.topic ?? raw.theme ?? raw.subtopic ?? "");
 
-  return { stem, choices, answer_key, explanation, image_path, image_caption, difficulty, tags, subject, system, topic };
+  const finalTags = title ? [`title:${title}`, ...tags] : tags;
+  return { stem, choices, answer_key, explanation, image_path, image_caption, difficulty, tags: finalTags, subject, system, topic };
 }
 
 /**
