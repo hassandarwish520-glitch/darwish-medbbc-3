@@ -484,6 +484,7 @@ function AnnotationPanelInner({
       )}
 
       <div className={`min-h-0 flex-1 overflow-y-auto overflow-x-auto p-3 md:p-5 ${darkMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`}
+           style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}
            onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>
         <div className="mx-auto flex min-h-full w-full justify-center">
           <div ref={containerRef}
@@ -507,7 +508,8 @@ function AnnotationPanelInner({
                 <div className="grid place-items-center px-6 text-center text-sm text-rose-400" style={{ height: frameHeight }}>Unable to render this HTML document. Please refresh.</div>
               ) : (
                 <iframe ref={htmlFrameRef} srcDoc={htmlSource} sandbox="allow-same-origin allow-scripts allow-forms"
-                        className="block w-full bg-white" style={{ height: htmlFrameHeight || frameHeight }} title={attachment.name} />
+                        data-annotation-html="true"
+                        className="block w-full bg-white" style={{ height: htmlFrameHeight || frameHeight, pointerEvents: "auto" }} title={attachment.name} />
               )
             ) : isVideo ? (
               <video src={attachment.href} controls className="block w-full bg-black"

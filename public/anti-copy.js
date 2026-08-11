@@ -96,7 +96,7 @@
     'body.__darwish_blur__ { filter: blur(22px) !important; transition: filter .12s; }' +
     'body { -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none; user-select:none; -webkit-touch-callout:none; }' +
     'input,textarea,[contenteditable="true"] { -webkit-user-select:text !important; user-select:text !important; }' +
-    'img,video,canvas,svg { -webkit-user-drag:none; user-drag:none; pointer-events:none; }' +
+    'img,video,canvas,svg { -webkit-user-drag:none; user-drag:none; pointer-events:auto; }' +
     /* Prevent text selection highlight showing */
     '::selection { background: transparent; }' +
     '::-moz-selection { background: transparent; }';
@@ -241,15 +241,17 @@
       }
     }, { capture: true });
 
-    // Block long-press on touch devices (prevents the "save image" popup)
+    // Block long-press "save image" popup on CANVAS / IMG only.
+    // NOTE: IFRAME is intentionally excluded — preventing default on iframe
+    // touches froze scrolling for every student on tablets / iPads / laptops.
     document.addEventListener('touchstart', function(e) {
       var el = e.target;
-      if (el && (el.tagName === 'CANVAS' || el.tagName === 'IMG' || el.tagName === 'IFRAME')) {
+      if (el && (el.tagName === 'CANVAS' || el.tagName === 'IMG')) {
         var firstTouch = e.touches && e.touches[0];
         el._touchStartX = firstTouch ? firstTouch.clientX : 0;
         el._touchStartY = firstTouch ? firstTouch.clientY : 0;
         el._longPressTimer = setTimeout(function() {
-          e.preventDefault();
+          try { e.preventDefault(); } catch (_) {}
         }, 550);
       }
     }, { passive: false });

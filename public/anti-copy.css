@@ -22,17 +22,22 @@ textarea,
   user-select:         text !important;
 }
 
-/* ── Block media dragging ── */
+/* ── Block media dragging (no pointer-events freeze — that broke
+     scrolling/interaction for PDF & HTML viewers on tablets/laptops) ── */
 img, video, canvas, svg, iframe {
   -webkit-user-drag: none;
   -khtml-user-drag:  none;
   -moz-user-drag:    none;
   -o-user-drag:      none;
   user-drag:         none;
-  pointer-events:    none;
 }
 
-/* Re-enable pointer events on interactive media (video controls) */
+/* Media must stay interactive so iframes / canvases can scroll & work
+   inside the app. Copy/drag protection remains enforced via JS listeners. */
+img, video, canvas, svg, iframe {
+  pointer-events: auto;
+}
+
 video::-webkit-media-controls { pointer-events: auto; }
 
 /* ── Block text highlight ── */
