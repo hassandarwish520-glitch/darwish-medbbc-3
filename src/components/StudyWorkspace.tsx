@@ -5,6 +5,7 @@ import BookmarkButton from "@/components/BookmarkButton";
 import LessonViewer from "@/components/LessonViewer";
 import LectureWorkspaceBoard from "@/components/LectureWorkspaceBoard";
 import { getOfflinePackage, upsertOfflinePackage, type OfflinePackageAsset } from "@/lib/offline-downloads";
+import { injectProtectionIntoHtml } from "@/lib/protected-html";
 import {
   CheckCircle2,
   Clipboard,
@@ -377,7 +378,7 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
         if (!response.ok) throw new Error("attachment-html-load-failed");
         const text = await response.text();
         if (!alive) return;
-        setHtmlSource(text);
+        setHtmlSource(injectProtectionIntoHtml(text));
         setLoadingHtml(false);
       })
       .catch(() => {

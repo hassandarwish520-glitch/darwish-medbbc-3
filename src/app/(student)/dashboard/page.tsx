@@ -177,6 +177,10 @@ export default async function DashboardPage() {
   }
 
   const touchedLessonIds = new Set(activity.map((row) => row.lesson_id).filter((value): value is string => Boolean(value)));
+  const activityOrder = new Map<string, number>();
+  activity.forEach((row, index) => {
+    if (row.lesson_id && !activityOrder.has(row.lesson_id)) activityOrder.set(row.lesson_id, index);
+  });
 
   const continueLessons: ContinueLessonRow[] = lessonsData.map((lesson) => {
     const totalQuestions = questionsByLesson.get(lesson.id)?.size ?? 0;
@@ -192,6 +196,13 @@ export default async function DashboardPage() {
       return { ...lesson, progressPercent: null, stateLabel: "In progress" };
     }
     return { ...lesson, progressPercent: null, stateLabel: "New" };
+  }).sort((a, b) => {
+    const aTouched = touchedLessonIds.has(a.id);
+    const bTouched = touchedLessonIds.has(b.id);
+    if (aTouched !== bTouched) return aTouched ? -1 : 1;
+    const aOrder = activityOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+    const bOrder = activityOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+    return aOrder - bOrder;
   });
 
   const activatedAt = typeof ctx?.profile?.activated_at === "string" ? ctx.profile.activated_at : null;

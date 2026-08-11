@@ -13,6 +13,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Eraser, Expand, Highlighter, Loader2, MoreHorizontal, MousePointer2, PencilLine, Redo2, Undo2 } from "lucide-react";
+import { injectProtectionIntoHtml } from "@/lib/protected-html";
 
 export type AnnotationTool = "navigate" | "pen" | "highlighter" | "eraser";
 export type AnnotationStroke = {
@@ -304,7 +305,7 @@ function AnnotationPanelInner({
         if (!res.ok) throw new Error("attachment-html-load-failed");
         const text = await res.text();
         if (!alive) return;
-        setHtmlSource(text);
+        setHtmlSource(injectProtectionIntoHtml(text));
         setLoadingHtml(false);
       })
       .catch(() => { if (alive) { setFailedHtml(true); setLoadingHtml(false); } });

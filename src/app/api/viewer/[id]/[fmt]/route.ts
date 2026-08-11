@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient, createClient, isAdminProfile, requireActive } from "@/lib/supabase/server";
 import { getClientIp, logSecurityEvent } from "@/lib/security-monitor";
+import { injectProtectionIntoHtml } from "@/lib/protected-html";
 
 /**
  * Sniff content-type from the storage path when the lesson.kind hint is missing
@@ -74,7 +75,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   if (fmt === "html" && lesson.kind === "html" && lesson.html_body) {
-    return new NextResponse(lesson.html_body, {
+    return new NextResponse(injectProtectionIntoHtml(lesson.html_body), {
       status: 200,
       headers: {
         "Content-Type": "text/html; charset=utf-8",
@@ -128,6 +129,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // Critical so pdf.js on mobile can fetch ranges without forcing download.
     "Accept-Ranges": "bytes",
   };
+
+  if (fmt === "html" || contentType.startsWith("text/html")) {
+    const html = await blob.text();
+    return new NextResponse(injectProtectionIntoHtml(html), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "private, no-store",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": `inline; filename="${fileBase}.html"`,
+      },
+    });
+  }
 
   // Helper for inline PDFs: browsers and the in-app pdf.js reader need the
   // range header honoured or the first paint stalls on larger files.

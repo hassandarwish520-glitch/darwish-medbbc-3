@@ -332,6 +332,17 @@ function splitQuestionTitle(stemBody: string) {
     }
   }
 
+  // Legacy imports sometimes stored the title inline without punctuation,
+  // e.g. "Tetralogy of Fallot A 3-year-old...".
+  const looseMatch = cleaned.match(/^([A-Z][A-Za-z0-9'’()/:;,\-\s]{2,140}?)(?:\s+|\n+)(?=(?:A|An|The)?\s*(?:\d{1,3}[- ]?(?:year|month|week|day)-?old\b|infant\b|neonate\b|newborn\b|toddler\b|child\b|adolescent\b|teenager\b|man\b|woman\b|male\b|female\b|patient\b|pregnant\b|primigravida\b|multigravida\b|primipara\b|nulliparous\b|previously healthy\b|previously well\b|otherwise healthy\b|previously\b|presents\b|comes\b|is brought\b|is admitted\b|arrives\b|develops\b|returns\b|attends\b|complains\b|reports\b|has been\b))/i);
+  if (looseMatch) {
+    const title = looseMatch[1].replace(/[.:!?—–-]+$/g, "").trim();
+    const remainder = cleaned.slice(looseMatch[1].length).trim();
+    if (looksLikeTitleCandidate(title) && SCENARIO_START_RE.test(remainder)) {
+      return { title, stemBody: remainder };
+    }
+  }
+
   return { title: null as string | null, stemBody: cleaned };
 }
 
@@ -1100,7 +1111,6 @@ export default function QBankRunner({
           <div className="px-4 py-4 md:px-5 md:py-5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: "rgba(96,165,250,0.24)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" }}>{(((q.tags ?? []).find((t) => typeof t === "string" && t && !/^title\s*:/i.test(t))) || subjectLabel).toUpperCase()}</span>
-              <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: isDarkTheme ? "var(--qb-panel-soft-border)" : "#e3eaf2", background: isDarkTheme ? "var(--qb-panel-soft)" : "#ffffff", color: isDarkTheme ? "var(--qb-panel-text)" : "#44586f" }}>{topic}</span>
               {q.difficulty ? <span className="rounded-full border px-3 py-1 text-[11px] font-medium" style={{ borderColor: diff.border, background: isDarkTheme ? diff.bg : "#fff8e8", color: diff.color }}>{q.difficulty}</span> : null}
             </div>
 
@@ -1206,9 +1216,9 @@ export default function QBankRunner({
                     {isCorrectAnswer ? `You answered ${picked}.` : <>You answered <strong>{picked}</strong>. Correct answer: <strong>{q.answer_key}</strong>.</>}
                   </div>
                   {questionTitle ? (
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--qb-panel-muted)" }}>
-                      <span className="rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ borderColor: "rgba(96,165,250,0.28)", background: "var(--qb-blue-soft)", color: "var(--qb-blue-text)" }}>Topic</span>
-                      <span className="font-semibold" style={{ color: isDarkTheme ? "#e2e8f0" : "var(--qb-panel-title)" }}>{questionTitle}</span>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]" style={{ color: "var(--qb-panel-muted)" }}>
+                      <span className="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ borderColor: "rgba(96,165,250,0.22)", background: "transparent", color: "var(--qb-blue-text)" }}>Topic</span>
+                      <span className="font-medium" style={{ color: isDarkTheme ? "#cbd5e1" : "var(--qb-panel-title)" }}>{questionTitle}</span>
                     </div>
                   ) : null}
                 </div>

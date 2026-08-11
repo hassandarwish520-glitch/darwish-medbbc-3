@@ -59,6 +59,12 @@ type AttemptRow = {
   created_at: string;
 };
 
+type BlockAttemptRow = {
+  question_id: string | null;
+  correct: boolean;
+  questions?: { lesson_id?: string | null } | null;
+};
+
 type FlashcardReviewRow = {
   flashcard_id: string;
   due_at: string;
@@ -202,6 +208,9 @@ export default async function SubjectDashboardPage({
   const Icon = getSubjectIconName(detail.subject.title);
   const notesDocuments = detail.documents.filter((doc) => !isActiveQbankDocument(doc as SubjectLesson));
   const activeQbankDocuments = detail.documents.filter((doc) => isActiveQbankDocument(doc as SubjectLesson));
+  const activeBlockIds = new Set(detail.activeBlocks.map((block) => block.id));
+  const officialBlockIds = new Set(detail.officialBlocks.map((block) => block.id));
+  const practicePoolSources = detail.qbankSources.filter((src) => !activeBlockIds.has(src.id) && !officialBlockIds.has(src.id));
 
   const qbankConfigHref = `/qbank/configure?subject=${encodeURIComponent(detail.subject.title)}&exam=${encodeURIComponent(exam)}&returnTo=${encodeURIComponent(`/subjects/${detail.subject.slug}?exam=${exam}`)}`;
   const randomQuizHref = `/qbank/configure?subject=${encodeURIComponent(detail.subject.title)}&exam=${encodeURIComponent(exam)}&mode=random&returnTo=${encodeURIComponent(`/subjects/${detail.subject.slug}?exam=${exam}`)}`;
@@ -237,6 +246,16 @@ export default async function SubjectDashboardPage({
   const sessions = (sessionsRes.data ?? []) as QuizSession[];
   const todayAttempts = (attemptsRes.data ?? []) as AttemptRow[];
   const flashcardReviews = (flashcardReviewsRes.data ?? []) as FlashcardReviewRow[];
+  const blockLessonIds = [...new Set(detail.qbankSources.map((src) => src.id).filter(Boolean))];
+  const blockLessonIdSet = new Set(blockLessonIds);
+  const { data: blockAttemptRowsData } = blockLessonIds.length
+    ? await admin
+        .from("question_attempts")
+        .select("question_id,correct,questions(lesson_id)")
+        .eq("user_id", ctx.user.id)
+        .order("created_at", { ascending: false })
+        .limit(5000)
+    : { data: [] as BlockAttemptRow[] };
 
   // ── Today stats ────────────────────────────────────────────────────────────
   const todayCorrect = todayAttempts.filter((a) => a.correct).length;
@@ -255,10 +274,37 @@ export default async function SubjectDashboardPage({
 
   // ── Overall subject progress ───────────────────────────────────────────────
   const completeSessions = sessions.filter((s) => s.status === "complete");
-  const totalQuestionsAttempted = sessions.reduce((sum, s) => sum + Math.min(s.current_index, s.question_count), 0);
+  const attemptedByLesson = new Map<string, Set<string>>();
+  const correctByLesson = new Map<string, Set<string>>();
+  for (const row of (blockAttemptRowsData ?? []) as BlockAttemptRow[]) {
+    const lessonId = row.questions?.lesson_id ?? null;
+    const questionId = row.question_id ?? null;
+    if (!lessonId || !questionId || !blockLessonIdSet.has(lessonId)) continue;
+    const attemptedSet = attemptedByLesson.get(lessonId) ?? new Set<string>();
+    attemptedSet.add(questionId);
+    attemptedByLesson.set(lessonId, attemptedSet);
+    if (row.correct) {
+      const correctSet = correctByLesson.get(lessonId) ?? new Set<string>();
+      correctSet.add(questionId);
+      correctByLesson.set(lessonId, correctSet);
+    }
+  }
+  const allAttemptedQuestionIds = new Set<string>();
+  for (const set of attemptedByLesson.values()) {
+    set.forEach((id) => allAttemptedQuestionIds.add(id));
+  }
   const subjectProgressPct = detail.qbankQuestionCount > 0
-    ? Math.min(100, Math.round((totalQuestionsAttempted / (detail.qbankQuestionCount * 2)) * 100))
+    ? Math.min(100, Math.round((allAttemptedQuestionIds.size / detail.qbankQuestionCount) * 100))
     : 0;
+
+  function getBlockMetrics(blockId: string, questionCount: number) {
+    const attemptedCount = attemptedByLesson.get(blockId)?.size ?? 0;
+    const correctCount = correctByLesson.get(blockId)?.size ?? 0;
+    const displayPct = questionCount > 0 ? Math.min(100, Math.round((attemptedCount / questionCount) * 100)) : 0;
+    const lastScore = attemptedCount > 0 ? Math.round((correctCount / attemptedCount) * 100) : null;
+    const blockStatus: "new" | "suspended" | "complete" = attemptedCount <= 0 ? "new" : attemptedCount >= questionCount ? "complete" : "suspended";
+    return { attemptedCount, correctCount, displayPct, lastScore, blockStatus };
+  }
 
   // ── Flashcard SRS stats ────────────────────────────────────────────────────
   const now = new Date();
@@ -520,7 +566,7 @@ export default async function SubjectDashboardPage({
         )}
 
         {/* Practice Pool — random-style sessions (separate section) */}
-        {(detail.qbankSources.length > detail.officialBlocks.length || activeQbankDocuments.length > 0) && (
+        {(practicePoolSources.length > 0 || activeQbankDocuments.length > 0) && (
           <div className="mt-6">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -536,14 +582,8 @@ export default async function SubjectDashboardPage({
               style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" }}
             >
               {/* Question Pools (from questions table) */}
-              {detail.qbankSources.map((src, index) => {
-                const isComplete = completeSessions.length > 0 && index < completeSessions.length;
-                const sessionForBlock = completeSessions[index] || suspendedSession;
-                const blockStatus = isComplete ? "complete" : hasSuspendedSession && index === 0 ? "suspended" : "new";
-                const displayPct = isComplete ? 100 : blockStatus === "suspended" && sessionForBlock
-                  ? Math.min(100, Math.round(((sessionForBlock.current_index) / Math.max(sessionForBlock.question_count, 1)) * 100))
-                  : 0;
-                const lastScore = sessionForBlock?.score_pct != null ? Math.round(sessionForBlock.score_pct) : null;
+              {practicePoolSources.map((src, index) => {
+                const { blockStatus, displayPct, lastScore } = getBlockMetrics(src.id, src.questionCount);
                 const estMins = Math.round(src.questionCount * 1.5);
                 const diffLabel = src.questionCount > 30 ? "Hard" : src.questionCount > 15 ? "Medium" : "Easy";
 
