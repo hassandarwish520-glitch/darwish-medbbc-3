@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient, requireActive } from "@/lib/supabase/server";
 import { normalizeQuestions } from "@/lib/question-normalizer";
 
+function normalizeStem(value?: string | null) {
+  return (value || "")
+    .toLowerCase()
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 512);
+}
+
+function dedupeQuestions<T extends { stem?: string | null; id: string }>(questions: T[]) {
+  const seen = new Set<string>();
+  const deduped: T[] = [];
+  for (const question of questions) {
+    const key = normalizeStem(question.stem) || `id:${question.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(question);
+  }
+  return deduped;
+}
+
 export async function GET(req: NextRequest) {
   const ctx = await requireActive();
   if (!ctx) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -77,7 +98,7 @@ export async function GET(req: NextRequest) {
   };
 
   if (block) {
-    return NextResponse.json({ questions: normalizedPool });
+    return NextResponse.json({ questions: dedupeQuestions(normalizedPool) });
   }
 
   let eligibleQuestionIds: Set<string> | null = null;
@@ -115,11 +136,11 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const filteredPool = normalizedPool.filter((q: any) => {
+  const filteredPool = dedupeQuestions(normalizedPool.filter((q: any) => {
     if (!matchesSubject(q) || !matchesExam(q)) return false;
     if (eligibleQuestionIds && !eligibleQuestionIds.has(q.id)) return false;
     return true;
-  });
+  }));
 
   if (!block) {
     for (let k = filteredPool.length - 1; k > 0; k--) {

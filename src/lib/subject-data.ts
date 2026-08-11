@@ -135,6 +135,47 @@ function subjectTitleMatches(assignedSubject: string, targetTitle: string): bool
   return assignedSubject === targetTitle || assignedSubject.toLowerCase() === targetTitle.toLowerCase();
 }
 
+function normalizeQuestionStem(value?: string | null) {
+  return (value || "")
+    .toLowerCase()
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 512);
+}
+
+function blockSignalText(lesson: LessonRow | undefined, sourceTitle: string, sourceTags: string[] = []) {
+  const meta = lesson?.meta ?? {};
+  return [
+    sourceTitle,
+    lesson?.title ?? "",
+    typeof meta.subject === "string" ? meta.subject : "",
+    typeof meta.section === "string" ? meta.section : "",
+    typeof meta.block_kind === "string" ? meta.block_kind : "",
+    typeof meta.description === "string" ? meta.description : "",
+    typeof meta.notes === "string" ? meta.notes : "",
+    typeof meta.original_name === "string" ? meta.original_name : "",
+    ...sourceTags,
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
+}
+
+function isActiveBlockSource(lesson: LessonRow | undefined, sourceTitle: string, sourceTags: string[] = []) {
+  if (Boolean(lesson?.meta?.is_active_qbank) || lesson?.meta?.block_kind === "active") return true;
+  const haystack = blockSignalText(lesson, sourceTitle, sourceTags);
+  return /(active\s*qbank|active\s*qe\b|qe\s*active|active\s*questions?)/i.test(haystack);
+}
+
+function isOfficialBlockSource(lesson: LessonRow | undefined, sourceTitle: string, sourceTags: string[] = [], sourceId = "") {
+  if (isActiveBlockSource(lesson, sourceTitle, sourceTags)) return false;
+  if (Boolean(lesson?.meta?.is_official_block) || lesson?.meta?.fixed_block === true || lesson?.meta?.block_kind === "official") return true;
+  if (sourceId && !sourceId.startsWith("pool-")) return true;
+  const haystack = blockSignalText(lesson, sourceTitle, sourceTags);
+  return /(official\s*fixed\s*block|fixed\s*qbank\s*block|fixed\s*block|ifom\s*block|cardio_block_|official\b)/i.test(haystack);
+}
+
 function matchesSubject(subjectTitle: string, value: string, tags?: string[] | null) {
   const normalizedSubject = normalizeSubjectTitle(subjectTitle);
   if (tagsMatchSubject(normalizedSubject, tags)) return true;
@@ -218,10 +259,22 @@ export async function getSubjectOverviews(exam = "IFOM_CSE"): Promise<SubjectOve
     });
     const lessonName = new Map(lessons.map((lesson) => [lesson.id, lesson.title]));
     const sourceMap = new Map<string, { id: string; title: string; questionCount: number }>();
+    const sourceStemSeen = new Map<string, Set<string>>();
+    const sourceTagsMap = new Map<string, Set<string>>();
 
     for (const question of relevantQuestions) {
       const key = question.lesson_id || `pool-${subject.slug}`;
       const title = question.lesson_id ? lessonName.get(question.lesson_id) || subject.title : `${subject.title} Practice Pool`;
+      const stemKey = normalizeQuestionStem(question.stem);
+      const seen = sourceStemSeen.get(key) ?? new Set<string>();
+      if (stemKey) {
+        if (seen.has(stemKey)) continue;
+        seen.add(stemKey);
+        sourceStemSeen.set(key, seen);
+      }
+      const tagSet = sourceTagsMap.get(key) ?? new Set<string>();
+      (question.tags ?? []).forEach((tag) => tagSet.add(tag));
+      sourceTagsMap.set(key, tagSet);
       const existing = sourceMap.get(key) || { id: key, title, questionCount: 0 };
       existing.questionCount += 1;
       sourceMap.set(key, existing);
@@ -229,18 +282,14 @@ export async function getSubjectOverviews(exam = "IFOM_CSE"): Promise<SubjectOve
 
     const qbankSources = [...sourceMap.values()].sort((a, b) => b.questionCount - a.questionCount || a.title.localeCompare(b.title));
     const keyPoints = flashcards.filter((card) => matchesSubject(subject.title, flashcardText(card), card.tags));
-    const isActiveLesson = (lesson: LessonRow | undefined) =>
-      Boolean(lesson?.meta?.is_active_qbank) || lesson?.meta?.block_kind === "active";
-    const isOfficialLesson = (lesson: LessonRow | undefined) =>
-      !isActiveLesson(lesson) && (Boolean(lesson?.meta?.is_official_block) || lesson?.meta?.fixed_block === true || lesson?.meta?.block_kind === "official");
 
     const activeBlocks = qbankSources
-      .filter((src) => isActiveLesson(lessons.find((l) => l.id === src.id)))
+      .filter((src) => isActiveBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())]))
       .map((src, idx) => ({ id: src.id, title: src.title, questionCount: src.questionCount, blockNumber: idx + 1 }));
     const activeBlockQuestionTotal = activeBlocks.reduce((acc, b) => acc + b.questionCount, 0);
 
     const officialBlocks = qbankSources
-      .filter((src) => isOfficialLesson(lessons.find((l) => l.id === src.id)))
+      .filter((src) => isOfficialBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())], src.id))
       .map((src, idx) => ({ id: src.id, title: src.title, questionCount: src.questionCount, blockNumber: idx + 1 }));
     const officialBlockQuestionTotal = officialBlocks.reduce((acc, b) => acc + b.questionCount, 0);
     const practicePoolCount = Math.max(0, qbankSources.length - officialBlocks.length - activeBlocks.length);
@@ -281,13 +330,31 @@ export async function getSubjectDetail(slug: string, exam = "IFOM_CSE"): Promise
     return type !== "video" && documentKinds.has(lesson.kind) && subjectTitleMatches(assignedSubject, subject.title);
   });
 
-  const relevantQuestions = questions.filter((question) => matchesSubject(subject.title, questionText(question), question.tags));
+  const lessonMap = new Map(lessons.map((lesson) => [lesson.id, lesson] as const));
+  const relevantQuestions = questions.filter((question) => {
+    const lesson = question.lesson_id ? lessonMap.get(question.lesson_id) : null;
+    const assignedSubject = lesson ? lessonAssignedSubject(lesson) : "";
+    if (assignedSubject) return subjectTitleMatches(assignedSubject, subject.title);
+    return matchesSubject(subject.title, questionText(question), question.tags);
+  });
   const lessonName = new Map(lessons.map((lesson) => [lesson.id, lesson.title]));
   const sourceMap = new Map<string, { id: string; title: string; questionCount: number }>();
+  const sourceStemSeen = new Map<string, Set<string>>();
+  const sourceTagsMap = new Map<string, Set<string>>();
 
   for (const question of relevantQuestions) {
     const key = question.lesson_id || `pool-${subject.slug}`;
     const title = question.lesson_id ? lessonName.get(question.lesson_id) || subject.title : `${subject.title} Practice Pool`;
+    const stemKey = normalizeQuestionStem(question.stem);
+    const seen = sourceStemSeen.get(key) ?? new Set<string>();
+    if (stemKey) {
+      if (seen.has(stemKey)) continue;
+      seen.add(stemKey);
+      sourceStemSeen.set(key, seen);
+    }
+    const tagSet = sourceTagsMap.get(key) ?? new Set<string>();
+    (question.tags ?? []).forEach((tag) => tagSet.add(tag));
+    sourceTagsMap.set(key, tagSet);
     const existing = sourceMap.get(key) || { id: key, title, questionCount: 0 };
     existing.questionCount += 1;
     sourceMap.set(key, existing);
@@ -296,18 +363,13 @@ export async function getSubjectDetail(slug: string, exam = "IFOM_CSE"): Promise
   const keyPoints = flashcards.filter((card) => matchesSubject(subject.title, flashcardText(card), card.tags));
   const qbankSources = [...sourceMap.values()].sort((a, b) => b.questionCount - a.questionCount || a.title.localeCompare(b.title));
 
-  const isActiveLessonDetail = (lesson: LessonRow | undefined) =>
-    Boolean(lesson?.meta?.is_active_qbank) || lesson?.meta?.block_kind === "active";
-  const isOfficialLessonDetail = (lesson: LessonRow | undefined) =>
-    !isActiveLessonDetail(lesson) && (Boolean(lesson?.meta?.is_official_block) || lesson?.meta?.fixed_block === true || lesson?.meta?.block_kind === "official");
-
   const activeBlocks = qbankSources
-    .filter((src) => isActiveLessonDetail(lessons.find((l) => l.id === src.id)))
+    .filter((src) => isActiveBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())]))
     .map((src, idx) => ({ id: src.id, title: src.title, questionCount: src.questionCount, blockNumber: idx + 1 }));
   const activeBlockQuestionTotal = activeBlocks.reduce((acc, b) => acc + b.questionCount, 0);
 
   const officialBlocks = qbankSources
-    .filter((src) => isOfficialLessonDetail(lessons.find((l) => l.id === src.id)))
+    .filter((src) => isOfficialBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())], src.id))
     .map((src, idx) => ({ id: src.id, title: src.title, questionCount: src.questionCount, blockNumber: idx + 1 }));
   const officialBlockQuestionTotal = officialBlocks.reduce((acc, b) => acc + b.questionCount, 0);
   const practicePoolCount = Math.max(0, qbankSources.length - officialBlocks.length - activeBlocks.length);
