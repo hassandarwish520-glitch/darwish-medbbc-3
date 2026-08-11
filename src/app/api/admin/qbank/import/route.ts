@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
   const extraTags = tagsRaw.split(",").map((t) => t.trim()).filter(Boolean);
   const lessonIdRaw = String(fd.get("lesson_id") || "").trim();
   const lesson_id = lessonIdRaw || null;
+  const dedupeFlag = String(fd.get("dedupe") || "") === "1";
 
   if (!file) return NextResponse.json({ error: "file required" }, { status: 400 });
 
@@ -125,14 +126,65 @@ export async function POST(req: NextRequest) {
     };
   });
 
-  const { data: inserted, error } = await admin.from("questions").insert(rows).select("id");
+  const normalizeStem = (value: string) =>
+    (value || "")
+      .toLowerCase()
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 512);
+
+  let rowsToInsert = rows;
+  let duplicateSkipped = 0;
+
+  if (dedupeFlag) {
+    const seen = new Set<string>();
+    const withinBatch: typeof rows = [];
+    for (const row of rows) {
+      const key = normalizeStem(row.stem);
+      if (!key) continue;
+      if (seen.has(key)) { duplicateSkipped += 1; continue; }
+      seen.add(key);
+      withinBatch.push(row);
+    }
+
+    if (lesson_id) {
+      const { data: existing } = await admin
+        .from("questions")
+        .select("stem")
+        .eq("lesson_id", lesson_id);
+      const existingKeys = new Set((existing ?? []).map((q: { stem: string }) => normalizeStem(q.stem)));
+      const filtered: typeof rows = [];
+      for (const row of withinBatch) {
+        const key = normalizeStem(row.stem);
+        if (existingKeys.has(key)) { duplicateSkipped += 1; continue; }
+        filtered.push(row);
+      }
+      rowsToInsert = filtered;
+    } else {
+      rowsToInsert = withinBatch;
+    }
+  }
+
+  if (!rowsToInsert.length) {
+    revalidateTag("subject-base-data");
+    return NextResponse.json({
+      imported: 0,
+      total: rows.length,
+      duplicates_skipped: duplicateSkipped,
+      format: ext || "auto",
+    });
+  }
+
+  const { data: inserted, error } = await admin.from("questions").insert(rowsToInsert).select("id");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   revalidateTag("subject-base-data");
 
   return NextResponse.json({
-    imported: inserted?.length ?? rows.length,
+    imported: inserted?.length ?? rowsToInsert.length,
     total: rows.length,
+    duplicates_skipped: duplicateSkipped,
     format: ext || "auto",
   });
 }

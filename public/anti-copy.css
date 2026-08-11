@@ -22,22 +22,30 @@ textarea,
   user-select:         text !important;
 }
 
-/* ── Block media dragging (no pointer-events freeze — that broke
-     scrolling/interaction for PDF & HTML viewers on tablets/laptops) ── */
+/* ── Block media dragging AND pointer interaction globally.
+     This is the strong copy-protection layer the app relies on. ── */
 img, video, canvas, svg, iframe {
   -webkit-user-drag: none;
   -khtml-user-drag:  none;
   -moz-user-drag:    none;
   -o-user-drag:      none;
   user-drag:         none;
+  pointer-events:    none;
 }
 
-/* Media must stay interactive so iframes / canvases can scroll & work
-   inside the app. Copy/drag protection remains enforced via JS listeners. */
-img, video, canvas, svg, iframe {
+/* Re-enable pointer events for VIEWERS ONLY (scoped, opt-in).
+   Any component that must remain scrollable/interactive on tablets/laptops
+   opts in by adding class="medbbc-viewer" or data-medbbc-viewer on its
+   scroll container. This lets students read PDFs / HTML lessons without
+   opening a hole in the site-wide copy protection. */
+.medbbc-viewer,
+.medbbc-viewer *,
+[data-medbbc-viewer],
+[data-medbbc-viewer] * {
   pointer-events: auto;
 }
 
+/* Video controls must remain reachable even outside viewer scopes. */
 video::-webkit-media-controls { pointer-events: auto; }
 
 /* ── Block text highlight ── */

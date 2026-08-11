@@ -96,7 +96,8 @@
     'body.__darwish_blur__ { filter: blur(22px) !important; transition: filter .12s; }' +
     'body { -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none; user-select:none; -webkit-touch-callout:none; }' +
     'input,textarea,[contenteditable="true"] { -webkit-user-select:text !important; user-select:text !important; }' +
-    'img,video,canvas,svg { -webkit-user-drag:none; user-drag:none; pointer-events:auto; }' +
+    'img,video,canvas,svg { -webkit-user-drag:none; user-drag:none; pointer-events:none; }' +
+    '.medbbc-viewer, .medbbc-viewer *, [data-medbbc-viewer], [data-medbbc-viewer] * { pointer-events:auto !important; }' +
     /* Prevent text selection highlight showing */
     '::selection { background: transparent; }' +
     '::-moz-selection { background: transparent; }';

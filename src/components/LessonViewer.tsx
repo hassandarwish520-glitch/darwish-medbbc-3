@@ -115,7 +115,7 @@ function PptxViewer({ id }: { id: string }) {
   }, [id]);
 
   return (
-    <div className="card protected-view overflow-hidden flex flex-col" style={{ minHeight: "80vh" }}>
+    <div data-medbbc-viewer="html" className="medbbc-viewer card protected-view overflow-hidden flex flex-col" style={{ minHeight: "80vh" }}>
       <div className="flex items-center gap-2 border-b border-ink-700 bg-ink-900 px-4 py-2.5 select-none">
         <Presentation className="h-4 w-4 text-cyan-400 flex-shrink-0" />
         <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Presentation</span>
@@ -404,7 +404,7 @@ function PdfjsReader({ src }: { id: string; src: string }) {
   }
 
   return (
-    <div ref={wrapRef} tabIndex={0} className="relative h-full min-h-0 w-full overflow-y-auto overflow-x-auto bg-[#0b1322] select-none">
+    <div ref={wrapRef} tabIndex={0} data-medbbc-viewer="pdf" className="medbbc-viewer relative h-full min-h-0 w-full overflow-y-auto overflow-x-auto bg-[#0b1322] select-none">
       {/* Floating controls */}
       <div className="sticky top-2 z-10 mx-auto flex w-fit items-center gap-1 rounded-full border border-ink-700 bg-ink-900/95 px-2 py-1 text-xs shadow-lg backdrop-blur">
         <button className="btn-ghost h-7 w-7 p-0 grid place-items-center" onClick={prevPage} disabled={currentPage <= 1 || loading} title="Previous">

@@ -117,6 +117,25 @@ async function downloadExport(format: ExportFormat, ids?: string[]) {
 }
 
 export default function QBankAdmin({ initial, lessons }: { initial: Q[]; lessons: LessonOption[] }) {
+  const [dupBusy, setDupBusy] = useState(false);
+  const [dupMsg, setDupMsg] = useState<string | null>(null);
+
+  async function bulkDeleteDuplicates() {
+    if (!confirm("Scan all questions and delete exact duplicates (same stem within the same lesson)? This cannot be undone.")) return;
+    setDupBusy(true);
+    setDupMsg(null);
+    try {
+      const r = await fetch("/api/admin/qbank/dedupe", { method: "POST" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || "Failed to dedupe");
+      setDupMsg(`Removed ${j.removed ?? 0} duplicates (kept ${j.kept ?? 0}).`);
+    } catch (e: unknown) {
+      setDupMsg(e instanceof Error ? e.message : "Failed to dedupe");
+    } finally {
+      setDupBusy(false);
+    }
+  }
+
   const [rows, setRows] = useState<Q[]>(initial);
   const [open, setOpen] = useState<null | "add" | "import" | "export">(null);
   const [exportBusy, setExportBusy] = useState<ExportFormat | null>(null);
@@ -411,6 +430,8 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
   const [blocksSubject, setBlocksSubject] = useState("");
   const [blocksTitle, setBlocksTitle] = useState("");
   const [blocksOfficial, setBlocksOfficial] = useState(true);
+  const [blocksActive, setBlocksActive] = useState(false);
+  const [blocksDedupe, setBlocksDedupe] = useState(true);
   const [blocksDifficulty, setBlocksDifficulty] = useState("intermediate");
   const [blocksBusy, setBlocksBusy] = useState(false);
   const [blocksResult, setBlocksResult] = useState<{ ok: true; name: string; count: number } | { ok: false; msg: string } | null>(null);
@@ -430,9 +451,10 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
           subject: blocksSubject.trim(),
           section: "qbank",
           skip_auto_import: true,
-          is_official_block: blocksOfficial,
-          fixed_block: blocksOfficial,
-          block_kind: blocksOfficial ? "official" : "practice",
+          is_official_block: blocksOfficial && !blocksActive,
+          fixed_block: blocksOfficial && !blocksActive,
+          block_kind: blocksActive ? "active" : (blocksOfficial ? "official" : "practice"),
+          is_active_qbank: blocksActive,
         }),
       );
 
@@ -461,7 +483,11 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
       const importFd = new FormData();
       importFd.set("file", blockFile);
       importFd.set("difficulty", blocksDifficulty);
-      importFd.set("tags", [blocksSubject.trim(), blocksTitle.trim(), blocksOfficial ? "Official Fixed Block" : "Practice Pool"].join(", "));
+      const categoryTag = blocksActive
+        ? "Active QBank"
+        : (blocksOfficial ? "Official Fixed Block" : "Practice Pool");
+      importFd.set("tags", [blocksSubject.trim(), blocksTitle.trim(), categoryTag].join(", "));
+      if (blocksDedupe) importFd.set("dedupe", "1");
       importFd.set("subject", blocksSubject.trim());
       if (lessonId) importFd.set("lesson_id", lessonId);
 
@@ -579,15 +605,42 @@ function ImportModal({ lessons, onClose, onDone }: { lessons: LessonOption[]; on
               </div>
               <div className="rounded-xl border border-ink-700 bg-ink-950/50 p-3">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand">Step 2</div>
-                <label className="label mt-2">Fixed official block</label>
+                <label className="label mt-2">Placement</label>
                 <label className="mt-2 flex items-center gap-3 rounded-xl border border-ink-700 px-3 py-3 text-sm text-slate-200">
                   <input
                     type="checkbox"
-                    checked={blocksOfficial}
-                    onChange={(e) => setBlocksOfficial(e.target.checked)}
+                    checked={blocksActive}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      setBlocksActive(v);
+                      if (v) setBlocksOfficial(false);
+                    }}
                     className="h-4 w-4"
                   />
-                  <span>{blocksOfficial ? "Yes — show it in Official Fixed Blocks" : "No — keep it as a practice-pool source"}</span>
+                  <span>{blocksActive ? "Active QBank — show it in its own Active section" : "Not an Active QBank file"}</span>
+                </label>
+                <label className="mt-2 flex items-center gap-3 rounded-xl border border-ink-700 px-3 py-3 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={blocksOfficial && !blocksActive}
+                    disabled={blocksActive}
+                    onChange={(e) => setBlocksOfficial(e.target.checked)}
+                    className="h-4 w-4 disabled:opacity-40"
+                  />
+                  <span>{blocksActive
+                    ? "Disabled while Active QBank is on"
+                    : blocksOfficial
+                      ? "Yes — show it in Official Fixed Blocks"
+                      : "No — keep it as a practice-pool source"}</span>
+                </label>
+                <label className="mt-2 flex items-center gap-3 rounded-xl border border-ink-700 px-3 py-3 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={blocksDedupe}
+                    onChange={(e) => setBlocksDedupe(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  <span>{blocksDedupe ? "Deduplicate identical questions on import" : "Import all rows even if duplicated"}</span>
                 </label>
               </div>
               <div className="rounded-xl border border-ink-700 bg-ink-950/50 p-3">

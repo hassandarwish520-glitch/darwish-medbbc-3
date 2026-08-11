@@ -483,7 +483,8 @@ function AnnotationPanelInner({
         </div>
       )}
 
-      <div className={`min-h-0 flex-1 overflow-y-auto overflow-x-auto p-3 md:p-5 ${darkMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`}
+      <div className={`medbbc-viewer min-h-0 flex-1 overflow-y-auto overflow-x-auto p-3 md:p-5 ${darkMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`}
+           data-medbbc-viewer="annotation"
            style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}
            onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>
         <div className="mx-auto flex min-h-full w-full justify-center">

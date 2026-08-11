@@ -440,6 +440,43 @@ export default async function SubjectDashboardPage({
           </Link>
         </div>
 
+        {/* Active QBank — its own dedicated section */}
+        {detail.activeBlocks && detail.activeBlocks.length > 0 && (
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider" style={{ background: "rgba(16,185,129,0.20)", color: "#6ee7b7" }}>Active</span>
+                <div className="text-xs uppercase tracking-wider text-emerald-100 font-semibold">Active QBank Files</div>
+              </div>
+              <div className="text-xs text-emerald-200/80">{detail.activeBlocks.length} files · {detail.activeBlockQuestionTotal} questions</div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {detail.activeBlocks.map((block) => (
+                <Link
+                  key={block.id}
+                  href={`/qbank?block=${block.id}&blockTitle=${encodeURIComponent(block.title)}&subject=${encodeURIComponent(detail.subject.title)}&exam=${encodeURIComponent(detail.exam)}&returnTo=${encodeURIComponent(`/subjects/${detail.subject.slug}?exam=${detail.exam}`)}`}
+                  className="group rounded-xl border border-emerald-400/25 bg-ink-950/40 p-3 hover:border-emerald-400/60 transition"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold" style={{ background: "rgba(16,185,129,0.25)", color: "#6ee7b7" }}>{block.blockNumber}</span>
+                    <span className="text-sm font-semibold text-white truncate flex-1">{block.title}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-center">
+                    <div className="rounded-lg bg-ink-950/60 py-1.5">
+                      <div className="text-base font-bold text-white">{block.questionCount}</div>
+                      <div className="text-[10px] uppercase tracking-wider text-slate-500">Questions</div>
+                    </div>
+                    <div className="rounded-lg bg-ink-950/60 py-1.5">
+                      <div className="text-base font-bold text-emerald-300">~{Math.round(block.questionCount * 1.5)}m</div>
+                      <div className="text-[10px] uppercase tracking-wider text-slate-500">Duration</div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Official Fixed Blocks — distinct from practice pool */}
         {detail.officialBlocks.length > 0 && (
           <div className="mt-6">
