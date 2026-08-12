@@ -208,7 +208,7 @@ export default async function FlashcardsHome() {
               <div className="mb-3 flex items-center gap-2">
                 <Sparkles className="h-4 w-4" style={{ color: "var(--c-text-4)" }} />
                 <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--c-text-3)" }}>
-                  Personal / Standalone
+                  Standalone / Shared
                 </h2>
               </div>
               <div className="grid gap-2 md:grid-cols-2">
@@ -219,7 +219,7 @@ export default async function FlashcardsHome() {
                     <div className="grid h-9 w-9 place-items-center rounded-xl shrink-0" style={{ background: "var(--c-elevated)", color: "var(--c-text-3)" }}>
                       <Timer className="h-4 w-4" />
                     </div>
-                    <span className="text-sm font-medium" style={{ color: "var(--c-text-1)" }}>Standalone cards</span>
+                    <span className="text-sm font-medium" style={{ color: "var(--c-text-1)" }}>Standalone + admin shared cards</span>
                   </div>
                   <div className="flex items-center gap-2" style={{ color: "var(--c-text-3)" }}>
                     <span className="text-sm">{orphanCount} cards</span>
