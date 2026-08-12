@@ -15,6 +15,8 @@ type LessonMeta = {
   document_path?: string;
   document_name?: string;
   document_mime?: string;
+  original_name?: string;
+  file_type?: string;
   url?: string;
   telegram_links?: unknown;
   quality_links?: unknown;
@@ -273,6 +275,10 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
   }
 
   const displayTitle = prettifyLessonTitle(lesson.title);
+  const inferredAttachmentMime =
+    meta?.document_mime ||
+    (meta?.file_type === "image" ? "image/*" : lesson.kind === "pdf" ? "application/pdf" : lesson.kind === "html" ? "text/html" : "");
+  const inferredAttachmentName = meta?.document_name || meta?.original_name || displayTitle || "Attached file";
 
   return (
     <div className="page-shell max-w-5xl pb-10">
@@ -328,8 +334,8 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
           subjectSlug={typeof (lesson.meta as Record<string, unknown> | null)?.subject === "string" ? ((lesson.meta as Record<string, unknown>).subject as string) : null}
           externalAttachment={meta?.document_path ? {
             href: assetHref(meta.document_path),
-            mime: meta.document_mime || "",
-            name: meta.document_name || "Attached file",
+            mime: inferredAttachmentMime,
+            name: inferredAttachmentName,
           } : null}
           sessionUrl={sessionUrl || null}
           sessionEmbedUrl={sessionEmbedUrl}

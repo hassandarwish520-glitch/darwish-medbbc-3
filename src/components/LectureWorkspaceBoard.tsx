@@ -27,6 +27,22 @@ function inferCategory(lessonKind: string, title: string, hasVideo: boolean): Ca
   return "documents";
 }
 
+function inferAttachmentBlock(url: string, name?: string | null): Pick<Block, "type" | "url" | "name" | "caption"> {
+  const lowerUrl = url.toLowerCase();
+  const lowerName = (name ?? "").toLowerCase();
+  if (/\.pdf(?:$|[?#])/i.test(lowerUrl) || lowerName.endsWith(".pdf")) {
+    return { type: "pdf", url, name: name ?? "Lecture PDF" };
+  }
+  if (
+    /\.(png|jpe?g|gif|webp|svg)(?:$|[?#])/i.test(lowerUrl) ||
+    /\.(png|jpe?g|gif|webp|svg)$/i.test(lowerName) ||
+    /\/image(?:$|[/?#])/i.test(lowerUrl)
+  ) {
+    return { type: "image", url, caption: name ?? "Lecture image" };
+  }
+  return { type: "attachment", url, name: name ?? "Lecture attachment" };
+}
+
 function makeInitialBlocks(args: {
   lessonTitle: string;
   lessonKind: string;
@@ -50,11 +66,7 @@ function makeInitialBlocks(args: {
     blocks.push({ id: crypto.randomUUID(), type: "youtube", url: args.videoUrl, text: "Lecture video" } as Block);
   }
   if (args.attachmentUrl) {
-    if (/\.pdf($|\?)/i.test(args.attachmentUrl) || (args.attachmentName ?? "").toLowerCase().endsWith(".pdf")) {
-      blocks.push({ id: crypto.randomUUID(), type: "pdf", url: args.attachmentUrl, name: args.attachmentName ?? "Lecture PDF" });
-    } else {
-      blocks.push({ id: crypto.randomUUID(), type: "attachment", url: args.attachmentUrl, name: args.attachmentName ?? "Lecture attachment" });
-    }
+    blocks.push({ id: crypto.randomUUID(), ...inferAttachmentBlock(args.attachmentUrl, args.attachmentName) } as Block);
   }
 
   blocks.push({ id: crypto.randomUUID(), type: "paragraph", text: "" });

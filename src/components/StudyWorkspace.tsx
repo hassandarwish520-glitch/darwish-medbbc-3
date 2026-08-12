@@ -127,9 +127,43 @@ function safeStorageSet(key: string, value: string) {
   }
 }
 
+function inferAttachmentKind(attachment: NonNullable<Attachment>): "image" | "pdf" | "html" | "other" {
+  const lowerName = attachment.name.toLowerCase();
+  const lowerHref = attachment.href.toLowerCase();
+  const lowerMime = attachment.mime.toLowerCase();
+
+  if (
+    lowerMime.startsWith("image/") ||
+    /\.(png|jpe?g|gif|webp|svg)(?:$|[?#])/i.test(lowerName) ||
+    /\.(png|jpe?g|gif|webp|svg)(?:$|[?#])/i.test(lowerHref) ||
+    /\/image(?:$|[/?#])/i.test(lowerHref)
+  ) {
+    return "image";
+  }
+
+  if (
+    lowerMime.includes("pdf") ||
+    /\.pdf(?:$|[?#])/i.test(lowerName) ||
+    /\.pdf(?:$|[?#])/i.test(lowerHref) ||
+    /\/pdf(?:$|[/?#])/i.test(lowerHref)
+  ) {
+    return "pdf";
+  }
+
+  if (
+    lowerMime.includes("html") ||
+    /\.(html|htm)(?:$|[?#])/i.test(lowerName) ||
+    /\.(html|htm)(?:$|[?#])/i.test(lowerHref) ||
+    /\/html(?:$|[/?#])/i.test(lowerHref)
+  ) {
+    return "html";
+  }
+
+  return "other";
+}
+
 function isHtmlAttachment(attachment: NonNullable<Attachment>) {
-  const lower = attachment.name.toLowerCase();
-  return attachment.mime.includes("html") || lower.endsWith(".html") || lower.endsWith(".htm");
+  return inferAttachmentKind(attachment) === "html";
 }
 
 function isImageMaterial(item: MaterialItem) {
@@ -173,9 +207,10 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
     points: { x: number; y: number }[];
   };
 
-  const isPdf = attachment.mime === "application/pdf" || attachment.name.toLowerCase().endsWith(".pdf");
-  const isImage = attachment.mime.startsWith("image/");
-  const isHtml = isHtmlAttachment(attachment);
+  const attachmentKind = inferAttachmentKind(attachment);
+  const isPdf = attachmentKind === "pdf";
+  const isImage = attachmentKind === "image";
+  const isHtml = attachmentKind === "html";
   const [htmlSource, setHtmlSource] = useState("");
   const [loadingHtml, setLoadingHtml] = useState(isHtml);
   const [failedHtml, setFailedHtml] = useState(false);

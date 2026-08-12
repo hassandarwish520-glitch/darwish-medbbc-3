@@ -4,7 +4,10 @@ import { getClientIp, logSecurityEvent } from "@/lib/security-monitor";
 
 export const runtime = "nodejs";
 
-function inferType(path: string) {
+function inferType(path: string, blobType?: string | null) {
+  const normalizedBlobType = typeof blobType === "string" ? blobType.trim() : "";
+  if (normalizedBlobType && normalizedBlobType !== "application/octet-stream") return normalizedBlobType;
+
   const lower = path.toLowerCase();
   if (lower.endsWith(".pdf")) return "application/pdf";
   if (lower.endsWith(".png")) return "image/png";
@@ -41,7 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
       metadata: {
         path,
         file_name: filename,
-        mime_type: inferType(path),
+        mime_type: inferType(path, blob.type),
         source: "assets_route",
         ip_address: ipAddress,
         user_agent: userAgent,
@@ -49,12 +52,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
     });
   }
 
-  const isPdf = inferType(path) === "application/pdf";
+  const contentType = inferType(path, blob.type);
+  const isPdf = contentType === "application/pdf";
 
   return new NextResponse(blob.stream(), {
     status: 200,
     headers: {
-      "Content-Type": inferType(path),
+      "Content-Type": contentType,
       "Content-Length": String(blob.size),
       "Cache-Control": "private, no-store",
       "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${filename}"`,
