@@ -1621,6 +1621,15 @@ function LessonViewerWithTools({
     : "clamp(420px, calc(100vh - 18rem), 1180px)";
 
   const fileType = typeof lessonMeta?.file_type === "string" ? lessonMeta.file_type : undefined;
+  const lessonFileName = String(lessonMeta?.document_name || "").toLowerCase();
+  const lessonMime = typeof lessonMeta?.document_mime === "string" ? lessonMeta.document_mime : "";
+  const derivedLessonKind = lessonMime.includes("pdf") || lessonFileName.endsWith(".pdf")
+    ? "pdf"
+    : lessonMime.includes("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test(lessonFileName)
+      ? "image"
+      : lessonMime.includes("html") || /\.(html|htm)$/i.test(lessonFileName)
+        ? "html"
+        : lessonKind;
 
   return (
     <div ref={panelRef} className="flex min-h-0 flex-col overflow-hidden">
@@ -1703,9 +1712,9 @@ function LessonViewerWithTools({
             className={`relative overflow-hidden rounded-[24px] border border-white/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] ${darkMode ? "[filter:invert(1)_hue-rotate(180deg)]" : ""}`}
             style={{ width: `min(100%, ${frameWidth}px)`, minHeight: frameHeight }}>
             <div style={{ minHeight: frameHeight, height: "100%" }}>
-              {(lessonKind === "pdf" || fileType === "pdf" || lessonKind === "pptx") ? (
-                <LessonViewer id={lessonId} kind={lessonKind} fileType={fileType} />
-              ) : lessonKind === "html" ? (
+              {(derivedLessonKind === "pdf" || fileType === "pdf" || derivedLessonKind === "pptx") ? (
+                <LessonViewer id={lessonId} kind={derivedLessonKind} fileType={fileType} />
+              ) : derivedLessonKind === "html" ? (
                 <iframe
                   src={'/api/viewer/' + lessonId + '/html'}
                   className="block w-full bg-white"
@@ -1713,7 +1722,7 @@ function LessonViewerWithTools({
                   title="Lesson"
                   sandbox="allow-same-origin allow-scripts allow-forms"
                 />
-              ) : lessonKind === "image" ? (
+              ) : derivedLessonKind === "image" ? (
                 <img
                   src={'/api/viewer/' + lessonId + '/image'}
                   alt="Lesson"
@@ -1722,7 +1731,7 @@ function LessonViewerWithTools({
                   draggable={false}
                 />
               ) : (
-                <LessonViewer id={lessonId} kind={lessonKind} fileType={fileType} />
+                <LessonViewer id={lessonId} kind={derivedLessonKind} fileType={fileType} />
               )}
             </div>
 

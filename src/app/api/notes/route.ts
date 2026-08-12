@@ -88,6 +88,39 @@ export async function POST(req: NextRequest) {
   }
 
   // Create new standalone or lesson-linked note
+  if (lesson_id) {
+    const { data: existing, error: existingError } = await db
+      .from("notes")
+      .select("id, lesson_id, body, meta, updated_at, created_at")
+      .eq("user_id", ctx.user.id)
+      .eq("lesson_id", lesson_id)
+      .maybeSingle();
+    if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+
+    if (existing) {
+      const mergedMeta: Record<string, unknown> = {
+        ...((existing.meta && typeof existing.meta === "object") ? existing.meta : {}),
+        ...meta,
+      };
+      const { data, error } = await db
+        .from("notes")
+        .update({ body: trimmed, meta: mergedMeta, updated_at: now, lesson_id })
+        .eq("id", existing.id)
+        .eq("user_id", ctx.user.id)
+        .select("id, lesson_id, body, meta, updated_at, created_at")
+        .single();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      try {
+        await admin.from("rag_chunks").delete().eq("source_type", "note").eq("source_id", data.id);
+        const text = extractNoteIndexText({ body: data.body });
+        if (text) await indexSource("note", data.id, text);
+      } catch { /* non-blocking */ }
+
+      return NextResponse.json({ note: { ...data, title: data.meta?.title ?? null } });
+    }
+  }
+
   const payload: Record<string, unknown> = {
     user_id: ctx.user.id,
     body: trimmed,

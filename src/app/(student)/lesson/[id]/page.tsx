@@ -30,6 +30,18 @@ type PlaylistItem = { id: string; title: string; active: boolean };
 type TelegramLink = { label: string; url: string; resolution?: string | null; size?: string | null };
 type MaterialItem = { label: string; url: string; kind: string; mime?: string | null };
 
+function prettifyLessonTitle(raw: string) {
+  const cleaned = raw
+    .replace(/\.(html|htm|pdf|docx?|pptx?)$/i, "")
+    .replace(/^cardio_block_(\d+)_?\d*q?$/i, "Cardio QBank Block $1")
+    .replace(/^([a-z]+)_block_(\d+)_?\d*q?$/i, (_, subject: string, n: string) => `${subject} QBank Block ${n}`)
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function assetHref(path: string) {
   return `/api/assets/${path.split("/").map(encodeURIComponent).join("/")}`;
 }
@@ -260,6 +272,8 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
       .map((row) => ({ id: row.id, title: row.title, active: row.id === lesson.id }));
   }
 
+  const displayTitle = prettifyLessonTitle(lesson.title);
+
   return (
     <div className="page-shell max-w-5xl pb-10">
       <Link
@@ -290,7 +304,7 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
                 ) : null}
               </div>
 
-              <h1 className="mt-4 text-2xl font-bold text-white sm:text-3xl">{lesson.title}</h1>
+              <h1 className="mt-4 text-2xl font-bold text-white sm:text-3xl">{displayTitle}</h1>
 
               <div className="mt-4 flex flex-wrap gap-3">
                 <div className="btn-ghost text-sm">
@@ -308,7 +322,7 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
       <section className="mt-6">
         <StudyWorkspace
           lessonId={lesson.id}
-          lessonTitle={lesson.title}
+          lessonTitle={displayTitle}
           lessonKind={lesson.kind}
           lessonMeta={(lesson.meta ?? null) as Record<string, unknown> | null}
           subjectSlug={typeof (lesson.meta as Record<string, unknown> | null)?.subject === "string" ? ((lesson.meta as Record<string, unknown>).subject as string) : null}
