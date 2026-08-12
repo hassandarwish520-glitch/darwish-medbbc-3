@@ -6,22 +6,104 @@ import FlashcardDeckRunner from "@/components/FlashcardDeckRunner";
 
 export const dynamic = "force-dynamic";
 
+const RICH_SELECT = "id, front, back, lesson_id, section, high_yield, clinical_pearl, memory_tip, references, difficulty, image_url, tags, source, topic_id";
+const CORE_SELECT = "id, front, back, lesson_id, tags, topic_id";
+const DUE_RICH_SELECT = `flashcard_id, flashcards!inner(${RICH_SELECT})`;
+const DUE_CORE_SELECT = `flashcard_id, flashcards!inner(${CORE_SELECT})`;
+
 type FlashcardRow = {
   id: string;
   front: string;
   back: string;
   lesson_id: string | null;
-  section: string | null;
-  high_yield: string | null;
-  clinical_pearl: string | null;
-  memory_tip: string | null;
-  references: string[] | null;
-  difficulty: string | null;
-  image_url: string | null;
-  tags: string[] | null;
-  source: string | null;
-  topic_id: string | null;
+  section?: string | null;
+  high_yield?: string | null;
+  clinical_pearl?: string | null;
+  memory_tip?: string | null;
+  references?: string[] | null;
+  difficulty?: string | null;
+  image_url?: string | null;
+  tags?: string[] | null;
+  source?: string | null;
+  topic_id?: string | null;
 };
+
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+function normalizeCard(row: FlashcardRow): FlashcardRow {
+  return {
+    id: row.id,
+    front: row.front,
+    back: row.back,
+    lesson_id: row.lesson_id ?? null,
+    section: row.section ?? null,
+    high_yield: row.high_yield ?? null,
+    clinical_pearl: row.clinical_pearl ?? null,
+    memory_tip: row.memory_tip ?? null,
+    references: Array.isArray(row.references) ? row.references : [],
+    difficulty: row.difficulty ?? null,
+    image_url: row.image_url ?? null,
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    source: row.source ?? null,
+    topic_id: row.topic_id ?? null,
+  };
+}
+
+async function fetchCardsForLesson(s: SupabaseClient, lessonId: string) {
+  const rich = await s.from("flashcards").select(RICH_SELECT).eq("lesson_id", lessonId).limit(200);
+  if (!rich.error) return (rich.data ?? []).map((row) => normalizeCard(row as FlashcardRow));
+
+  const fallback = await s.from("flashcards").select(CORE_SELECT).eq("lesson_id", lessonId).limit(200);
+  return (fallback.data ?? []).map((row) => normalizeCard(row as FlashcardRow));
+}
+
+async function fetchStandaloneCards(s: SupabaseClient) {
+  const rich = await s.from("flashcards").select(RICH_SELECT).is("lesson_id", null).limit(120);
+  if (!rich.error) return (rich.data ?? []).map((row) => normalizeCard(row as FlashcardRow));
+
+  const fallback = await s.from("flashcards").select(CORE_SELECT).is("lesson_id", null).limit(120);
+  return (fallback.data ?? []).map((row) => normalizeCard(row as FlashcardRow));
+}
+
+async function fetchDueAndNewCards(s: SupabaseClient, userId: string) {
+  const today = new Date().toISOString();
+
+  const dueRich = await s
+    .from("flashcard_reviews")
+    .select(DUE_RICH_SELECT)
+    .eq("user_id", userId)
+    .lte("due_at", today)
+    .order("due_at")
+    .limit(200);
+
+  const dueRows = !dueRich.error
+    ? dueRich.data
+    : (await s
+        .from("flashcard_reviews")
+        .select(DUE_CORE_SELECT)
+        .eq("user_id", userId)
+        .lte("due_at", today)
+        .order("due_at")
+        .limit(200)).data;
+
+  const fromDue = (dueRows ?? [])
+    .map((row: { flashcards: FlashcardRow | FlashcardRow[] | null }) => (Array.isArray(row.flashcards) ? row.flashcards[0] : row.flashcards))
+    .filter((card): card is FlashcardRow => Boolean(card))
+    .map(normalizeCard);
+
+  const known = new Set(fromDue.map((card) => card.id));
+
+  const newRich = await s.from("flashcards").select(RICH_SELECT).limit(120);
+  const newRows = !newRich.error
+    ? newRich.data
+    : (await s.from("flashcards").select(CORE_SELECT).limit(120)).data;
+
+  const fromNew = ((newRows ?? []) as FlashcardRow[])
+    .map(normalizeCard)
+    .filter((card) => !known.has(card.id));
+
+  return [...fromDue, ...fromNew];
+}
 
 export default async function ReviewPage({
   searchParams,
@@ -32,7 +114,6 @@ export default async function ReviewPage({
   const s = await createClient();
   const { lesson_id, scope } = await searchParams;
 
-  // Determine lesson title (if any)
   let lessonTitle: string | null = null;
   if (lesson_id) {
     const { data: lesson } = await s.from("lessons").select("title").eq("id", lesson_id).maybeSingle();
@@ -41,42 +122,14 @@ export default async function ReviewPage({
 
   let cardRows: FlashcardRow[] = [];
   if (scope === "personal") {
-    const { data } = await s
-      .from("flashcards")
-      .select("id, front, back, lesson_id, section, high_yield, clinical_pearl, memory_tip, references, difficulty, image_url, tags, source, topic_id")
-      .is("lesson_id", null)
-      .limit(120);
-    cardRows = (data as FlashcardRow[] | null) ?? [];
+    cardRows = await fetchStandaloneCards(s);
   } else if (lesson_id) {
-    const { data } = await s
-      .from("flashcards")
-      .select("id, front, back, lesson_id, section, high_yield, clinical_pearl, memory_tip, references, difficulty, image_url, tags, source, topic_id")
-      .eq("lesson_id", lesson_id)
-      .limit(200);
-    cardRows = (data as FlashcardRow[] | null) ?? [];
+    cardRows = await fetchCardsForLesson(s, lesson_id);
   } else {
-    // Mix of due + new cards up to 200
-    const today = new Date().toISOString();
-    const { data: due } = await s
-      .from("flashcard_reviews")
-      .select("flashcard_id, flashcards!inner(id, front, back, lesson_id, section, high_yield, clinical_pearl, memory_tip, references, difficulty, image_url, tags, source, topic_id)")
-      .eq("user_id", ctx!.user.id)
-      .lte("due_at", today)
-      .order("due_at")
-      .limit(200);
-    const fromDue = (due ?? [])
-      .map((row: { flashcards: FlashcardRow | FlashcardRow[] | null }) => (Array.isArray(row.flashcards) ? row.flashcards[0] : row.flashcards))
-      .filter((c): c is FlashcardRow => Boolean(c));
-    const known = new Set(fromDue.map((c) => c.id));
-    const { data: newCards } = await s
-      .from("flashcards")
-      .select("id, front, back, lesson_id, section, high_yield, clinical_pearl, memory_tip, references, difficulty, image_url, tags, source, topic_id")
-      .limit(120);
-    const fromNew = ((newCards as FlashcardRow[] | null) ?? []).filter((c) => !known.has(c.id));
-    cardRows = [...fromDue, ...fromNew];
+    cardRows = await fetchDueAndNewCards(s, ctx!.user.id);
   }
 
-  const courseLabel = !lessonTitle && scope === "personal" ? "Personal Deck" : lessonTitle ?? "All Due Cards";
+  const courseLabel = !lessonTitle && scope === "personal" ? "Standalone Deck" : lessonTitle ?? "All Due Cards";
   const isStandalone = scope === "personal";
 
   return (
@@ -99,16 +152,16 @@ export default async function ReviewPage({
           front: c.front,
           back: c.back,
           lesson_id: c.lesson_id,
-          section: c.section,
-          high_yield: c.high_yield,
-          clinical_pearl: c.clinical_pearl,
-          memory_tip: c.memory_tip,
+          section: c.section ?? null,
+          high_yield: c.high_yield ?? null,
+          clinical_pearl: c.clinical_pearl ?? null,
+          memory_tip: c.memory_tip ?? null,
           references: (c.references ?? []) as string[],
-          difficulty: c.difficulty,
-          image_url: c.image_url,
+          difficulty: c.difficulty ?? null,
+          image_url: c.image_url ?? null,
           tags: c.tags ?? [],
-          source: c.source,
-          topic_id: c.topic_id,
+          source: c.source ?? null,
+          topic_id: c.topic_id ?? null,
         }))}
         lessonTitle={courseLabel}
         isStandalone={isStandalone}

@@ -249,6 +249,7 @@ export async function POST(req: NextRequest) {
       lesson_id,
       front: card.front,
       back: card.back,
+      section: card.section ?? null,
       tags: card.tags,
       ai_generated: false,
       created_by: ctx.user.id,

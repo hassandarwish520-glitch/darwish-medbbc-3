@@ -47,6 +47,7 @@ import {
   X,
 } from "lucide-react";
 import { GRADE_OPTIONS, sm2, type Grade, type SpacedRepetitionState } from "@/lib/flashcard-scheduler";
+import { extractFlashcardTitle } from "@/lib/flashcards/structured";
 
 type Reference = string;
 type FlashcardSection = {
@@ -193,13 +194,15 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
 
   const taggedCards = useMemo(() => {
     return cards.map((c) => {
+      const cardTitle = extractFlashcardTitle(c.tags ?? []);
       const tagList = Array.from(new Set([
-        ...(c.tags ?? []),
+        ...(c.tags ?? []).filter((tag) => !tag.toLowerCase().startsWith("title:")),
+        ...(cardTitle ? [cardTitle] : []),
         ...(c.section ? [c.section] : []),
         ...(c.high_yield ? ["high_yield"] : []),
         ...(c.source ? [c.source] : []),
       ]));
-      return { ...c, normalizedTags: tagList.map((t) => t.toLowerCase()) };
+      return { ...c, cardTitle, normalizedTags: tagList.map((t) => t.toLowerCase()) };
     });
   }, [cards]);
 
@@ -230,7 +233,10 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
     if (search.trim().length > 1) {
       const needle = search.toLowerCase();
       list = list.filter((c) =>
-        c.front.toLowerCase().includes(needle) || c.back.toLowerCase().includes(needle),
+        c.front.toLowerCase().includes(needle) ||
+        c.back.toLowerCase().includes(needle) ||
+        (c.cardTitle ?? "").toLowerCase().includes(needle) ||
+        (c.section ?? "").toLowerCase().includes(needle),
       );
     }
     return list.slice(0, Math.max(1, limit));
@@ -244,6 +250,8 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
   const remainingCount = Math.max(0, total - studiedCount);
   const accuracy = studiedCount === 0 ? 0 : Math.round((accuracyCount.right / studiedCount) * 100);
   const deckTitle = lessonTitle ?? "Personal Deck";
+  const currentSectionCards = card?.section ? filteredCards.filter((item) => item.section === card.section) : [];
+  const currentSectionIndex = card?.section ? currentSectionCards.findIndex((item) => item.id === card.id) + 1 : 0;
 
   /* Run timers */
   useEffect(() => {
@@ -577,8 +585,12 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
             Jump to Card 1
           </button>
         </div>
-        <div className="hidden md:block">
-          Card {safeIndex + 1} of {total}
+        <div className="hidden text-right md:block">
+          {card.section ? <div className="text-[11px] uppercase tracking-[0.16em] text-blue-300">{card.section}</div> : null}
+          <div>
+            Card {safeIndex + 1} of {total}
+            {currentSectionCards.length > 0 ? ` · ${currentSectionIndex} / ${currentSectionCards.length} in this part` : ""}
+          </div>
         </div>
       </div>
 
@@ -623,11 +635,18 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img src={card.image_url} alt="" className="mx-auto mb-3 max-h-32 rounded-2xl border border-white/10 object-contain" />
               ) : null}
-              <div className="flex h-full flex-col justify-center text-center">
-                <div className="text-xl font-medium leading-relaxed text-white md:text-2xl">{card.front}</div>
-              </div>
-              <div className="absolute bottom-4 left-0 right-0 text-center text-xs uppercase tracking-[0.16em] text-slate-500">
-                Tap to reveal answer
+              <div className="flex h-full flex-col text-center">
+                {card.section ? (
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-blue-300">{card.section}</div>
+                ) : null}
+                {card.cardTitle ? (
+                  <div className="mt-4 text-2xl font-semibold text-white md:text-3xl">{card.cardTitle}</div>
+                ) : null}
+                <div className="mt-6 text-xs uppercase tracking-[0.16em] text-slate-400">Front</div>
+                <div className="mt-3 flex flex-1 items-center justify-center text-xl font-medium leading-relaxed text-white md:text-2xl">{card.front}</div>
+                <div className="pt-4 text-center text-xs uppercase tracking-[0.16em] text-slate-500">
+                  Tap to reveal answer
+                </div>
               </div>
             </div>
             {/* BACK */}
@@ -637,8 +656,14 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
               }`}
             >
               <div className="space-y-4 overflow-auto h-full pr-1">
+                {card.section ? (
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-blue-300">{card.section}</div>
+                ) : null}
+                {card.cardTitle ? (
+                  <div className="text-2xl font-semibold text-white md:text-3xl">{card.cardTitle}</div>
+                ) : null}
                 <div>
-                  <div className="text-xs uppercase tracking-[0.16em] text-blue-300">Answer</div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-blue-300">Back</div>
                   <div className="mt-1 whitespace-pre-line text-lg font-medium text-white">{card.back}</div>
                 </div>
                 {card.high_yield ? (
