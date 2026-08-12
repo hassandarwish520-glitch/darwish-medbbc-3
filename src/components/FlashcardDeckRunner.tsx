@@ -50,7 +50,7 @@ import { GRADE_OPTIONS, sm2, type Grade, type SpacedRepetitionState } from "@/li
 import { extractFlashcardTitle } from "@/lib/flashcards/structured";
 import { structureBackText, type SectionGroup, type StructuredBack } from "@/lib/flashcards/structure";
 import { SectionGroupsView, UngroupedBullets } from "@/components/flashcard-card/StructuredCardSections";
-import { makeSelfContainedFront, deriveBreadcrumbFromCard } from "@/lib/flashcards/context";
+import { buildCardSearchText, makeSelfContainedFront, deriveBreadcrumbFromCard } from "@/lib/flashcards/context";
 
 type Reference = string;
 type FlashcardSection = {
@@ -205,7 +205,18 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
         ...(c.high_yield ? ["high_yield"] : []),
         ...(c.source ? [c.source] : []),
       ]));
-      return { ...c, cardTitle, normalizedTags: tagList.map((t) => t.toLowerCase()) };
+      const breadcrumbParts = deriveBreadcrumbFromCard({ section: c.section, cardTitle, tags: tagList });
+      const displayFront = makeSelfContainedFront({ front: c.front, title: cardTitle, rawBack: c.back });
+      const searchText = buildCardSearchText({
+        front: c.front,
+        back: c.back,
+        section: c.section,
+        cardTitle,
+        tags: tagList,
+        displayFront,
+        breadcrumbParts,
+      });
+      return { ...c, cardTitle, breadcrumbParts, displayFront, searchText, normalizedTags: tagList.map((t) => t.toLowerCase()) };
     });
   }, [cards]);
 
@@ -235,12 +246,7 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
       list = list.filter((c) => (stateById[c.id]?.streak_correct ?? 0) >= 3);
     if (search.trim().length > 1) {
       const needle = search.toLowerCase();
-      list = list.filter((c) =>
-        c.front.toLowerCase().includes(needle) ||
-        c.back.toLowerCase().includes(needle) ||
-        (c.cardTitle ?? "").toLowerCase().includes(needle) ||
-        (c.section ?? "").toLowerCase().includes(needle),
-      );
+      list = list.filter((c) => (c.searchText ?? "").includes(needle));
     }
     return list.slice(0, Math.max(1, limit));
   }, [difficultOnly, filter, limit, masteredOnly, schedulesById, search, stateById, taggedCards]);
@@ -623,8 +629,8 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
 
           {(() => {
             const backStructure: StructuredBack = structureBackText(card.back);
-            const frontForDisplay = makeSelfContainedFront({ front: card.front, title: card.cardTitle });
-            const breadcrumbParts = deriveBreadcrumbFromCard(card);
+            const frontForDisplay = card.displayFront ?? makeSelfContainedFront({ front: card.front, title: card.cardTitle, rawBack: card.back });
+            const breadcrumbParts = card.breadcrumbParts ?? deriveBreadcrumbFromCard(card);
             return (
           <div
             role="button"

@@ -1,89 +1,140 @@
 /**
  * Helpers that turn the existing flashcard fields into a self-contained
- * question + 3-level breadcrumb so the FRONT is unambiguous on its own.
+ * question + breadcrumb so the FRONT is never ambiguous on its own.
  *
- * The system is "automatic" in the sense that we NEVER invent clinical
- * content — we only rearrange the field the user/teacher already wrote
- * (title = disease, section = subject area, front = raw prompt) into a
- * topic-prefixed form and surface the breadcrumb chain.
+ * Rule: never invent new medical facts. We may only rephrase the EXISTING
+ * prompt fragment into a complete question using the already-known topic
+ * title and the labels detected from the card BACK.
  */
 
+import { structureBackText } from "@/lib/flashcards/structure";
+
 export type BreadcrumbInput = {
-  /** Subject, e.g. "Cardiology" — usually the first tag on the card. */
   subject?: string | null;
-  /** Section the card belongs to — usually `card.section` from PART lines. */
   area?: string | null;
-  /** Topic/disease name, e.g. "Mitral Stenosis" — `card.cardTitle`. */
   title?: string | null;
 };
 
-/**
- * Build a self-contained prompt for the FRONT side.
- *
- * If the prompt already mentions the topic (long tokens ≥5 chars appear
- * in both), leave it untouched. Otherwise prefix with the title so the
- * student never sees an ambiguous "Best heard?" with no clinical anchor.
- *
- * Examples:
- *   { front: "Best heard",          title: "Mitral Stenosis" }
- *     → "Mitral Stenosis — Best heard?"
- *   { front: "Classic cause?"      title: "Mitral Stenosis" }
- *     → "Mitral Stenosis — Classic cause?"
- *   { front: "Workup of AS?"       title: "Aortic Stenosis" }
- *     → "Workup of AS?"  (already contains "AS" via 3-char match — fine)
- *   { front: "What causes it?"     title: "Mitral Stenosis" }
- *     → "Mitral Stenosis — What causes it?"
- */
+function cleanPrompt(value: string) {
+  return (value ?? "")
+    .replace(/^\s*[•\-–—*]+\s*/, "")
+    .replace(/^\s*(?:q|question|front)\s*[:\-]\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function titleTokens(title: string) {
+  return title
+    .toLowerCase()
+    .split(/\s+/)
+    .map((token) => token.replace(/[^a-z0-9]/g, ""))
+    .filter(Boolean);
+}
+
+function titleAlreadyPresent(prompt: string, title: string) {
+  const p = prompt.toLowerCase();
+  const t = title.toLowerCase();
+  if (!title) return false;
+  if (p.includes(t) || t.includes(p)) return true;
+  const longTokens = titleTokens(title).filter((token) => token.length >= 5);
+  if (longTokens.some((token) => p.includes(token))) return true;
+  const acronym = title
+    .split(/\s+/)
+    .map((word) => word[0])
+    .join("")
+    .toLowerCase();
+  if (acronym.length >= 2 && p.includes(acronym)) return true;
+  return false;
+}
+
+function sentenceCase(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function ensureQuestion(value: string) {
+  const trimmed = value.trim().replace(/[?.!]+$/g, "");
+  return `${trimmed}?`;
+}
+
+function hasLabel(rawBack: string, labelPrefix: string) {
+  const structured = structureBackText(rawBack);
+  return structured.groups.some((group) => group.label.toLowerCase().startsWith(labelPrefix.toLowerCase()));
+}
+
+function convertFragmentToQuestion(fragment: string, title: string, rawBack: string) {
+  const f = fragment.toLowerCase().replace(/[?.!]+$/g, "").trim();
+  const murmurContext = hasLabel(rawBack, "murmur") || /murmur/i.test(fragment);
+
+  const exactMap: Array<{ pattern: RegExp; make: () => string }> = [
+    { pattern: /^best heard$/, make: () => murmurContext ? `Where is the murmur best heard in ${title}` : `Where is it best heard in ${title}` },
+    { pattern: /^(characteristic )?murmur$/, make: () => `What is the characteristic murmur of ${title}` },
+    { pattern: /^progression$/, make: () => `How does ${title} typically progress` },
+    { pattern: /^classic cause$/, make: () => `What is the classic cause of ${title}` },
+    { pattern: /^cause$/, make: () => `What causes ${title}` },
+    { pattern: /^etiology$/, make: () => `What is the etiology of ${title}` },
+    { pattern: /^triad$/, make: () => `What is the classic triad of ${title}` },
+    { pattern: /^triggers?$/, make: () => `What triggers ${title}` },
+    { pattern: /^relief$/, make: () => `What relieves ${title}` },
+    { pattern: /^management$/, make: () => `How is ${title} managed` },
+    { pattern: /^treatment$/, make: () => `How is ${title} treated` },
+    { pattern: /^troponin$/, make: () => `What is the troponin level in ${title}` },
+    { pattern: /^ecg at rest$/, make: () => `What is the ECG at rest in ${title}` },
+    { pattern: /^ecg during (?:an? )?attack$/, make: () => `What is the ECG during an attack of ${title}` },
+    { pattern: /^first-line acute relief$/, make: () => `What is the first-line acute relief for ${title}` },
+    { pattern: /^extra heart sound$/, make: () => `What is the extra heart sound in ${title}` },
+    { pattern: /^key finding$/, make: () => `What is the key finding in ${title}` },
+    { pattern: /^consequences$/, make: () => `What are the main consequences of ${title}` },
+    { pattern: /^clinical features$/, make: () => `What are the clinical features of ${title}` },
+  ];
+
+  for (const entry of exactMap) {
+    if (entry.pattern.test(f)) return ensureQuestion(entry.make());
+  }
+
+  const alreadyQuestionLike = /^(what|which|where|when|why|how|who|can|does|do|is|are)\b/i.test(fragment.trim());
+  if (alreadyQuestionLike) {
+    if (titleAlreadyPresent(fragment, title)) return ensureQuestion(sentenceCase(fragment));
+    const normalized = ensureQuestion(sentenceCase(fragment));
+    if (/\bit\b/i.test(normalized) || /\bthis\b/i.test(normalized)) {
+      return normalized.replace(/\bit\b/i, title).replace(/\bthis\b/i, title);
+    }
+    return normalized.replace(/\?$/, ` in ${title}?`);
+  }
+
+  // Very short noun fragments: convert into a full "What is...of" prompt.
+  const wordCount = f.split(/\s+/).filter(Boolean).length;
+  if (wordCount <= 4) {
+    if (murmurContext) {
+      return ensureQuestion(`What is the ${f} of ${title}`.replace(/the best heard/i, "where the murmur is best heard"));
+    }
+    return ensureQuestion(`What is the ${f} in ${title}`);
+  }
+
+  // Fallback: preserve wording but prefix the topic.
+  return ensureQuestion(`${title} — ${sentenceCase(fragment)}`);
+}
+
 export function makeSelfContainedFront(opts: {
   front: string;
   title?: string | null;
+  rawBack?: string | null;
 }): string {
-  const rawFront = (opts.front ?? "").trim();
-  if (!rawFront) return "";
+  const prompt = cleanPrompt(opts.front);
+  if (!prompt) return "";
 
-  // Strip "Q:" / "Question:" / "Front:" artifacts that may exist.
-  const cleaned = rawFront.replace(/^\s*(?:q|question|front)\s*[:\-]\s*/i, "").trim();
   const title = (opts.title ?? "").trim();
-  if (!title) return cleaned;
+  if (!title) return ensureQuestion(sentenceCase(prompt));
+  if (titleAlreadyPresent(prompt, title)) return ensureQuestion(sentenceCase(prompt));
 
-  const tLow = title.toLowerCase();
-  const fLow = cleaned.toLowerCase();
-
-  // Whole-title inclusion either direction.
-  if (tLow && (fLow.includes(tLow) || tLow.includes(fLow))) return cleaned;
-
-  // Any individual long token (≥5 letters) appears in the prompt?
-  const longTokens = tLow.split(/\s+/).filter((w) => w.length >= 5);
-  if (longTokens.some((tok) => fLow.includes(tok))) return cleaned;
-
-  // Acronym-style match (≥3 chars) like "AS", "MR".
-  const shortAcronyms = title
-    .split(/\s+/)
-    .filter((w) => /^[A-Z]{2,}$/.test(w) && w.length >= 3)
-    .map((w) => w.toLowerCase());
-  if (shortAcronyms.some((tok) => fLow.includes(tok))) return cleaned;
-
-  // Otherwise prefix the topic.
-  let prompt = cleaned;
-  if (!/[.?!]$/.test(prompt)) {
-    prompt = prompt.endsWith(".") ? prompt : `${prompt}?`;
+  const looksShortAndFragmentary = prompt.split(/\s+/).filter(Boolean).length <= 5 || !/[?]/.test(prompt);
+  if (looksShortAndFragmentary) {
+    return convertFragmentToQuestion(prompt, title, opts.rawBack ?? "");
   }
-  if (/^[a-z]/.test(prompt)) {
-    prompt = prompt.charAt(0).toUpperCase() + prompt.slice(1);
-  }
-  return `${title} — ${prompt}`;
+
+  return ensureQuestion(`${sentenceCase(prompt)} in ${title}`);
 }
 
-/**
- * Build a 1–3 crumb breadcrumb chain.
- *
- * Strips "PART N — " prefix from `area` and uppercases every level so the
- * chain reads as the user requested:
- *   CARDIOLOGY › VALVULAR HEART DISEASE › MITRAL STENOSIS
- *
- * Falls back gracefully when fields are missing: with only `area`
- *   VALVULAR HEART DISEASE › MITRAL STENOSIS
- */
 export function buildBreadcrumb(opts: BreadcrumbInput): string[] {
   const cleaned = (s: string | null | undefined) =>
     (s ?? "")
@@ -102,12 +153,6 @@ export function buildBreadcrumb(opts: BreadcrumbInput): string[] {
   return out;
 }
 
-/**
- * Helper that derives breadcrumb from the card record directly. The card's
- * tags typically already include the subject (first tag) and the
- * title-prefixed mark `title:NAME`. Use this from the runner so a missing
- * subject just drops the first crumb.
- */
 export function deriveBreadcrumbFromCard(card: {
   section?: string | null;
   cardTitle?: string | null;
@@ -125,4 +170,26 @@ export function deriveBreadcrumbFromCard(card: {
     }
   }
   return buildBreadcrumb({ subject, area: card.section ?? null, title });
+}
+
+export function buildCardSearchText(card: {
+  front: string;
+  back: string;
+  section?: string | null;
+  cardTitle?: string | null;
+  tags?: string[] | null;
+  displayFront?: string | null;
+  breadcrumbParts?: string[] | null;
+}) {
+  return [
+    card.front,
+    card.back,
+    card.section ?? "",
+    card.cardTitle ?? "",
+    card.displayFront ?? "",
+    ...(card.tags ?? []),
+    ...(card.breadcrumbParts ?? []),
+  ]
+    .join(" \n ")
+    .toLowerCase();
 }
