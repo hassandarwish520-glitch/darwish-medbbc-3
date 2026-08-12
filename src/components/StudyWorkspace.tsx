@@ -610,7 +610,14 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
       </div>
       )}
 
-      <div className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3 md:p-5 ${darkReadingMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} tabIndex={0}>
+      <div
+        className={`medbbc-viewer min-h-0 flex-1 overflow-y-auto overflow-x-auto p-3 md:p-5 ${darkReadingMode ? "bg-[#0a1220]" : "bg-[#0c1422]"}`}
+        data-medbbc-viewer="study-attachment"
+        style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}
+        onContextMenu={(e) => e.preventDefault()}
+        onDragStart={(e) => e.preventDefault()}
+        tabIndex={0}
+      >
         <div className="mx-auto flex min-h-full w-full justify-center">
           <div ref={containerRef} className={`relative overflow-hidden rounded-[24px] border border-white/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] ${darkReadingMode ? "[filter:invert(1)_hue-rotate(180deg)]" : ""}`} style={{ width: `min(100%, ${frameWidth}px)`, minHeight: frameHeight }}>
         {isImage ? (
@@ -619,7 +626,7 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
           <iframe
             src={`${attachment.href}#toolbar=0&navpanes=0&statusbar=0&scrollbar=0&view=FitH`}
             className="block w-full bg-white"
-            style={{ height: frameHeight }}
+            style={{ height: frameHeight, pointerEvents: "auto" }}
             title={attachment.name}
             sandbox="allow-same-origin allow-scripts"
           />
@@ -635,12 +642,12 @@ function AttachmentPanel({ attachment, lessonId, subjectSlug }: { attachment: No
               srcDoc={htmlSource}
               sandbox="allow-same-origin allow-scripts allow-forms"
               className="block w-full bg-white"
-            style={{ height: frameHeight }}
+              style={{ height: frameHeight, pointerEvents: "auto" }}
               title={attachment.name}
             />
           )
         ) : (
-          <iframe src={attachment.href} className="block w-full bg-white" style={{ height: frameHeight }} title={attachment.name} />
+          <iframe src={attachment.href} className="block w-full bg-white" style={{ height: frameHeight, pointerEvents: "auto" }} title={attachment.name} />
         )}
 
         <canvas
@@ -1753,7 +1760,7 @@ function LessonViewerWithTools({
                 <iframe
                   src={'/api/viewer/' + lessonId + '/html'}
                   className="block w-full bg-white"
-                  style={{ height: frameHeight }}
+                  style={{ height: frameHeight, pointerEvents: "auto" }}
                   title="Lesson"
                   sandbox="allow-same-origin allow-scripts allow-forms"
                 />

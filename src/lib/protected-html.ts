@@ -1,34 +1,32 @@
 const PROTECTED_MARKER = "data-medbbc-protected-html";
 
 const PROTECTED_STYLE = `
-html, body, * {
-  -webkit-user-select: none !important;
-  -moz-user-select: none !important;
-  -ms-user-select: none !important;
-  user-select: none !important;
+html, body {
   -webkit-touch-callout: none !important;
   -webkit-tap-highlight-color: transparent !important;
+  overscroll-behavior: contain;
 }
-input, textarea, [contenteditable="true"] {
+body, body * {
   -webkit-user-select: text !important;
   -moz-user-select: text !important;
   -ms-user-select: text !important;
   user-select: text !important;
 }
-img, video, canvas, svg {
+img, video, canvas, svg, iframe {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
   -webkit-user-drag: none !important;
   user-drag: none !important;
 }
 ::selection {
-  background: transparent !important;
+  background: rgba(250, 204, 21, 0.42) !important;
   color: inherit !important;
 }
 ::-moz-selection {
-  background: transparent !important;
+  background: rgba(250, 204, 21, 0.42) !important;
   color: inherit !important;
-}
-body {
-  overscroll-behavior: contain;
 }
 `;
 
@@ -44,10 +42,10 @@ const PROTECTED_SCRIPT = `(function(){
       var active = document.activeElement;
       if (active && editable(active)) return;
       var sel = window.getSelection && window.getSelection();
-      if (sel && sel.rangeCount) sel.removeAllRanges();
+      if (sel && sel.rangeCount && !sel.toString().trim()) sel.removeAllRanges();
     } catch (_) {}
   }
-  ['contextmenu','copy','cut','paste','dragstart','selectstart'].forEach(function(evt){
+  ['contextmenu','copy','cut','paste','dragstart'].forEach(function(evt){
     document.addEventListener(evt, function(e){
       if (editable(e.target)) return;
       e.preventDefault();
@@ -70,9 +68,6 @@ const PROTECTED_SCRIPT = `(function(){
       return false;
     }
   }, {capture:true});
-  document.addEventListener('selectionchange', clearSelection, {capture:true});
-  document.addEventListener('touchend', function(){ setTimeout(clearSelection, 0); }, {capture:true, passive:true});
-  document.addEventListener('mouseup', clearSelection, {capture:true});
 })();`;
 
 export function injectProtectionIntoHtml(html: string): string {

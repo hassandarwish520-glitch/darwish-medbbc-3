@@ -45,20 +45,64 @@ img, video, canvas, svg, iframe {
   pointer-events: auto;
 }
 
+/* Within protected viewers, allow scrolling + text selection, but copying is still blocked by JS. */
+.medbbc-viewer,
+.medbbc-viewer *,
+[data-medbbc-viewer],
+[data-medbbc-viewer] *,
+.protected-view,
+.protected-view * {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+}
+
+.medbbc-viewer img,
+.medbbc-viewer video,
+.medbbc-viewer canvas,
+.medbbc-viewer svg,
+.medbbc-viewer iframe,
+[data-medbbc-viewer] img,
+[data-medbbc-viewer] video,
+[data-medbbc-viewer] canvas,
+[data-medbbc-viewer] svg,
+[data-medbbc-viewer] iframe,
+.protected-view img,
+.protected-view video,
+.protected-view canvas,
+.protected-view svg,
+.protected-view iframe {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+}
+
 /* Video controls must remain reachable even outside viewer scopes. */
 video::-webkit-media-controls { pointer-events: auto; }
 
-/* ── Block text highlight ── */
+/* ── Default: hide text highlight globally; inside protected viewers allow yellow highlight only ── */
 ::selection      { background: transparent !important; color: inherit; }
 ::-moz-selection { background: transparent !important; color: inherit; }
+.medbbc-viewer ::selection,
+[data-medbbc-viewer] ::selection,
+.protected-view ::selection {
+  background: rgba(250, 204, 21, 0.42) !important;
+  color: inherit !important;
+}
+.medbbc-viewer ::-moz-selection,
+[data-medbbc-viewer] ::-moz-selection,
+.protected-view ::-moz-selection {
+  background: rgba(250, 204, 21, 0.42) !important;
+  color: inherit !important;
+}
 
-/* ── PDF / iframe document viewers: extra protection ── */
+/* ── PDF / iframe document viewers: keep callout disabled without killing scroll/select in viewer scopes ── */
 .lesson-content,
 .pdf-viewer,
 [data-protected],
 .document-body {
-  -webkit-user-select: none !important;
-  user-select: none !important;
   -webkit-touch-callout: none !important;
 }
 

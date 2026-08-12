@@ -16,12 +16,6 @@ export default function ProtectionGuards() {
       event.preventDefault();
     };
 
-    const onSelectStart = (event: Event) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, [contenteditable='true']")) return;
-      event.preventDefault();
-    };
-
     const onKeyDown = async (event: KeyboardEvent) => {
       const isMeta = event.ctrlKey || event.metaKey;
       const key = event.key.toLowerCase();
@@ -48,7 +42,6 @@ export default function ProtectionGuards() {
     window.addEventListener("copy", onCopyLike);
     window.addEventListener("cut", onCopyLike);
     window.addEventListener("dragstart", onDragStart);
-    window.addEventListener("selectstart", onSelectStart);
     window.addEventListener("keydown", onKeyDown);
 
     return () => {
@@ -57,7 +50,6 @@ export default function ProtectionGuards() {
       window.removeEventListener("copy", onCopyLike);
       window.removeEventListener("cut", onCopyLike);
       window.removeEventListener("dragstart", onDragStart);
-      window.removeEventListener("selectstart", onSelectStart);
       window.removeEventListener("keydown", onKeyDown);
     };
   }, []);

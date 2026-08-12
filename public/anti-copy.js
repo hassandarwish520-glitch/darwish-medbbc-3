@@ -1,6 +1,6 @@
 /*!
  * anti-copy.js — Darwish MedBBC v2
- * Blocks copy / right-click / selection / common shortcuts
+ * Blocks copy / right-click / common shortcuts while preserving viewer scrolling
  * Softens screenshots via blur-on-blur & DevTools detection
  * Adds watermark overlay for document/PDF viewers
  * Fully bypassed for admin users.
@@ -43,9 +43,9 @@
   }, { capture: true });
 
   /* ============================================
-     3) Copy / Cut / Paste / Selection / Drag
+     3) Copy / Cut / Paste / Drag
      ============================================ */
-  ['copy', 'cut', 'paste', 'selectstart', 'dragstart'].forEach(function (evt) {
+  ['copy', 'cut', 'paste', 'dragstart'].forEach(function (evt) {
     document.addEventListener(evt, function (e) {
       const t = e.target;
       const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
@@ -96,11 +96,14 @@
     'body.__darwish_blur__ { filter: blur(22px) !important; transition: filter .12s; }' +
     'body { -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none; user-select:none; -webkit-touch-callout:none; }' +
     'input,textarea,[contenteditable="true"] { -webkit-user-select:text !important; user-select:text !important; }' +
-    'img,video,canvas,svg { -webkit-user-drag:none; user-drag:none; pointer-events:none; }' +
-    '.medbbc-viewer, .medbbc-viewer *, [data-medbbc-viewer], [data-medbbc-viewer] * { pointer-events:auto !important; }' +
-    /* Prevent text selection highlight showing */
+    'img,video,canvas,svg,iframe { -webkit-user-drag:none; user-drag:none; pointer-events:none; }' +
+    '.medbbc-viewer, .medbbc-viewer *, [data-medbbc-viewer], [data-medbbc-viewer] *, .protected-view, .protected-view * { pointer-events:auto !important; }' +
+    '.medbbc-viewer, .medbbc-viewer *, [data-medbbc-viewer], [data-medbbc-viewer] *, .protected-view, .protected-view * { -webkit-user-select:text !important; user-select:text !important; }' +
+    '.medbbc-viewer img, .medbbc-viewer video, .medbbc-viewer canvas, .medbbc-viewer svg, .medbbc-viewer iframe, [data-medbbc-viewer] img, [data-medbbc-viewer] video, [data-medbbc-viewer] canvas, [data-medbbc-viewer] svg, [data-medbbc-viewer] iframe, .protected-view img, .protected-view video, .protected-view canvas, .protected-view svg, .protected-view iframe { -webkit-user-select:none !important; user-select:none !important; }' +
     '::selection { background: transparent; }' +
-    '::-moz-selection { background: transparent; }';
+    '::-moz-selection { background: transparent; }' +
+    '.medbbc-viewer ::selection, [data-medbbc-viewer] ::selection, .protected-view ::selection { background: rgba(250,204,21,.42) !important; color: inherit !important; }' +
+    '.medbbc-viewer ::-moz-selection, [data-medbbc-viewer] ::-moz-selection, .protected-view ::-moz-selection { background: rgba(250,204,21,.42) !important; color: inherit !important; }';
   (document.head || document.documentElement).appendChild(style);
 
   /* ============================================
@@ -226,7 +229,7 @@
     // Block long-press text selection on mobile
     var style = document.createElement('style');
     style.textContent = [
-      '.protected-view, .protected-view * { -webkit-user-select:none!important; user-select:none!important; -webkit-touch-callout:none!important; }',
+      '.protected-view, .protected-view * { -webkit-touch-callout:none!important; }',
       '.protected-view canvas { pointer-events:auto; -webkit-user-drag:none; }',
       '.protected-view iframe { pointer-events:auto; }',
       'canvas { -webkit-user-select:none!important; user-select:none!important; }',
