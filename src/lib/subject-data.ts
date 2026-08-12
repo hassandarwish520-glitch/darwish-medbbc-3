@@ -170,8 +170,8 @@ function isActiveBlockSource(lesson: LessonRow | undefined, sourceTitle: string,
 
 function isOfficialBlockSource(lesson: LessonRow | undefined, sourceTitle: string, sourceTags: string[] = [], sourceId = "") {
   if (isActiveBlockSource(lesson, sourceTitle, sourceTags)) return false;
+  if (lesson?.meta?.block_kind === "practice") return false;
   if (Boolean(lesson?.meta?.is_official_block) || lesson?.meta?.fixed_block === true || lesson?.meta?.block_kind === "official") return true;
-  if (sourceId && !sourceId.startsWith("pool-")) return true;
   const haystack = blockSignalText(lesson, sourceTitle, sourceTags);
   return /(official\s*fixed\s*block|fixed\s*qbank\s*block|fixed\s*block|ifom\s*block|cardio_block_|official\b)/i.test(haystack);
 }

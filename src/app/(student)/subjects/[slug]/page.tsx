@@ -4,7 +4,6 @@ import {
   ExternalLink,
   FileText,
   HelpCircle,
-  Layers,
   PlaySquare,
   ChevronLeft,
   ChevronRight,
@@ -211,15 +210,13 @@ export default async function SubjectDashboardPage({
   const Icon = getSubjectIconName(detail.subject.title);
   const activeBlockIds = new Set(detail.activeBlocks.map((block) => block.id));
   const officialBlockIds = new Set(detail.officialBlocks.map((block) => block.id));
-  const practicePoolSources = detail.qbankSources.filter((src) => !activeBlockIds.has(src.id) && !officialBlockIds.has(src.id));
-  const representedQbankIds = new Set([
+  const representedStructuredIds = new Set([
     ...detail.activeBlocks.map((block) => block.id),
     ...detail.officialBlocks.map((block) => block.id),
-    ...practicePoolSources.map((src) => src.id),
   ]);
   const notesDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "notes");
-  const standaloneActiveQbankDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "active-qbank" && !representedQbankIds.has(doc.id));
-  const standaloneQbankDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "qbank" && !representedQbankIds.has(doc.id));
+  const activeQbankDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "active-qbank");
+  const standaloneActiveQbankDocuments = activeQbankDocuments.filter((doc) => !representedStructuredIds.has(doc.id));
 
   const qbankConfigHref = `/qbank/configure?subject=${encodeURIComponent(detail.subject.title)}&exam=${encodeURIComponent(exam)}&returnTo=${encodeURIComponent(`/subjects/${detail.subject.slug}?exam=${exam}`)}`;
   const randomQuizHref = `/qbank/configure?subject=${encodeURIComponent(detail.subject.title)}&exam=${encodeURIComponent(exam)}&mode=random&returnTo=${encodeURIComponent(`/subjects/${detail.subject.slug}?exam=${exam}`)}`;
@@ -537,7 +534,7 @@ export default async function SubjectDashboardPage({
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider" style={{ background: "rgba(16,185,129,0.20)", color: "#6ee7b7" }}>Active</span>
-                <div className="text-xs uppercase tracking-wider text-emerald-100 font-semibold">Active QBank Resources</div>
+                <div className="text-xs uppercase tracking-wider text-emerald-100 font-semibold">Active QBank Documents</div>
               </div>
               <div className="text-xs text-emerald-200/80">{standaloneActiveQbankDocuments.length} file{standaloneActiveQbankDocuments.length !== 1 ? "s" : ""}</div>
             </div>
@@ -552,7 +549,7 @@ export default async function SubjectDashboardPage({
                     <span className="grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold" style={{ background: "rgba(16,185,129,0.25)", color: "#6ee7b7" }}>{index + 1}</span>
                     <span className="text-sm font-semibold text-white truncate flex-1">{friendlyDocTitle(doc.title, index + 1)}</span>
                   </div>
-                  <div className="text-xs text-slate-400 truncate">Open attached active QBank resource</div>
+                  <div className="text-xs text-slate-400 truncate">Open active QBank HTML document</div>
                 </Link>
               ))}
             </div>
@@ -601,153 +598,6 @@ export default async function SubjectDashboardPage({
           </div>
         )}
 
-        {/* Practice Pool — random-style sessions (separate section) */}
-        {(practicePoolSources.length > 0 || standaloneQbankDocuments.length > 0) && (
-          <div className="mt-6">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Layers className="h-3.5 w-3.5 text-slate-400" />
-                <div className="text-xs uppercase tracking-wider text-slate-500 font-medium">Practice Pool &amp; Random Sessions</div>
-              </div>
-              <div className="text-xs text-slate-600">Swipe to explore →</div>
-            </div>
-
-            {/* Horizontal scroll container */}
-            <div
-              className="flex gap-3 overflow-x-auto pb-3"
-              style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" }}
-            >
-              {/* Question Pools (from questions table) */}
-              {practicePoolSources.map((src, index) => {
-                const { blockStatus, displayPct, lastScore } = getBlockMetrics(src.id, src.questionCount);
-                const estMins = Math.round(src.questionCount * 1.5);
-                const diffLabel = src.questionCount > 30 ? "Hard" : src.questionCount > 15 ? "Medium" : "Easy";
-
-                return (
-                  <div
-                    key={src.id}
-                    className="shrink-0 flex flex-col rounded-2xl border border-ink-700 bg-ink-950/70 p-4"
-                    style={{ width: "220px", minWidth: "220px", scrollSnapAlign: "start" }}
-                  >
-                    {/* Status dot + title */}
-                    <div className="flex items-center gap-2 mb-3">
-                      {displayPct >= 100 ? (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                      ) : displayPct > 0 ? (
-                        <div className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
-                      ) : (
-                        <div className="h-2 w-2 rounded-full border border-slate-600 shrink-0" />
-                      )}
-                      <span className="text-sm font-semibold text-white truncate flex-1">
-                        {conciseTitle("qbank", index + 1, src.title)}
-                      </span>
-                    </div>
-
-                    {/* Stats grid */}
-                    <div className="grid grid-cols-2 gap-2 mb-3">
-                      <div className="rounded-xl bg-ink-900 px-2 py-1.5 text-center">
-                        <div className="text-sm font-bold text-white">{src.questionCount}</div>
-                        <div className="text-[10px] uppercase tracking-wide text-slate-500">Questions</div>
-                      </div>
-                      <div className="rounded-xl bg-ink-900 px-2 py-1.5 text-center">
-                        <div className={`text-sm font-bold ${diffLabel === "Hard" ? "text-red-400" : diffLabel === "Medium" ? "text-amber-400" : "text-emerald-400"}`}>
-                          {diffLabel}
-                        </div>
-                        <div className="text-[10px] uppercase tracking-wide text-slate-500">Difficulty</div>
-                      </div>
-                      <div className="rounded-xl bg-ink-900 px-2 py-1.5 text-center">
-                        <div className="text-sm font-bold text-amber-300">~{estMins}m</div>
-                        <div className="text-[10px] uppercase tracking-wide text-slate-500">Est. Time</div>
-                      </div>
-                      <div className="rounded-xl bg-ink-900 px-2 py-1.5 text-center">
-                        {lastScore !== null ? (
-                          <>
-                            <div className={`text-sm font-bold ${lastScore >= 60 ? "text-emerald-400" : "text-red-400"}`}>
-                              {lastScore}%
-                            </div>
-                            <div className="text-[10px] uppercase tracking-wide text-slate-500">Score</div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="text-sm font-bold text-slate-500">—</div>
-                            <div className="text-[10px] uppercase tracking-wide text-slate-500">Score</div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Progress bar */}
-                    <div className="mb-1.5">
-                      <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                        <span>Progress</span>
-                        <span className="font-semibold text-white">{displayPct}%</span>
-                      </div>
-                      <ProgressBar
-                        pct={displayPct}
-                        color={displayPct >= 100 ? "bg-emerald-500" : displayPct > 0 ? "bg-amber-400" : "bg-ink-600"}
-                      />
-                    </div>
-
-                    {/* Spacer */}
-                    <div className="flex-1 min-h-[8px]" />
-
-                    {/* Action button */}
-                    <div className="mt-3">
-                      {blockStatus === "complete" ? (
-                        <Link href={qbankConfigHref} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-400/30 bg-emerald-500/10 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition">
-                          <RotateCcw className="h-3.5 w-3.5" /> Review
-                        </Link>
-                      ) : blockStatus === "suspended" ? (
-                        <Link
-                          href={suspendedSession ? `/qbank?session=${suspendedSession.id}` : qbankConfigHref}
-                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-500/10 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition"
-                        >
-                          <Zap className="h-3.5 w-3.5" /> Continue
-                        </Link>
-                      ) : (
-                        <Link href={qbankConfigHref} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-ink-700 bg-ink-900 py-2 text-xs font-semibold text-slate-300 hover:border-amber-400/50 transition">
-                          <ChevronRight className="h-3.5 w-3.5" /> Start
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Standalone Q-Bank documents not already represented by blocks */}
-              {standaloneQbankDocuments.map((doc, index) => (
-                <div
-                  key={doc.id}
-                  className="shrink-0 flex flex-col rounded-2xl border border-ink-700 bg-ink-950/70 p-4"
-                  style={{ width: "220px", minWidth: "220px", scrollSnapAlign: "start" }}
-                >
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="h-2 w-2 rounded-full border border-slate-600 shrink-0" />
-                    <span className="text-sm font-semibold text-white truncate flex-1">
-                      {friendlyDocTitle(doc.title, index + 1)}
-                    </span>
-                  </div>
-
-                  {/* Stats */}
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    <div className="rounded-xl bg-ink-900 px-2 py-1.5 text-center col-span-2">
-                      <div className="text-xs font-semibold text-slate-400">Interactive HTML Q-Bank</div>
-                    </div>
-                  </div>
-
-                  <div className="flex-1" />
-
-                  <Link
-                    href={`/lesson/${doc.id}`}
-                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-ink-700 bg-ink-900 py-2 text-xs font-semibold text-slate-300 hover:border-amber-400/50 transition"
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" /> Open
-                  </Link>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── SECTIONS GRID ────────────────────────────────────────────────── */}
