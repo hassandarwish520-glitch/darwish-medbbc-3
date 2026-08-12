@@ -3,8 +3,8 @@
  * question + breadcrumb so the FRONT is never ambiguous on its own.
  *
  * Rule: never invent new medical facts. We may only rephrase the EXISTING
- * prompt fragment into a complete question using the already-known topic
- * title and the labels detected from the card BACK.
+ * prompt fragment into a complete question using the already-known or
+ * inferred topic title and the labels detected from the card BACK.
  */
 
 import { structureBackText } from "@/lib/flashcards/structure";
@@ -62,6 +62,124 @@ function hasLabel(rawBack: string, labelPrefix: string) {
   return structured.groups.some((group) => group.label.toLowerCase().startsWith(labelPrefix.toLowerCase()));
 }
 
+function containsAny(text: string, terms: string[]) {
+  const lower = text.toLowerCase();
+  return terms.some((term) => lower.includes(term.toLowerCase()));
+}
+
+/**
+ * Best-effort title inference for already-imported legacy cardiology cards
+ * that lost their TITLE metadata during older extraction runs.
+ */
+export function inferTopicTitleFromCard(card: {
+  front?: string | null;
+  back?: string | null;
+  section?: string | null;
+  tags?: string[] | null;
+}): string | null {
+  const front = cleanPrompt(card.front ?? "");
+  const back = (card.back ?? "").replace(/\s+/g, " ").trim();
+  const haystack = `${front} \n ${back} \n ${(card.section ?? "")} \n ${String((card.tags ?? []).join(" "))}`.toLowerCase();
+
+  const rules: Array<{ title: string; when: (text: string) => boolean }> = [
+    {
+      title: "Mitral Stenosis",
+      when: (text) => containsAny(text, [
+        "opening snap",
+        "low-pitched diastolic rumble",
+        "left atrial enlargement",
+        "left atrial thrombus",
+        "rheumatic heart disease",
+      ]),
+    },
+    {
+      title: "Aortic Stenosis",
+      when: (text) => containsAny(text, [
+        "radiates to carotids",
+        "crescendo-decrescendo systolic murmur",
+        "calcific degeneration",
+        "syncope, angina, dyspnea",
+        "pulsus parvus et tardus",
+        "bicuspid aortic valve",
+      ]),
+    },
+    {
+      title: "Mitral Regurgitation",
+      when: (text) => containsAny(text, [
+        "radiates to axilla",
+        "holosystolic murmur",
+        "mitral valve prolapse",
+        "papillary muscle dysfunction",
+        "left atrial dilation",
+        "left ventricular dilation",
+      ]),
+    },
+    {
+      title: "Stable Angina",
+      when: (text) => containsAny(text, [
+        "exertional chest pain relieved by rest",
+        "fixed atherosclerotic coronary narrowing",
+        "troponin normal",
+        "sublingual nitroglycerin",
+      ]),
+    },
+    {
+      title: "Unstable Angina",
+      when: (text) => containsAny(text, [
+        "plaque rupture",
+        "partially occlusive thrombus",
+        "new-onset, worsening, or rest angina",
+        "troponin remains normal",
+      ]),
+    },
+    {
+      title: "NSTEMI",
+      when: (text) => containsAny(text, [
+        "troponin elevated",
+        "subendocardial infarction",
+        "no persistent st elevation",
+      ]) || text.includes("nstemi"),
+    },
+    {
+      title: "STEMI",
+      when: (text) => containsAny(text, [
+        "persistent st elevation",
+        "transmural infarction",
+        "complete coronary occlusion",
+        "q waves may develop",
+      ]) || text.includes("stemi"),
+    },
+    {
+      title: "Post-MI Complications",
+      when: (text) => containsAny(text, [
+        "papillary muscle rupture",
+        "ventricular septal rupture",
+        "free wall rupture",
+        "dressler",
+        "post-mi",
+      ]),
+    },
+    {
+      title: "Infective Endocarditis",
+      when: (text) => containsAny(text, [
+        "janeway",
+        "osler",
+        "splinter hemorrhages",
+        "s. aureus",
+        "viridans streptococci",
+        "hacek",
+        "endocarditis",
+      ]),
+    },
+  ];
+
+  for (const rule of rules) {
+    if (rule.when(haystack)) return rule.title;
+  }
+
+  return null;
+}
+
 function convertFragmentToQuestion(fragment: string, title: string, rawBack: string) {
   const f = fragment.toLowerCase().replace(/[?.!]+$/g, "").trim();
   const murmurContext = hasLabel(rawBack, "murmur") || /murmur/i.test(fragment);
@@ -102,16 +220,14 @@ function convertFragmentToQuestion(fragment: string, title: string, rawBack: str
     return normalized.replace(/\?$/, ` in ${title}?`);
   }
 
-  // Very short noun fragments: convert into a full "What is...of" prompt.
   const wordCount = f.split(/\s+/).filter(Boolean).length;
   if (wordCount <= 4) {
-    if (murmurContext) {
-      return ensureQuestion(`What is the ${f} of ${title}`.replace(/the best heard/i, "where the murmur is best heard"));
+    if (murmurContext && f === "best heard") {
+      return ensureQuestion(`Where is the murmur best heard in ${title}`);
     }
     return ensureQuestion(`What is the ${f} in ${title}`);
   }
 
-  // Fallback: preserve wording but prefix the topic.
   return ensureQuestion(`${title} — ${sentenceCase(fragment)}`);
 }
 

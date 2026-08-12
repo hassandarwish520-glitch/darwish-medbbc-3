@@ -50,7 +50,7 @@ import { GRADE_OPTIONS, sm2, type Grade, type SpacedRepetitionState } from "@/li
 import { extractFlashcardTitle } from "@/lib/flashcards/structured";
 import { structureBackText, type SectionGroup, type StructuredBack } from "@/lib/flashcards/structure";
 import { SectionGroupsView, UngroupedBullets } from "@/components/flashcard-card/StructuredCardSections";
-import { buildCardSearchText, makeSelfContainedFront, deriveBreadcrumbFromCard } from "@/lib/flashcards/context";
+import { buildCardSearchText, inferTopicTitleFromCard, makeSelfContainedFront, deriveBreadcrumbFromCard } from "@/lib/flashcards/context";
 
 type Reference = string;
 type FlashcardSection = {
@@ -197,10 +197,15 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
 
   const taggedCards = useMemo(() => {
     return cards.map((c) => {
-      const cardTitle = extractFlashcardTitle(c.tags ?? []);
+      const cardTitle = extractFlashcardTitle(c.tags ?? []) ?? inferTopicTitleFromCard({
+        front: c.front,
+        back: c.back,
+        section: c.section,
+        tags: c.tags ?? [],
+      });
       const tagList = Array.from(new Set([
         ...(c.tags ?? []).filter((tag) => !tag.toLowerCase().startsWith("title:")),
-        ...(cardTitle ? [cardTitle] : []),
+        ...(cardTitle ? [cardTitle, `title:${cardTitle}`] : []),
         ...(c.section ? [c.section] : []),
         ...(c.high_yield ? ["high_yield"] : []),
         ...(c.source ? [c.source] : []),
