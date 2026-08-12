@@ -50,6 +50,7 @@ import { GRADE_OPTIONS, sm2, type Grade, type SpacedRepetitionState } from "@/li
 import { extractFlashcardTitle } from "@/lib/flashcards/structured";
 import { structureBackText, type SectionGroup, type StructuredBack } from "@/lib/flashcards/structure";
 import { SectionGroupsView, UngroupedBullets } from "@/components/flashcard-card/StructuredCardSections";
+import { makeSelfContainedFront, deriveBreadcrumbFromCard } from "@/lib/flashcards/context";
 
 type Reference = string;
 type FlashcardSection = {
@@ -622,6 +623,8 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
 
           {(() => {
             const backStructure: StructuredBack = structureBackText(card.back);
+            const frontForDisplay = makeSelfContainedFront({ front: card.front, title: card.cardTitle });
+            const breadcrumbParts = deriveBreadcrumbFromCard(card);
             return (
           <div
             role="button"
@@ -641,13 +644,17 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
                 <img src={card.image_url} alt="" className="mx-auto mb-4 max-h-32 rounded-2xl border border-white/10 object-contain" />
               ) : null}
               <div className="flex flex-col text-left">
-                {card.section ? (
-                  <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-blue-300/90">{card.section.replace(/^PART\s+/i, 'PART ')}</div>
+                {breadcrumbParts.length > 0 ? (
+                  <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-blue-300/80">
+                    {breadcrumbParts.join("  ›  ")}
+                  </div>
                 ) : null}
-                {card.cardTitle ? (
-                  <div className="mt-2 text-2xl font-bold leading-tight text-white md:text-[28px]">{card.cardTitle}</div>
-                ) : null}
-                <div className="mt-5 text-base font-medium leading-relaxed text-white md:text-[19px]">{card.front}</div>
+                <div className="mt-2 text-2xl font-bold leading-tight text-white md:text-[28px]">
+                  {card.cardTitle || "Flashcard"}
+                </div>
+                <div className="mt-5 text-base font-medium leading-relaxed text-white md:text-[19px]">
+                  {frontForDisplay}
+                </div>
                 <div className="mt-5 text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">
                   ↻ Tap to reveal answer
                 </div>
@@ -660,17 +667,19 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
               }`}
             >
               <div className="flex flex-col gap-4">
-                {card.section ? (
-                  <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-blue-300/90">{card.section.replace(/^PART\s+/i, 'PART ')}</div>
+                {breadcrumbParts.length > 0 ? (
+                  <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-blue-300/80">
+                    {breadcrumbParts.join("  ›  ")}
+                  </div>
                 ) : null}
-                {card.cardTitle ? (
-                  <div className="text-2xl font-bold leading-tight text-white md:text-[28px]">{card.cardTitle}</div>
-                ) : null}
+                <div className="text-2xl font-bold leading-tight text-white md:text-[28px]">
+                  {card.cardTitle || "Answer"}
+                </div>
 
                 {backStructure.primaryAnswer ? (
                   <div className="rounded-xl bg-white/[0.04] px-4 py-3">
                     <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-blue-300/80">
-                      {card.cardTitle ? `${card.cardTitle.toUpperCase()} – Answer` : "Answer"}
+                      {card.cardTitle ? `${card.cardTitle.toUpperCase()} – Primary Answer` : "Primary Answer"}
                     </div>
                     <div className="mt-1 text-lg font-semibold leading-snug text-white md:text-[20px]">
                       {backStructure.primaryAnswer.value}
