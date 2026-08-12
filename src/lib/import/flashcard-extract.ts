@@ -4,16 +4,20 @@
  * Preserves original wording. Never generates placeholder content.
  *
  * Extraction strategies (in order):
+ *  0. Explicit structured flashcards (PART / TITLE / FRONT / BACK)
  *  1. Structured key-value blocks (Definition:, Features:, Treatment:, etc.)
  *  2. Header + bullet-point lists
  *  3. Medical fact sentences (condition + characteristic pattern)
  *  4. Lab value patterns
  */
 
+import { parseStructuredFlashcards, upsertFlashcardTitleTag } from "@/lib/flashcards/structured";
+
 export type ExtractedFlashcard = {
   front: string;
   back: string;
   tags: string[];
+  section?: string | null;
 };
 
 // ─── Text preprocessing ───────────────────────────────────────────────────────
@@ -123,12 +127,23 @@ export function extractFlashcardsFromText(
   const defaultTags = opts.tags ?? [];
 
   const text = opts.isHtml ? stripHtml(rawText) : rawText;
+
+  const structured = parseStructuredFlashcards(text);
+  if (structured.length) {
+    return structured.slice(0, maxCards).map((card) => ({
+      front: card.front,
+      back: card.back,
+      section: card.section,
+      tags: upsertFlashcardTitleTag(defaultTags, card.title),
+    }));
+  }
+
   const lines = text.split("\n").map(cleanLine).filter(l => l && !isNoise(l));
 
   const cards: ExtractedFlashcard[] = [];
   const seen = new Set<string>();
 
-  function addCard(front: string, back: string, extraTags: string[] = []) {
+  function addCard(front: string, back: string, extraTags: string[] = [], section?: string | null) {
     if (cards.length >= maxCards) return;
     front = front.trim().replace(/[:.\-]+$/, "").trim();
     back = back.trim();
@@ -137,7 +152,7 @@ export function extractFlashcardsFromText(
     const key = front.toLowerCase().slice(0, 40);
     if (seen.has(key)) return;
     seen.add(key);
-    cards.push({ front, back, tags: [...new Set([...defaultTags, ...extraTags])] });
+    cards.push({ front, back, section: section ?? null, tags: [...new Set([...defaultTags, ...extraTags])] });
   }
 
   // ── Pass 1: Labelled blocks ──────────────────────────────────────────────────
