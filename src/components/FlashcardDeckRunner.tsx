@@ -48,6 +48,8 @@ import {
 } from "lucide-react";
 import { GRADE_OPTIONS, sm2, type Grade, type SpacedRepetitionState } from "@/lib/flashcard-scheduler";
 import { extractFlashcardTitle } from "@/lib/flashcards/structured";
+import { structureBackText, type SectionGroup, type StructuredBack } from "@/lib/flashcards/structure";
+import { SectionGroupsView, UngroupedBullets } from "@/components/flashcard-card/StructuredCardSections";
 
 type Reference = string;
 type FlashcardSection = {
@@ -618,76 +620,89 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
             </div>
           </div>
 
+          {(() => {
+            const backStructure: StructuredBack = structureBackText(card.back);
+            return (
           <div
             role="button"
             tabIndex={0}
             onClick={handleFlip}
             onKeyDown={(e) => { if (e.code === "Enter" || e.code === "Space") { e.preventDefault(); handleFlip(); } }}
-            className="relative h-[400px] cursor-pointer select-none rounded-[28px]"
+            className="relative cursor-pointer select-none rounded-[28px]"
           >
             {/* FRONT */}
             <div
-              className={`absolute inset-0 rounded-[28px] border border-white/10 bg-gradient-to-br from-slate-900 via-slate-950 to-black p-8 shadow-[0_24px_60px_rgba(15,23,42,0.55)] transition-transform duration-500 [transform-style:preserve-3d] ${
-                flipped ? "[transform:rotateY(180deg)] [backface-visibility:hidden]" : ""
+              className={`rounded-[28px] border border-white/10 bg-gradient-to-br from-slate-900 via-slate-950 to-black px-6 py-7 md:px-8 md:py-8 shadow-[0_24px_60px_rgba(15,23,42,0.55)] transition-transform duration-500 [transform-style:preserve-3d] ${
+                flipped ? "[transform:rotateY(180deg)] [backface-visibility:hidden] hidden" : "block"
               }`}
             >
               {card.image_url ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={card.image_url} alt="" className="mx-auto mb-3 max-h-32 rounded-2xl border border-white/10 object-contain" />
+                <img src={card.image_url} alt="" className="mx-auto mb-4 max-h-32 rounded-2xl border border-white/10 object-contain" />
               ) : null}
-              <div className="flex h-full flex-col text-center">
+              <div className="flex flex-col text-left">
                 {card.section ? (
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-blue-300">{card.section}</div>
+                  <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-blue-300/90">{card.section.replace(/^PART\s+/i, 'PART ')}</div>
                 ) : null}
                 {card.cardTitle ? (
-                  <div className="mt-4 text-2xl font-semibold text-white md:text-3xl">{card.cardTitle}</div>
+                  <div className="mt-2 text-2xl font-bold leading-tight text-white md:text-[28px]">{card.cardTitle}</div>
                 ) : null}
-                <div className="mt-6 text-xs uppercase tracking-[0.16em] text-slate-400">Front</div>
-                <div className="mt-3 flex flex-1 items-center justify-center text-xl font-medium leading-relaxed text-white md:text-2xl">{card.front}</div>
-                <div className="pt-4 text-center text-xs uppercase tracking-[0.16em] text-slate-500">
-                  Tap to reveal answer
+                <div className="mt-5 text-base font-medium leading-relaxed text-white md:text-[19px]">{card.front}</div>
+                <div className="mt-5 text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">
+                  ↻ Tap to reveal answer
                 </div>
               </div>
             </div>
             {/* BACK */}
             <div
-              className={`absolute inset-0 rounded-[28px] border border-blue-500/30 bg-gradient-to-br from-slate-900 via-blue-950/60 to-slate-950 p-8 shadow-[0_24px_60px_rgba(15,23,42,0.55)] transition-transform duration-500 [transform-style:preserve-3d] ${
-                flipped ? "" : "[transform:rotateY(180deg)] [backface-visibility:hidden]"
+              className={`rounded-[28px] border border-blue-500/30 bg-gradient-to-br from-slate-900 via-blue-950/60 to-slate-950 px-6 py-7 md:px-8 md:py-8 shadow-[0_24px_60px_rgba(15,23,42,0.55)] transition-transform duration-500 [transform-style:preserve-3d] ${
+                flipped ? "block" : "[transform:rotateY(180deg)] [backface-visibility:hidden] hidden"
               }`}
             >
-              <div className="space-y-4 overflow-auto h-full pr-1">
+              <div className="flex flex-col gap-4">
                 {card.section ? (
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-blue-300">{card.section}</div>
+                  <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-blue-300/90">{card.section.replace(/^PART\s+/i, 'PART ')}</div>
                 ) : null}
                 {card.cardTitle ? (
-                  <div className="text-2xl font-semibold text-white md:text-3xl">{card.cardTitle}</div>
+                  <div className="text-2xl font-bold leading-tight text-white md:text-[28px]">{card.cardTitle}</div>
                 ) : null}
-                <div>
-                  <div className="text-xs uppercase tracking-[0.16em] text-blue-300">Back</div>
-                  <div className="mt-1 whitespace-pre-line text-lg font-medium text-white">{card.back}</div>
-                </div>
+
+                {backStructure.primaryAnswer ? (
+                  <div className="rounded-xl bg-white/[0.04] px-4 py-3">
+                    <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-blue-300/80">
+                      {card.cardTitle ? `${card.cardTitle.toUpperCase()} – Answer` : "Answer"}
+                    </div>
+                    <div className="mt-1 text-lg font-semibold leading-snug text-white md:text-[20px]">
+                      {backStructure.primaryAnswer.value}
+                    </div>
+                  </div>
+                ) : null}
+
+                <SectionGroupsView groups={backStructure.groups} />
+                <UngroupedBullets lines={backStructure.ungrouped} />
+
                 {card.high_yield ? (
-                  <div className="rounded-2xl border border-rose-400/40 bg-rose-500/10 p-3">
-                    <div className="text-xs uppercase tracking-[0.16em] text-rose-300">High Yield</div>
-                    <div className="mt-1 text-sm text-rose-100">{card.high_yield}</div>
+                  <div className="rounded-xl bg-white/[0.03] px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-rose-300/80">High Yield</div>
+                    <div className="mt-1 text-sm font-medium text-white">{card.high_yield}</div>
                   </div>
                 ) : null}
                 {card.clinical_pearl ? (
-                  <div className="rounded-2xl border border-violet-400/40 bg-violet-500/10 p-3">
-                    <div className="text-xs uppercase tracking-[0.16em] text-violet-300">Clinical Pearl</div>
-                    <div className="mt-1 text-sm text-violet-100">{card.clinical_pearl}</div>
+                  <div className="rounded-xl bg-white/[0.03] px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-300/80">Clinical Pearl</div>
+                    <div className="mt-1 text-sm font-medium text-white">{card.clinical_pearl}</div>
                   </div>
                 ) : null}
                 {card.memory_tip ? (
-                  <div className="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-3">
-                    <div className="text-xs uppercase tracking-[0.16em] text-amber-300">Memory Tip</div>
-                    <div className="mt-1 text-sm text-amber-100">{card.memory_tip}</div>
+                  <div className="rounded-xl bg-white/[0.03] px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-300/80">Memory Tip</div>
+                    <div className="mt-1 text-sm font-medium text-white">{card.memory_tip}</div>
                   </div>
                 ) : null}
                 {card.references && card.references.length ? (
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <div className="text-xs uppercase tracking-[0.16em] text-slate-300">References</div>
-                    <ul className="mt-2 space-y-1.5 text-sm text-slate-100">
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">References</div>
+                    <ul className="mt-1.5 space-y-1 text-sm text-slate-100">
                       {card.references.map((ref, i) => (
                         <li key={i} className="flex items-center gap-2">
                           <span className="text-emerald-400">•</span>
@@ -707,11 +722,13 @@ export default function FlashcardDeckRunner({ cards, lessonTitle, isStandalone }
                   </div>
                 ) : null}
               </div>
-              <div className="absolute bottom-4 left-0 right-0 text-center text-xs uppercase tracking-[0.16em] text-slate-500">
-                Tap to see the question
+              <div className="mt-3 text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">
+                ↻ Tap to see the question
               </div>
             </div>
           </div>
+            );
+          })()}
 
           {/* Hint row */}
           {!flipped ? (
