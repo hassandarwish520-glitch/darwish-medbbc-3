@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/supabase/server";
 import Link from "next/link";
@@ -28,6 +30,22 @@ type FlashcardRow = {
   topic_id?: string | null;
 };
 
+type SmartDeckCard = {
+  id: string;
+  section?: string;
+  title: string;
+  front: string;
+  primary_answer?: string;
+  murmur?: string;
+  extra_heart_sound?: string;
+  key_finding?: string;
+  etiology?: string;
+  triggers?: string[];
+  consequences?: string[];
+  difficulty?: number;
+  tags?: string[];
+};
+
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
 function normalizeCard(row: FlashcardRow): FlashcardRow {
@@ -47,6 +65,41 @@ function normalizeCard(row: FlashcardRow): FlashcardRow {
     source: row.source ?? null,
     topic_id: row.topic_id ?? null,
   };
+}
+
+function composeSmartBack(card: SmartDeckCard) {
+  const lines: string[] = [];
+  if (card.primary_answer) lines.push(`Primary Answer: ${card.primary_answer}`);
+  if (card.murmur) lines.push(`Murmur: ${card.murmur}`);
+  if (card.extra_heart_sound) lines.push(`Extra Heart Sound: ${card.extra_heart_sound}`);
+  if (card.key_finding) lines.push(`Key Finding: ${card.key_finding}`);
+  if (card.etiology) lines.push(`Etiology: ${card.etiology}`);
+  for (const item of card.triggers ?? []) lines.push(`Trigger: ${item}`);
+  for (const item of card.consequences ?? []) lines.push(`Consequence: ${item}`);
+  return lines.join("\n");
+}
+
+async function loadSmartCardiologyDeck(lessonId: string | null): Promise<FlashcardRow[]> {
+  const filePath = path.join(process.cwd(), "public", "flashcards", "cardiology-smart-deck.json");
+  const raw = await fs.readFile(filePath, "utf8");
+  const parsed = JSON.parse(raw) as { cards?: SmartDeckCard[] };
+  const cards = Array.isArray(parsed.cards) ? parsed.cards : [];
+  return cards.map((card) => normalizeCard({
+    id: card.id,
+    front: card.front,
+    back: composeSmartBack(card),
+    lesson_id: lessonId,
+    section: card.section ?? "Cardiology",
+    high_yield: card.primary_answer ?? null,
+    clinical_pearl: card.key_finding ?? null,
+    memory_tip: (card.triggers ?? []).length ? `Triggers: ${(card.triggers ?? []).join(" · ")}` : null,
+    references: [],
+    difficulty: typeof card.difficulty === "number" ? String(card.difficulty.toFixed(2)) : null,
+    image_url: null,
+    tags: [`title:${card.title}`, "ifom", "high_yield", ...(card.tags ?? [])],
+    source: "ifom",
+    topic_id: null,
+  }));
 }
 
 async function fetchCardsForLesson(s: SupabaseClient, lessonId: string) {
@@ -127,6 +180,21 @@ export default async function ReviewPage({
     cardRows = await fetchCardsForLesson(s, lesson_id);
   } else {
     cardRows = await fetchDueAndNewCards(s, ctx!.user.id);
+  }
+
+  const isCardiologyDeck = (lessonTitle ?? "").trim().toLowerCase() === "cardiology cards";
+  const looksMalformedCardiology = isCardiologyDeck && cardRows.some((card) => {
+    const front = (card.front ?? "").toLowerCase();
+    const back = (card.back ?? "").toLowerCase();
+    return front.includes("title:") || front.includes("front ") || back.includes("title:") || back.includes("front:") || back.includes("back:");
+  });
+
+  if (isCardiologyDeck && (looksMalformedCardiology || cardRows.length !== 14)) {
+    try {
+      cardRows = await loadSmartCardiologyDeck(lesson_id ?? null);
+    } catch {
+      // Keep DB cards if the bundled deck is unavailable.
+    }
   }
 
   const courseLabel = !lessonTitle && scope === "personal" ? "Standalone Deck" : lessonTitle ?? "All Due Cards";
