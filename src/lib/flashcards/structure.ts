@@ -31,6 +31,8 @@ export type StructuredBack = {
 };
 
 const KNOWN_LABELS: RegExp[] = [
+  /^primary\s+answer\b/i,
+  /^answer\b/i,
   /^high.?yield\b/i,
   /^murmur\b/i,
   /^extra\s+heart\s+sound\b/i,
@@ -100,6 +102,10 @@ function isKnownLabel(label: string) {
 }
 
 function derivePrimaryAnswer(groups: SectionGroup[], fallbackLines: string[]): PrimaryAnswer | null {
+  const preferred = groups.find((group) => /^primary\s+answer$/i.test(group.label) || /^answer$/i.test(group.label));
+  if (preferred?.lines?.[0] && preferred.lines[0].length >= 4 && preferred.lines[0].length <= 110) {
+    return { label: preferred.label, value: preferred.lines[0] };
+  }
   for (const group of groups) {
     if (!group.label || !group.lines.length) continue;
     const first = group.lines[0];
