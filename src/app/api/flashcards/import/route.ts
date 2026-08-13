@@ -3,16 +3,19 @@
  *
  * Student-facing flashcard importer. Accepts either:
  *   - lesson_id (existing lesson) → extract from that lesson's source text.
- *   - file upload (PDF/HTML/TXT/MD) + optional title + optional course_id →
- *     create a new lesson on the fly, then extract flashcards from it.
+ *   - file upload (PDF/HTML/TXT/MD/CSV/TSV/JSON) + optional title + optional course_id →
+ *     create a new lesson on the fly, then either:
+ *       A) import structured cards directly (preferred), or
+ *       B) extract cards from prose / source text.
  *
- * Extraction is deterministic (no LLM, no invented content) — flashcards are
- * pulled verbatim from the source using flashcard-extract.
+ * Import/extraction is deterministic — no invented content.
  */
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient, requireActive } from "@/lib/supabase/server";
 import { extractFlashcardsFromText } from "@/lib/import/flashcard-extract";
+import { parseImportedFlashcards } from "@/lib/import/flashcard-file-import";
+import { insertFlashcardsCompat } from "@/lib/flashcards/db";
 import { extractLessonIndexText } from "@/lib/ai/source-text";
 import { extractPdfTextFromBuffer } from "@/lib/ai/pdf";
 import { detectIfomSubject, detectTopic } from "@/lib/ai/ifom";
@@ -45,6 +48,19 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function looksStructured(text: string) {
+  return /(^|\n)\s*TITLE\s*[:\-]/im.test(text)
+    || /(^|\n)\s*FRONT\s*[:\-]/im.test(text)
+    || /\*\*Front:\*\*/i.test(text)
+    || /\"ID\"\s*,\s*\"Deck\"/i.test(text)
+    || /\t/.test(text);
+}
+
+function isStructuredFileName(name: string) {
+  const lower = name.toLowerCase();
+  return [".json", ".csv", ".tsv", ".md", ".txt", ".html", ".htm"].some((ext) => lower.endsWith(ext));
 }
 
 async function readFileText(file: File): Promise<{ text: string; html: string }> {
@@ -105,7 +121,7 @@ async function createLessonFromFile(
     };
     indexTextForRag = extractLessonIndexText({
       kind: "pdf",
-      meta: (lessonRow as any).meta,
+      meta: (lessonRow as { meta?: Record<string, unknown> }).meta,
     });
   } else if (lower.endsWith(".html") || lower.endsWith(".htm")) {
     lessonRow = {
@@ -122,10 +138,9 @@ async function createLessonFromFile(
     indexTextForRag = extractLessonIndexText({
       kind: "html",
       html_body: html,
-      meta: (lessonRow as any).meta,
+      meta: (lessonRow as { meta?: Record<string, unknown> }).meta,
     });
   } else {
-    // TXT / MD → wrap as inline HTML lesson so the viewer still works
     const wrappedHtml = `<!doctype html><html><body style="font-family:Inter,Arial,sans-serif;padding:24px;background:#020617;color:#e2e8f0;"><pre style="white-space:pre-wrap;line-height:1.7">${escapeHtml(
       text,
     )}</pre></body></html>`;
@@ -177,7 +192,8 @@ async function loadLessonText(
 
   if (lesson.kind === "html" && lesson.html_body) {
     html = lesson.html_body;
-    text = text || stripHtml(lesson.html_body);
+    const htmlText = stripHtml(lesson.html_body);
+    text = looksStructured(htmlText) ? htmlText : (text || htmlText);
   } else if (lesson.storage_path) {
     const { data: blob } = await admin.storage
       .from("lesson-assets")
@@ -185,7 +201,9 @@ async function loadLessonText(
     if (blob) {
       if (lesson.kind === "html") {
         html = await blob.text();
-        text = extractLessonIndexText(lesson, html);
+        const htmlText = stripHtml(html);
+        const indexed = extractLessonIndexText(lesson, html);
+        text = looksStructured(htmlText) ? htmlText : indexed;
       } else if (lesson.kind === "pdf") {
         const pdfText = await extractPdfTextFromBuffer(
           Buffer.from(await blob.arrayBuffer()),
@@ -229,6 +247,7 @@ export async function POST(req: NextRequest) {
   let sourceTitle = "";
   let text = "";
   let html = "";
+  let directImportedCount = 0;
 
   try {
     if (file) {
@@ -243,11 +262,92 @@ export async function POST(req: NextRequest) {
       sourceTitle = created.title;
       text = created.text;
       html = created.html;
+
+      if (isStructuredFileName(file.name)) {
+        const rawText = file.name.toLowerCase().endsWith(".pdf") ? "" : await file.text();
+        const importedCards = parseImportedFlashcards(rawText, file.name);
+        if (importedCards.length) {
+          const subject = detectIfomSubject(text || rawText || sourceTitle);
+          const topic = detectTopic(text || rawText || sourceTitle, subject);
+          const contextualTags = [subject, topic].filter(Boolean);
+
+          const rows = importedCards.map((card) => ({
+            lesson_id: targetLessonId,
+            front: card.front,
+            back: card.back,
+            section: card.section ?? null,
+            high_yield: card.high_yield ?? null,
+            clinical_pearl: card.clinical_pearl ?? null,
+            memory_tip: card.memory_tip ?? null,
+            references: card.references ?? [],
+            difficulty: card.difficulty,
+            source: card.source ?? "import",
+            image_url: card.image_url ?? null,
+            tags: [...new Set([...(card.tags ?? []), ...contextualTags])].filter(Boolean),
+            ai_generated: false,
+            created_by: ctx.user.id,
+          }));
+
+          const inserted = await insertFlashcardsCompat(admin, rows);
+          if (inserted.error) {
+            return NextResponse.json({ error: inserted.error.message }, { status: 500 });
+          }
+
+          directImportedCount = inserted.data?.length ?? rows.length;
+          return NextResponse.json({
+            inserted: directImportedCount,
+            lesson_id: targetLessonId,
+            source_title: sourceTitle,
+            subject,
+            topic,
+            mode: inserted.mode,
+            import_type: "structured",
+          });
+        }
+      }
     } else {
       const loaded = await loadLessonText(admin, targetLessonId);
       sourceTitle = loaded.title;
       text = loaded.text;
       html = loaded.html;
+
+      const importedCards = parseImportedFlashcards(html || text, `${sourceTitle || "lesson"}.txt`);
+      if (importedCards.length) {
+        const subject = detectIfomSubject(text || sourceTitle);
+        const topic = detectTopic(text || sourceTitle, subject);
+        const contextualTags = [subject, topic].filter(Boolean);
+        const rows = importedCards.map((card) => ({
+          lesson_id: targetLessonId,
+          front: card.front,
+          back: card.back,
+          section: card.section ?? null,
+          high_yield: card.high_yield ?? null,
+          clinical_pearl: card.clinical_pearl ?? null,
+          memory_tip: card.memory_tip ?? null,
+          references: card.references ?? [],
+          difficulty: card.difficulty,
+          source: card.source ?? "import",
+          image_url: card.image_url ?? null,
+          tags: [...new Set([...(card.tags ?? []), ...contextualTags])].filter(Boolean),
+          ai_generated: false,
+          created_by: ctx.user.id,
+        }));
+
+        const inserted = await insertFlashcardsCompat(admin, rows);
+        if (inserted.error) {
+          return NextResponse.json({ error: inserted.error.message }, { status: 500 });
+        }
+
+        return NextResponse.json({
+          inserted: inserted.data?.length ?? rows.length,
+          lesson_id: targetLessonId,
+          source_title: sourceTitle,
+          subject,
+          topic,
+          mode: inserted.mode,
+          import_type: "structured",
+        });
+      }
     }
   } catch (e: unknown) {
     return NextResponse.json(
@@ -260,7 +360,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "No extractable text in this source. Try a PDF with real text (not scanned images) or an HTML / TXT / Markdown file.",
+          "No extractable text in this source. Try a PDF with real text (not scanned images) or a structured HTML / TXT / Markdown / CSV / TSV / JSON file.",
       },
       { status: 422 },
     );
@@ -280,7 +380,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "No flashcard-worthy content found. This file may be pure prose without structured facts. Try a file that contains labelled sections (Definition:, Features:, Treatment:, lab values, bullet lists).",
+          "No flashcard-worthy content found. For direct import, upload a structured JSON / CSV / TSV / Markdown deck. For extraction, use labeled source text such as Title / Front / Back or sections like Definition:, Features:, Treatment:.",
       },
       { status: 422 },
     );
@@ -296,19 +396,18 @@ export async function POST(req: NextRequest) {
     created_by: ctx.user.id,
   }));
 
-  const { data: inserted, error } = await admin
-    .from("flashcards")
-    .insert(rows)
-    .select("id");
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const inserted = await insertFlashcardsCompat(admin, rows);
+  if (inserted.error) {
+    return NextResponse.json({ error: inserted.error.message }, { status: 500 });
   }
 
   return NextResponse.json({
-    inserted: inserted?.length ?? rows.length,
+    inserted: inserted.data?.length ?? rows.length,
     lesson_id: targetLessonId,
     source_title: sourceTitle,
     subject,
     topic,
+    mode: inserted.mode,
+    import_type: "extracted",
   });
 }

@@ -8,6 +8,7 @@ import { extractFlashcardsFromText } from "@/lib/import/flashcard-extract";
 import { extractLessonIndexText } from "@/lib/ai/source-text";
 import { extractPdfTextFromBuffer } from "@/lib/ai/pdf";
 import { detectIfomSubject, detectTopic } from "@/lib/ai/ifom";
+import { insertFlashcardsCompat } from "@/lib/flashcards/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -76,11 +77,11 @@ export async function POST(req: NextRequest) {
     created_by: ctx.user.id,
   }));
 
-  const { data: inserted, error } = await admin.from("flashcards").insert(rows).select("id");
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const inserted = await insertFlashcardsCompat(admin, rows);
+  if (inserted.error) return NextResponse.json({ error: inserted.error.message }, { status: 500 });
 
   return NextResponse.json({
-    inserted: inserted?.length ?? rows.length,
+    inserted: inserted.data?.length ?? rows.length,
     subject,
     topic,
     source_title: title,
