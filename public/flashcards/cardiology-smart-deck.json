@@ -1,0 +1,248 @@
+{
+  "deckTitle": "Cardiology cards",
+  "subtitle": "Smart IFOM CSE high-yield deck",
+  "cards": [
+    {
+      "id": "CARD-001",
+      "section": "CAD & Acute Coronary Syndrome",
+      "title": "Stable Angina",
+      "front": "What are the immediate high-yield clues for stable angina?",
+      "primary_answer": "Exertional chest pain relieved by rest or nitroglycerin",
+      "key_finding": "ST depression ± T-wave inversion during attack; ECG at rest usually normal",
+      "etiology": "Fixed atherosclerotic coronary narrowing",
+      "triggers": ["Exertion", "Cold", "Emotional stress"],
+      "consequences": [
+        "Troponin normal → no myocardial necrosis",
+        "Acute relief: sublingual nitroglycerin",
+        "Prevention: beta-blocker + aspirin + statin"
+      ],
+      "difficulty": 2.0,
+      "tags": ["ACS", "Ischemic", "Chronic"]
+    },
+    {
+      "id": "CARD-002",
+      "section": "CAD & Acute Coronary Syndrome",
+      "title": "Unstable Angina",
+      "front": "New/worsening or rest chest pain + ST depression + normal troponin → ?",
+      "primary_answer": "Unstable angina",
+      "key_finding": "ST depression ± T-wave inversion with no persistent ST elevation",
+      "etiology": "Plaque rupture → partially occlusive thrombus",
+      "consequences": [
+        "Pattern: new-onset, worsening, or rest angina",
+        "Troponin remains normal → distinguishes it from NSTEMI",
+        "Initial treatment: aspirin + P2Y12 inhibitor + anticoagulation ± beta-blocker"
+      ],
+      "difficulty": 2.5,
+      "tags": ["ACS", "Ischemic"]
+    },
+    {
+      "id": "CARD-003",
+      "section": "CAD & Acute Coronary Syndrome",
+      "title": "NSTEMI",
+      "front": "ST depression + elevated troponin → ?",
+      "primary_answer": "NSTEMI",
+      "key_finding": "ST depression ± T-wave inversion + elevated troponin",
+      "etiology": "Subendocardial infarction; subendocardium is farthest from coronary supply and exposed to high wall stress",
+      "consequences": [
+        "Myocardial necrosis without ST elevation",
+        "Treatment backbone: aspirin + P2Y12 inhibitor + anticoagulation ± beta-blocker",
+        "Revascularization: early invasive strategy based on risk"
+      ],
+      "difficulty": 2.5,
+      "tags": ["ACS", "MI"]
+    },
+    {
+      "id": "CARD-004",
+      "section": "CAD & Acute Coronary Syndrome",
+      "title": "STEMI",
+      "front": "ST elevation + elevated troponin → ?",
+      "primary_answer": "STEMI",
+      "key_finding": "Hyperacute T waves earliest → ST elevation classic → pathological Q waves later",
+      "etiology": "Acute coronary occlusion causing transmural ischemia/infarction",
+      "consequences": [
+        "Troponin rises ~3–4 h, peaks ~24 h, remains elevated ~7–10 days",
+        "CK-MB useful for detecting reinfarction",
+        "Preferred reperfusion: primary PCI",
+        "Fibrinolysis if timely PCI unavailable and no contraindications",
+        "V1–V4 anterior wall → LAD; II, III, aVF inferior wall → usually RCA"
+      ],
+      "difficulty": 3.0,
+      "tags": ["ACS", "MI", "Emergency"]
+    },
+    {
+      "id": "CARD-005",
+      "section": "CAD & Acute Coronary Syndrome",
+      "title": "MI Mechanical Complications",
+      "front": "What are the classic post-MI mechanical complication patterns?",
+      "primary_answer": "Papillary muscle rupture, ventricular septal rupture, free-wall rupture, ventricular aneurysm",
+      "key_finding": "Major mechanical complications classically occur about 3–7 days after MI",
+      "etiology": "Necrotic myocardium weakens and fails structurally",
+      "consequences": [
+        "Sudden pulmonary edema + new apical holosystolic murmur → papillary muscle rupture → acute MR",
+        "New holosystolic murmur at left sternal border + O2 step-up → ventricular septal rupture",
+        "Hypotension + JVD + PEA → free-wall rupture → tamponade",
+        "Persistent ST elevation weeks later → ventricular aneurysm"
+      ],
+      "difficulty": 3.0,
+      "tags": ["ACS", "Complications"]
+    },
+    {
+      "id": "CARD-006",
+      "section": "Valvular Heart Disease",
+      "title": "Aortic Stenosis",
+      "front": "What is the characteristic murmur of aortic stenosis?",
+      "primary_answer": "Crescendo-decrescendo systolic ejection murmur",
+      "murmur": "Crescendo-decrescendo systolic ejection murmur",
+      "key_finding": "Best heard at right 2nd intercostal space / RUSB and radiates to carotids",
+      "etiology": "Degenerative calcification in older adults; bicuspid valve in younger patients",
+      "consequences": [
+        "Classic triad: angina, syncope, dyspnea",
+        "Severe AS: pulsus parvus et tardus",
+        "Chronic AS → left ventricular hypertrophy"
+      ],
+      "difficulty": 2.5,
+      "tags": ["Valvular", "Systolic"]
+    },
+    {
+      "id": "CARD-007",
+      "section": "Valvular Heart Disease",
+      "title": "Mitral Regurgitation",
+      "front": "What is the characteristic murmur of mitral regurgitation?",
+      "primary_answer": "Holosystolic murmur radiating to the axilla",
+      "murmur": "Holosystolic / pansystolic murmur",
+      "key_finding": "Best heard at the cardiac apex; radiates to axilla",
+      "etiology": "Mitral valve prolapse, rheumatic disease, papillary muscle dysfunction/rupture, infective endocarditis",
+      "consequences": [
+        "Post-MI acute MR → papillary muscle rupture",
+        "Chronic MR → left atrial enlargement",
+        "Left atrial enlargement → atrial fibrillation",
+        "Can progress to pulmonary venous congestion, pulmonary hypertension, and late RV failure"
+      ],
+      "difficulty": 2.5,
+      "tags": ["Valvular", "Systolic"]
+    },
+    {
+      "id": "CARD-008",
+      "section": "Valvular Heart Disease",
+      "title": "Mitral Stenosis",
+      "front": "What is the characteristic murmur of mitral stenosis?",
+      "primary_answer": "Low-pitched diastolic rumble",
+      "murmur": "Low-pitched diastolic rumble",
+      "extra_heart_sound": "Opening snap",
+      "key_finding": "Shorter S2–opening snap interval means more severe mitral stenosis",
+      "etiology": "Rheumatic heart disease",
+      "consequences": [
+        "Left atrial enlargement",
+        "Atrial fibrillation",
+        "Left atrial thrombus",
+        "Systemic embolization → increased stroke risk",
+        "Pulmonary hypertension",
+        "Hemoptysis may reflect pulmonary venous hypertension"
+      ],
+      "difficulty": 2.5,
+      "tags": ["Valvular", "Diastolic"]
+    },
+    {
+      "id": "CARD-009",
+      "section": "Infective Endocarditis",
+      "title": "IE — Organisms & Valve Associations",
+      "front": "What are the immediate organism clues for infective endocarditis?",
+      "primary_answer": "Match the exposure to the organism",
+      "key_finding": "Risk factor is the fastest way to identify the likely organism",
+      "etiology": "Bacterial colonization of damaged valve endothelium",
+      "consequences": [
+        "IV drug use + fever + new murmur → Staphylococcus aureus",
+        "IV drug use most commonly involves tricuspid valve",
+        "Dental procedure + subacute endocarditis → viridans streptococci",
+        "GI/GU procedure → Enterococcus",
+        "Prosthetic valve → Staphylococcus epidermidis",
+        "Culture-negative endocarditis: remember HACEK organisms"
+      ],
+      "difficulty": 3.0,
+      "tags": ["Endocarditis", "Infectious"]
+    },
+    {
+      "id": "CARD-010",
+      "section": "Infective Endocarditis",
+      "title": "IE — Peripheral Findings",
+      "front": "What are the classic peripheral findings of infective endocarditis?",
+      "primary_answer": "Osler nodes, Janeway lesions, Roth spots, splinter hemorrhages",
+      "key_finding": "Osler = painful; Janeway = painless",
+      "etiology": "Immune complex deposition and septic microemboli",
+      "consequences": [
+        "Painful nodules on fingers → Osler nodes",
+        "Painless lesions on palms/soles → Janeway lesions",
+        "Retinal hemorrhages with pale centers → Roth spots",
+        "Linear hemorrhages under nails → splinter hemorrhages",
+        "New murmur often means new valvular regurgitation from valve destruction"
+      ],
+      "difficulty": 2.5,
+      "tags": ["Endocarditis", "Physical exam"]
+    },
+    {
+      "id": "CARD-011",
+      "section": "Rapid Recall Master Cards",
+      "title": "ACS Rapid Recognition",
+      "front": "How do you immediately distinguish the major ACS patterns?",
+      "primary_answer": "Use ECG + troponin together",
+      "key_finding": "ST direction and troponin status separate the ACS entities quickly",
+      "consequences": [
+        "Exertional chest pain + normal troponin → stable angina",
+        "Rest/worsening chest pain + ST depression + normal troponin → unstable angina",
+        "ST depression + elevated troponin → NSTEMI",
+        "ST elevation + elevated troponin → STEMI",
+        "STEMI requires immediate reperfusion; primary PCI preferred"
+      ],
+      "difficulty": 2.0,
+      "tags": ["ACS", "Rapid recall"]
+    },
+    {
+      "id": "CARD-012",
+      "section": "Rapid Recall Master Cards",
+      "title": "Valve Murmur Rapid Recognition",
+      "front": "How do you immediately recognize the classic valve murmurs?",
+      "primary_answer": "Use location + radiation + timing",
+      "key_finding": "Three anchor patterns cover the classic IFOM valve questions",
+      "consequences": [
+        "RUSB → carotids → crescendo-decrescendo systolic → aortic stenosis",
+        "Apex → axilla → holosystolic → mitral regurgitation",
+        "Opening snap → diastolic rumble → mitral stenosis"
+      ],
+      "difficulty": 2.0,
+      "tags": ["Valvular", "Rapid recall"]
+    },
+    {
+      "id": "CARD-013",
+      "section": "Rapid Recall Master Cards",
+      "title": "Post-MI Rapid Recognition",
+      "front": "What are the immediate post-MI complication clues?",
+      "primary_answer": "Use timing + new murmur + hemodynamic collapse",
+      "key_finding": "Mechanical complications usually cluster 3–7 days after MI",
+      "consequences": [
+        "Pulmonary edema + new apical holosystolic murmur → papillary muscle rupture → acute MR",
+        "LSB holosystolic murmur + O2 step-up → ventricular septal rupture",
+        "Hypotension + JVD + PEA → free-wall rupture → tamponade",
+        "Persistent ST elevation weeks later → ventricular aneurysm"
+      ],
+      "difficulty": 3.0,
+      "tags": ["ACS", "Complications", "Rapid recall"]
+    },
+    {
+      "id": "CARD-014",
+      "section": "Rapid Recall Master Cards",
+      "title": "Endocarditis Rapid Recognition",
+      "front": "What are the immediate infective endocarditis associations?",
+      "primary_answer": "One exposure → one organism",
+      "key_finding": "This is a pure association card for fast review",
+      "consequences": [
+        "IV drug use → S. aureus",
+        "Dental procedure → viridans streptococci",
+        "GI/GU procedure → Enterococcus",
+        "Prosthetic valve → S. epidermidis",
+        "Osler painful; Janeway painless"
+      ],
+      "difficulty": 2.5,
+      "tags": ["Endocarditis", "Rapid recall"]
+    }
+  ]
+}

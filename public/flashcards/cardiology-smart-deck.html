@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cardiology cards — Smart Deck</title>
+  <style>
+    :root {
+      --bg: #071120;
+      --panel: #0b1730;
+      --panel-2: #101f3f;
+      --card: #0a1430;
+      --card-2: #0d1e46;
+      --stroke: rgba(255,255,255,.08);
+      --muted: #90a0c3;
+      --text: #f5f7ff;
+      --blue: #6fa7ff;
+      --blue-2: #3a7dff;
+      --green: #1ea97c;
+      --yellow: #c49b2c;
+      --rose: #b34f76;
+      --shadow: 0 24px 60px rgba(0,0,0,.35);
+      --radius: 24px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(circle at top, rgba(39,75,150,.25), transparent 30%), linear-gradient(180deg, #06101d 0%, #081424 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 18px 42px;
+      display: grid;
+      grid-template-columns: 210px minmax(0,1fr);
+      gap: 18px;
+    }
+    .sidebar, .main-card, .panel, .metric, .btn, .toggle-row, .answer-btn { border: 1px solid var(--stroke); }
+    .sidebar {
+      background: rgba(6,15,31,.88);
+      border-radius: 26px;
+      padding: 18px 14px;
+      position: sticky;
+      top: 16px;
+      height: fit-content;
+      box-shadow: var(--shadow);
+    }
+    .brand { font-weight: 800; letter-spacing: .03em; font-size: 20px; }
+    .brand small { display:block; font-size: 10px; color:#6dd0a7; letter-spacing:.18em; margin-top:3px; }
+    .nav { margin-top: 18px; display:grid; gap: 8px; }
+    .nav-item {
+      padding: 12px 14px;
+      border-radius: 14px;
+      color: #aac0ea;
+      background: rgba(255,255,255,.02);
+      text-decoration: none;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      font-size: 14px;
+    }
+    .nav-item.active { background: rgba(39, 180, 123, .13); color: #dbfff1; border:1px solid rgba(39, 180, 123, .28); }
+    .content { display:grid; gap: 16px; }
+    .topbar, .metrics, .filters, .deck-toolbar, .grade-row, .stats-grid { display:grid; gap: 12px; }
+    .topbar {
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      background: rgba(8,16,33,.75);
+      border:1px solid var(--stroke);
+      border-radius: 22px;
+      padding: 14px 16px;
+      box-shadow: var(--shadow);
+    }
+    .search {
+      width: min(520px, 100%);
+      background: rgba(255,255,255,.03);
+      border:1px solid var(--stroke);
+      color: var(--text);
+      padding: 14px 16px;
+      border-radius: 16px;
+      outline:none;
+    }
+    .user-pill { display:flex; gap: 10px; align-items:center; }
+    .chip, .btn, .answer-btn, .mini-chip {
+      border-radius: 14px;
+      background: rgba(255,255,255,.04);
+      color: #d7e3ff;
+      padding: 9px 12px;
+      font-size: 13px;
+    }
+    .metrics { grid-template-columns: repeat(3, 1fr); }
+    .metric {
+      background: rgba(9,20,40,.88);
+      border-radius: 20px;
+      padding: 16px 18px;
+      min-height: 96px;
+    }
+    .metric .label { color: #8b9bc0; font-size: 11px; text-transform: uppercase; letter-spacing: .18em; }
+    .metric .value { font-size: 35px; margin-top: 10px; font-weight: 800; }
+    .progress-wrap {
+      background: rgba(8,16,33,.75);
+      border:1px solid var(--stroke);
+      border-radius: 20px;
+      padding: 14px 16px;
+    }
+    .progress-line { height: 8px; background: rgba(255,255,255,.06); border-radius: 999px; overflow:hidden; margin-top: 8px; }
+    .progress-fill { height:100%; background: linear-gradient(90deg, #4b86ff, #61d9c2); width:0%; border-radius:999px; transition: width .25s ease; }
+    .filters { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+    .chip { text-align:center; cursor:pointer; user-select:none; }
+    .chip.active { background: rgba(75,134,255,.16); border-color: rgba(75,134,255,.35); }
+    .deck-toolbar {
+      grid-template-columns: auto auto auto 1fr auto;
+      align-items:center;
+    }
+    .btn { cursor:pointer; }
+    .btn.primary { background: rgba(75,134,255,.16); border-color: rgba(75,134,255,.35); }
+    .btn.green { background: rgba(31,169,124,.12); border-color: rgba(31,169,124,.32); }
+    .btn.yellow { background: rgba(196,155,44,.12); border-color: rgba(196,155,44,.32); }
+    .btn.rose { background: rgba(179,79,118,.12); border-color: rgba(179,79,118,.32); }
+    .jump { width: 100%; }
+    .main-card {
+      background: linear-gradient(180deg, rgba(9,20,40,.95), rgba(7,16,33,.95));
+      border-radius: 28px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+    .card-head { display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; }
+    .streak { padding: 7px 12px; border-radius: 999px; background: rgba(30,169,124,.12); border:1px solid rgba(30,169,124,.28); color:#baf6df; font-size:12px; }
+    .bookmark { cursor:pointer; }
+    .flashcard {
+      border-radius: 28px;
+      background: radial-gradient(circle at top right, rgba(58,125,255,.18), transparent 28%), linear-gradient(180deg, #09142a 0%, #0a1734 100%);
+      border:1px solid rgba(94,129,208,.20);
+      padding: 20px;
+      min-height: 470px;
+      display:grid;
+      grid-template-rows: auto 1fr;
+    }
+    .front-side, .back-side { display:none; }
+    .flashcard.show-front .front-side { display:grid; align-content:center; min-height: 390px; }
+    .flashcard.show-back .back-side { display:grid; gap: 16px; }
+    .section-tag {
+      display:inline-flex; width: fit-content; padding: 8px 14px; border-radius: 999px;
+      border:1px solid rgba(121,141,255,.28); background: rgba(121,141,255,.08); color:#cfdaff;
+      font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+    }
+    .front-question {
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.22;
+      text-align:center;
+      max-width: 780px;
+      margin: 26px auto 0;
+      font-weight: 800;
+    }
+    .tap-note { text-align:center; color:#8195bc; font-size:12px; letter-spacing:.18em; text-transform:uppercase; margin-top: 18px; }
+    .answer-box {
+      border:1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.04);
+      border-radius: 18px;
+      padding: 12px 14px;
+    }
+    .eyebrow { color:#90a0c3; font-size:11px; text-transform:uppercase; letter-spacing:.18em; margin-bottom: 6px; }
+    .answer-value { font-size: 32px; font-weight: 800; line-height:1.18; }
+    .back-grid { display:grid; grid-template-columns: 1.1fr .9fr; gap: 14px; }
+    .left-col, .right-col { display:grid; gap: 12px; }
+    .info-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+    .panel {
+      background: rgba(255,255,255,.03);
+      border-radius: 18px;
+      padding: 14px;
+    }
+    .panel .title { color:#b9c7ea; font-size:11px; text-transform:uppercase; letter-spacing:.18em; margin-bottom: 8px; }
+    .panel .value { font-size: 20px; font-weight: 700; line-height:1.25; }
+    .bullets { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+    .bullets li { position:relative; padding-left: 16px; color:#ebf1ff; line-height:1.5; }
+    .bullets li::before { content:"•"; position:absolute; left:0; color:#5ee7c7; }
+    .timeline li::before { color:#5ee7c7; }
+    .grade-row { grid-template-columns: repeat(4, 1fr); margin-top: 14px; }
+    .answer-btn { padding: 16px 12px; text-align:center; cursor:pointer; border-radius: 18px; }
+    .answer-btn .big { font-size: 24px; display:block; margin-bottom: 6px; }
+    .again { background: rgba(179,79,118,.14); border-color: rgba(179,79,118,.34); }
+    .hard  { background: rgba(196,155,44,.14); border-color: rgba(196,155,44,.34); }
+    .good  { background: rgba(58,125,255,.14); border-color: rgba(58,125,255,.34); }
+    .easy  { background: rgba(30,169,124,.14); border-color: rgba(30,169,124,.34); }
+    .stats-grid { grid-template-columns: repeat(5, 1fr); }
+    .mini {
+      background: rgba(8,16,33,.82);
+      border:1px solid var(--stroke);
+      border-radius: 18px;
+      padding: 14px;
+    }
+    .mini .label { color:#8b9bc0; font-size:11px; text-transform:uppercase; letter-spacing:.16em; }
+    .mini .value { margin-top: 8px; font-size: 24px; font-weight: 800; }
+    .mini .sub { margin-top: 6px; color:#dbe6ff; font-size:14px; }
+    .settings-modal {
+      position: fixed; inset:0; background: rgba(1,4,10,.58); display:none; align-items:center; justify-content:center; padding:18px; z-index:50;
+    }
+    .settings-modal.open { display:flex; }
+    .settings-card {
+      width:min(560px, 100%); background: linear-gradient(180deg, #0a1430, #091425); border:1px solid var(--stroke); border-radius: 24px; box-shadow: var(--shadow); padding: 18px;
+    }
+    .settings-title { display:flex; align-items:center; justify-content:space-between; font-size:22px; font-weight:700; margin-bottom: 12px; }
+    .toggle-row { display:flex; align-items:center; justify-content:space-between; border-radius: 16px; padding: 14px; background: rgba(255,255,255,.03); margin-top: 10px; }
+    .switch { width: 54px; height: 30px; border-radius: 999px; background: rgba(255,255,255,.1); position:relative; cursor:pointer; }
+    .switch::after { content:""; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#fff; transition:left .2s ease; }
+    .switch.on { background: rgba(31,169,124,.5); }
+    .switch.on::after { left:27px; }
+    .settings-actions { display:flex; justify-content:flex-end; margin-top:16px; }
+    .hidden { display:none !important; }
+    @media (max-width: 980px) {
+      .shell { grid-template-columns: 1fr; }
+      .sidebar { position: static; }
+      .metrics, .stats-grid, .filters, .grade-row, .back-grid, .info-grid, .deck-toolbar { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 700px) {
+      .metrics, .stats-grid, .filters, .grade-row, .back-grid, .info-grid, .deck-toolbar { grid-template-columns: 1fr; }
+      .front-question { font-size: 28px; }
+      .answer-value { font-size: 24px; }
+      .panel .value { font-size: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">MedQBank<small>CLINICAL PRECISION</small></div>
+      <nav class="nav">
+        <a class="nav-item" href="#">Dashboard</a>
+        <a class="nav-item" href="#">Qbank</a>
+        <a class="nav-item active" href="#">Flashcards <span>14</span></a>
+        <a class="nav-item" href="#">Notes</a>
+        <a class="nav-item" href="#">Documents</a>
+        <a class="nav-item" href="#">Bookmarks</a>
+        <a class="nav-item" href="#">Progress</a>
+        <a class="nav-item" href="#">Settings</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <div class="topbar">
+        <input id="searchInput" class="search" placeholder="Search qbank, notes, flashcards..." />
+        <div class="user-pill">
+          <span class="mini-chip">Admin</span>
+          <button id="openSettings" class="btn">⚙ Session Settings</button>
+        </div>
+      </div>
+
+      <div>
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap; margin-bottom: 12px;">
+          <div>
+            <div style="color:#8ea2cb;font-size:13px;margin-bottom:8px;">← Back to Flashcards</div>
+            <div style="font-size:32px;font-weight:800;">Cardiology cards</div>
+            <div style="color:#97a9cb;margin-top:6px;">Deck · <span id="deckCountLabel">14 cards</span> · <span id="deckPercent">0%</span> complete</div>
+          </div>
+          <div class="mini-chip" id="readyLabel">14 cards ready · Cardiology cards</div>
+        </div>
+
+        <div class="metrics">
+          <div class="metric"><div class="label">Studied</div><div class="value" id="studiedCount">0</div></div>
+          <div class="metric"><div class="label">Remaining</div><div class="value" id="remainingCount">14</div></div>
+          <div class="metric"><div class="label">Mastered</div><div class="value" id="masteredCount">0</div></div>
+        </div>
+      </div>
+
+      <div class="progress-wrap">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
+          <div style="font-size:13px;color:#96a8cc;">Today's progress</div>
+          <div style="font-size:13px;color:#dfe8ff;" id="todayPct">0%</div>
+        </div>
+        <div class="progress-line"><div id="progressBar" class="progress-fill"></div></div>
+      </div>
+
+      <div class="filters" id="filters">
+        <div class="chip active">All</div>
+        <div class="chip">New</div>
+        <div class="chip">Learning</div>
+        <div class="chip">Review</div>
+        <div class="chip">Difficult</div>
+        <div class="chip">Bookmarked</div>
+        <div class="chip">Incorrect</div>
+        <div class="chip">Mastered</div>
+      </div>
+
+      <div class="deck-toolbar">
+        <button id="prevBtn" class="btn">‹ Prev</button>
+        <button id="nextBtn" class="btn">Next ›</button>
+        <button id="shuffleBtn" class="btn">⇄ Shuffle</button>
+        <select id="jumpSelect" class="btn jump"></select>
+        <div style="text-align:right;color:#a7b8dc;font-size:13px;" id="counterLabel">Card 1 of 14</div>
+      </div>
+
+      <section class="main-card">
+        <div class="card-head">
+          <div class="streak" id="streakLabel">Streak 0</div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <div class="mini-chip" id="timerLabel">0s</div>
+            <button id="bookmarkBtn" class="btn bookmark">🔖 Bookmark</button>
+          </div>
+        </div>
+
+        <div id="flashcard" class="flashcard show-front">
+          <div class="front-side">
+            <div class="section-tag" id="frontTitleTag">MITRAL STENOSIS</div>
+            <div class="front-question" id="frontQuestion"></div>
+            <div class="tap-note">Tap to reveal answer</div>
+          </div>
+
+          <div class="back-side">
+            <div class="answer-box">
+              <div class="eyebrow">Answer</div>
+              <div class="answer-value" id="primaryAnswer"></div>
+            </div>
+            <div class="back-grid">
+              <div class="left-col">
+                <div class="info-grid" id="infoGrid"></div>
+                <div class="panel" id="extrasPanel">
+                  <div class="title">Related IFOM CSE Points</div>
+                  <ul class="bullets" id="extrasList"></ul>
+                </div>
+              </div>
+              <div class="right-col">
+                <div class="panel">
+                  <div class="title">Consequences</div>
+                  <ul class="bullets timeline" id="consequenceList"></ul>
+                </div>
+              </div>
+            </div>
+            <div class="tap-note">Tap to see the question</div>
+          </div>
+        </div>
+
+        <div class="grade-row">
+          <button class="answer-btn again" data-grade="again"><span class="big">😵</span>Again<br><small>&lt; 1d</small></button>
+          <button class="answer-btn hard" data-grade="hard"><span class="big">😐</span>Hard<br><small>~ 1d</small></button>
+          <button class="answer-btn good" data-grade="good"><span class="big">🙂</span>Good<br><small>~ 3d</small></button>
+          <button class="answer-btn easy" data-grade="easy"><span class="big">😄</span>Easy<br><small>~ 7d</small></button>
+        </div>
+      </section>
+
+      <div class="stats-grid">
+        <div class="mini"><div class="label">Today's Accuracy</div><div class="value" id="accuracyValue">0%</div><div class="sub">Live session</div></div>
+        <div class="mini"><div class="label">Current Streak</div><div class="value" id="currentStreak">0</div><div class="sub">Review streak</div></div>
+        <div class="mini"><div class="label">Cards Reviewed</div><div class="value" id="reviewedValue">0</div><div class="sub">This session</div></div>
+        <div class="mini"><div class="label">Mastered Today</div><div class="value" id="masteredToday">0</div><div class="sub">Good / Easy driven</div></div>
+        <div class="mini"><div class="label">Avg Response Time</div><div class="value" id="avgTime">0s</div><div class="sub">Auto-tracked</div></div>
+        <div class="mini"><div class="label">Lesson</div><div class="sub">Cardiology cards</div></div>
+        <div class="mini"><div class="label">Cards</div><div class="sub" id="cardsTotalSub">14</div></div>
+        <div class="mini"><div class="label">Last Seen</div><div class="sub" id="lastSeenSub">Never</div></div>
+        <div class="mini"><div class="label">Next Review</div><div class="sub">today</div></div>
+        <div class="mini"><div class="label">Difficulty</div><div class="sub" id="difficultySub">2.50</div></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="settingsModal" class="settings-modal">
+    <div class="settings-card">
+      <div class="settings-title">Session Settings <button id="closeSettings" class="btn">✕</button></div>
+      <div class="toggle-row"><span>Cards per session</span><input id="cardsPerSession" type="number" min="5" max="80" value="14" class="search" style="max-width:120px;padding:10px 12px" /></div>
+      <div class="toggle-row"><span>Difficult cards only</span><div class="switch" data-toggle="difficultOnly"></div></div>
+      <div class="toggle-row"><span>Mastered cards only</span><div class="switch" data-toggle="masteredOnly"></div></div>
+      <div class="toggle-row"><span>Show timer per card</span><div class="switch on" data-toggle="showTimer"></div></div>
+      <div class="toggle-row"><span>Audio feedback after grading</span><div class="switch on" data-toggle="audioFeedback"></div></div>
+      <div class="toggle-row"><span>Show memory hints / tags</span><div class="switch on" data-toggle="showHints"></div></div>
+      <div class="settings-actions"><button id="doneSettings" class="btn primary">Done</button></div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      cards: [],
+      filtered: [],
+      index: 0,
+      flipped: false,
+      studied: new Set(),
+      mastered: new Set(),
+      bookmarks: new Set(),
+      grades: [],
+      streak: 0,
+      timerStartedAt: Date.now(),
+      responseTimes: [],
+      settings: {
+        difficultOnly: false,
+        masteredOnly: false,
+        showTimer: true,
+        audioFeedback: true,
+        showHints: true,
+        cardsPerSession: 14,
+      }
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const flashcard = $('flashcard');
+    const searchInput = $('searchInput');
+
+    function avg(arr) { return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
+    function pct(n, d) { return d ? Math.round((n/d)*100) : 0; }
+    function first(arr){ return Array.isArray(arr) && arr.length ? arr[0] : null; }
+
+    async function loadDeck() {
+      const res = await fetch('./cardiology-smart-deck.json');
+      const data = await res.json();
+      state.cards = data.cards;
+      state.filtered = [...state.cards];
+      $('cardsPerSession').value = Math.min(state.cards.length, 14);
+      state.settings.cardsPerSession = Math.min(state.cards.length, 14);
+      buildJump();
+      render();
+      startTimer();
+    }
+
+    function buildJump() {
+      const select = $('jumpSelect');
+      select.innerHTML = '';
+      state.filtered.forEach((card, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.textContent = `Jump to Card ${idx + 1} · ${card.title}`;
+        select.appendChild(opt);
+      });
+      select.value = String(state.index);
+    }
+
+    function visibleCards() {
+      let cards = [...state.cards];
+      const q = searchInput.value.trim().toLowerCase();
+      if (q) {
+        cards = cards.filter(card => JSON.stringify(card).toLowerCase().includes(q));
+      }
+      if (state.settings.difficultOnly) cards = cards.filter(card => Number(card.difficulty) >= 2.75);
+      if (state.settings.masteredOnly) cards = cards.filter(card => state.mastered.has(card.id));
+      const limit = Math.max(5, Math.min(80, Number(state.settings.cardsPerSession) || cards.length));
+      return cards.slice(0, Math.min(limit, cards.length));
+    }
+
+    function applyFilters() {
+      state.filtered = visibleCards();
+      if (!state.filtered.length) state.filtered = [...state.cards];
+      state.index = Math.min(state.index, Math.max(0, state.filtered.length - 1));
+      buildJump();
+      render();
+      startTimer();
+    }
+
+    function card() { return state.filtered[state.index] || state.cards[0]; }
+
+    function render() {
+      const c = card();
+      if (!c) return;
+      $('frontTitleTag').textContent = c.title.toUpperCase();
+      $('frontQuestion').textContent = c.front;
+      $('primaryAnswer').textContent = c.primary_answer || c.answer || '';
+      $('counterLabel').textContent = `Card ${state.index + 1} of ${state.filtered.length}`;
+      $('jumpSelect').value = String(state.index);
+      $('bookmarkedCount');
+
+      const infoGrid = $('infoGrid');
+      infoGrid.innerHTML = '';
+      const infoBlocks = [
+        c.murmur ? ['Murmur', c.murmur] : null,
+        c.extra_heart_sound ? ['Extra Heart Sound', c.extra_heart_sound] : null,
+        c.key_finding ? ['Key Finding', c.key_finding] : null,
+        c.etiology ? ['Etiology', c.etiology] : null,
+      ].filter(Boolean);
+      infoBlocks.forEach(([title, value]) => {
+        const div = document.createElement('div');
+        div.className = 'panel';
+        div.innerHTML = `<div class="title">${title}</div><div class="value">${value}</div>`;
+        infoGrid.appendChild(div);
+      });
+
+      const extras = [];
+      if (c.triggers?.length) extras.push(...c.triggers.map(v => `Trigger: ${v}`));
+      if (c.tags?.length && state.settings.showHints) extras.push(`Tags: ${c.tags.join(' · ')}`);
+      if (!infoBlocks.length && c.key_finding) extras.unshift(c.key_finding);
+      const extraList = $('extrasList');
+      extraList.innerHTML = '';
+      extras.forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = item;
+        extraList.appendChild(li);
+      });
+      $('extrasPanel').classList.toggle('hidden', extras.length === 0);
+
+      const consequences = $('consequenceList');
+      consequences.innerHTML = '';
+      (c.consequences || []).forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = item;
+        consequences.appendChild(li);
+      });
+
+      $('difficultySub').textContent = Number(c.difficulty || 2.5).toFixed(2);
+      $('bookmarkBtn').textContent = state.bookmarks.has(c.id) ? '🔖 Bookmarked' : '🔖 Bookmark';
+      flashcard.classList.toggle('show-front', !state.flipped);
+      flashcard.classList.toggle('show-back', state.flipped);
+      updateStats();
+    }
+
+    function updateStats() {
+      const total = state.filtered.length || 1;
+      const studied = state.studied.size;
+      const mastered = state.mastered.size;
+      $('studiedCount').textContent = studied;
+      $('remainingCount').textContent = Math.max(0, total - studied);
+      $('masteredCount').textContent = mastered;
+      const progress = pct(studied, total);
+      $('progressBar').style.width = `${progress}%`;
+      $('todayPct').textContent = `${progress}%`;
+      $('deckPercent').textContent = `${progress}%`;
+      $('reviewedValue').textContent = studied;
+      $('masteredToday').textContent = mastered;
+      const good = state.grades.filter(g => g === 'good' || g === 'easy').length;
+      $('accuracyValue').textContent = `${pct(good, state.grades.length || 1)}%`;
+      $('currentStreak').textContent = state.streak;
+      $('streakLabel').textContent = `Streak ${state.streak}`;
+      $('cardsTotalSub').textContent = total;
+      $('deckCountLabel').textContent = `${total} cards`;
+      $('readyLabel').textContent = `${total} cards ready · Cardiology cards`;
+      $('avgTime').textContent = `${Math.round(avg(state.responseTimes)) || 0}s`;
+      $('lastSeenSub').textContent = studied ? 'today' : 'Never';
+    }
+
+    function startTimer() {
+      state.timerStartedAt = Date.now();
+    }
+
+    setInterval(() => {
+      if (!state.settings.showTimer) {
+        $('timerLabel').textContent = 'timer off';
+        return;
+      }
+      $('timerLabel').textContent = `${Math.round((Date.now() - state.timerStartedAt)/1000)}s`;
+    }, 500);
+
+    function speak(label) {
+      if (!state.settings.audioFeedback || !window.speechSynthesis) return;
+      const u = new SpeechSynthesisUtterance(label);
+      u.rate = 1;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(u);
+    }
+
+    function grade(kind) {
+      const c = card();
+      if (!c) return;
+      const seconds = Math.max(1, Math.round((Date.now() - state.timerStartedAt)/1000));
+      state.responseTimes.push(seconds);
+      state.studied.add(c.id);
+      state.grades.push(kind);
+      if (kind === 'good' || kind === 'easy') {
+        state.streak += 1;
+        if (kind === 'easy') state.mastered.add(c.id);
+      } else if (kind === 'again') {
+        state.streak = 0;
+      }
+      speak(kind);
+      nextCard();
+    }
+
+    function nextCard() {
+      state.index = (state.index + 1) % state.filtered.length;
+      state.flipped = false;
+      render();
+      startTimer();
+    }
+
+    function prevCard() {
+      state.index = (state.index - 1 + state.filtered.length) % state.filtered.length;
+      state.flipped = false;
+      render();
+      startTimer();
+    }
+
+    function shuffleCards() {
+      for (let i = state.filtered.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [state.filtered[i], state.filtered[j]] = [state.filtered[j], state.filtered[i]];
+      }
+      state.index = 0;
+      buildJump();
+      state.flipped = false;
+      render();
+      startTimer();
+    }
+
+    flashcard.addEventListener('click', () => {
+      state.flipped = !state.flipped;
+      render();
+    });
+    $('nextBtn').addEventListener('click', nextCard);
+    $('prevBtn').addEventListener('click', prevCard);
+    $('shuffleBtn').addEventListener('click', shuffleCards);
+    $('jumpSelect').addEventListener('change', (e) => { state.index = Number(e.target.value || 0); state.flipped = false; render(); startTimer(); });
+    $('bookmarkBtn').addEventListener('click', (e) => { e.stopPropagation(); const c = card(); if (!c) return; state.bookmarks.has(c.id) ? state.bookmarks.delete(c.id) : state.bookmarks.add(c.id); render(); });
+    searchInput.addEventListener('input', applyFilters);
+    document.querySelectorAll('.answer-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); grade(btn.dataset.grade); }));
+
+    const modal = $('settingsModal');
+    $('openSettings').addEventListener('click', () => modal.classList.add('open'));
+    $('closeSettings').addEventListener('click', () => modal.classList.remove('open'));
+    $('doneSettings').addEventListener('click', () => { modal.classList.remove('open'); applyFilters(); });
+    $('cardsPerSession').addEventListener('change', (e) => { state.settings.cardsPerSession = Number(e.target.value || 14); });
+    document.querySelectorAll('.switch').forEach(sw => {
+      sw.addEventListener('click', () => {
+        const key = sw.dataset.toggle;
+        sw.classList.toggle('on');
+        state.settings[key] = sw.classList.contains('on');
+        if (key === 'showTimer' || key === 'showHints') render();
+      });
+    });
+
+    loadDeck();
+  </script>
+</body>
+</html>
