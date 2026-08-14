@@ -582,8 +582,6 @@ export default async function SubjectDashboardPage({
 
       </div>
 
-      </div>
-
       {/* ── ACTIVE QBANK DOCUMENTS (dedicated section, exclusive to admin's upload choice) ── */}
       {activeQbankDocumentsForRender.length > 0 && (
         <section className="mt-4 rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-teal-500/5 p-5">
