@@ -76,11 +76,20 @@ function classifyDocumentSection(doc: SubjectLesson): "notes" | "qbank" | "activ
   const section = typeof doc.meta?.section === "string" ? doc.meta.section.toLowerCase().trim() : "";
   const category = typeof doc.meta?.category === "string" ? doc.meta.category.toLowerCase().trim() : "";
   const blockKind = typeof doc.meta?.block_kind === "string" ? doc.meta.block_kind.toLowerCase().trim() : "";
-  const isActive = Boolean(doc.meta?.is_active_qbank) || blockKind === "active" || section === "qbank-active" || category === "qbank-active";
-  if (isActive) return "active-qbank";
 
-  const isQbank = doc.kind === "qbank" || section === "qbank" || category === "qbank" || blockKind === "official" || blockKind === "practice";
-  if (isQbank) return "qbank";
+  // Explicit official/practice blocks stay in the structured QBank world.
+  const isStructuredQbank = doc.kind === "qbank" || blockKind === "official" || blockKind === "practice";
+  if (isStructuredQbank) return "qbank";
+
+  // Admin choosing section=qbank means this source file should live under the
+  // dedicated Active QBank Documents section unless it was explicitly marked official above.
+  const isActive = Boolean(doc.meta?.is_active_qbank)
+    || blockKind === "active"
+    || section === "qbank"
+    || section === "qbank-active"
+    || category === "qbank"
+    || category === "qbank-active";
+  if (isActive) return "active-qbank";
 
   return "notes";
 }
@@ -217,9 +226,9 @@ export default async function SubjectDashboardPage({
   // A lesson that was promoted into `activeBlocks` because it has extracted questions
   // is ALSO surfaced in the Active QBank Documents section so the student can open
   // the source file directly — no duplication, no hiding.
-  const notesDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "notes" && !activeBlockIds.has(doc.id) && !officialBlockIds.has(doc.id));
-  const activeQbankDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "active-qbank" && !activeBlockIds.has(doc.id));
-  const activeBlocksWithoutDoc = detail.activeBlocks.filter((block) => !activeQbankDocuments.find((d) => d.id === block.id));
+  const notesDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "notes");
+  const activeQbankDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "active-qbank");
+  const activeBlocksWithoutDoc = detail.activeBlocks.filter((block) => !activeQbankDocuments.some((d) => d.id === block.id));
   const activeQbankDocumentsForRender: SubjectLesson[] = [
     ...activeQbankDocuments,
     ...activeBlocksWithoutDoc.map((b) => ({ id: b.id, title: b.title } as unknown as SubjectLesson)),
