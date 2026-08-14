@@ -164,16 +164,15 @@ function blockSignalText(lesson: LessonRow | undefined, sourceTitle: string, sou
 
 function isActiveBlockSource(lesson: LessonRow | undefined, sourceTitle: string, sourceTags: string[] = []) {
   const meta = (lesson?.meta ?? {}) as Record<string, unknown>;
-  const section = typeof meta.section === "string" ? meta.section.toLowerCase().trim() : "";
-  const category = typeof meta.category === "string" ? meta.category.toLowerCase().trim() : "";
   const blockKind = typeof meta.block_kind === "string" ? meta.block_kind.toLowerCase().trim() : "";
 
-  // Official / practice sources are not active by definition.
+  // Official / practice sources are never active.
   if (Boolean(meta.is_official_block) || meta.fixed_block === true || blockKind === "official" || blockKind === "practice") return false;
 
-  // Admin uploads routed to the QBank section should behave as Active QBank by default
-  // unless they were explicitly marked official/practice above.
-  if (Boolean(meta.is_active_qbank) || blockKind === "active" || section === "qbank" || section === "qbank-active" || category === "qbank" || category === "qbank-active") return true;
+  // CRITICAL: only EXPLICITLY added active blocks belong to the Active QBank Files section.
+  // A regular document uploaded with section="qbank" should stay under Active QBank Documents,
+  // not be promoted into the block grid unless the admin added it as a block.
+  if (Boolean(meta.is_active_qbank) || blockKind === "active") return true;
 
   const haystack = blockSignalText(lesson, sourceTitle, sourceTags);
   return /(active\s*qbank|active\s*qe\b|qe\s*active|active\s*questions?)/i.test(haystack);
