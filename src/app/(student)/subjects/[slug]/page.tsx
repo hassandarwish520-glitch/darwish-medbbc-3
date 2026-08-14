@@ -228,11 +228,9 @@ export default async function SubjectDashboardPage({
   // the source file directly — no duplication, no hiding.
   const notesDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "notes");
   const activeQbankDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "active-qbank");
-  const activeBlocksWithoutDoc = detail.activeBlocks.filter((block) => !activeQbankDocuments.some((d) => d.id === block.id));
-  const activeQbankDocumentsForRender: SubjectLesson[] = [
-    ...activeQbankDocuments,
-    ...activeBlocksWithoutDoc.map((b) => ({ id: b.id, title: b.title } as unknown as SubjectLesson)),
-  ];
+  // Active QBank Documents are exactly the docs the admin uploaded with meta.section="qbank".
+  // Question-backed blocks live in their own section above; empty uploads live here only.
+  const activeQbankDocumentsForRender: SubjectLesson[] = [...activeQbankDocuments];
 
   const qbankConfigHref = `/qbank/configure?subject=${encodeURIComponent(detail.subject.title)}&exam=${encodeURIComponent(exam)}&returnTo=${encodeURIComponent(`/subjects/${detail.subject.slug}?exam=${exam}`)}`;
   const randomQuizHref = `/qbank/configure?subject=${encodeURIComponent(detail.subject.title)}&exam=${encodeURIComponent(exam)}&mode=random&returnTo=${encodeURIComponent(`/subjects/${detail.subject.slug}?exam=${exam}`)}`;
@@ -613,7 +611,7 @@ export default async function SubjectDashboardPage({
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {activeQbankDocumentsForRender.map((doc, index) => {
-              const linkedBlock = activeBlocksWithoutDoc.find((b) => b.id === doc.id);
+              const linkedBlock = detail.activeBlocks.find((b) => b.id === doc.id);
               const href = linkedBlock
                 ? `/qbank?block=${doc.id}&blockTitle=${encodeURIComponent(linkedBlock.title)}&subject=${encodeURIComponent(detail.subject.title)}&exam=${encodeURIComponent(detail.exam)}&returnTo=${encodeURIComponent(`/subjects/${detail.subject.slug}?exam=${detail.exam}`)}`
                 : `/lesson/${doc.id}`;

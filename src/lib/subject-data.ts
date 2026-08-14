@@ -294,27 +294,23 @@ export async function getSubjectOverviews(exam = "IFOM_CSE"): Promise<SubjectOve
     const qbankSources = [...sourceMap.values()].sort((a, b) => b.questionCount - a.questionCount || a.title.localeCompare(b.title));
     const keyPoints = flashcards.filter((card) => matchesSubject(subject.title, flashcardText(card), card.tags));
 
-    const questionBackedActiveIds = new Set(
-      qbankSources
-        .filter((src) => isActiveBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())]))
-        .map((src) => src.id),
-    );
-    const emptyActiveLessons = documents.filter((lesson) =>
-      !questionBackedActiveIds.has(lesson.id) && isActiveBlockSource(lesson, lesson.title),
-    );
-    const activeBlocks = [
-      ...qbankSources
-        .filter((src) => isActiveBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())]))
-        .map((src) => ({ id: src.id, title: src.title, questionCount: src.questionCount })),
-      ...emptyActiveLessons.map((lesson) => ({ id: lesson.id, title: lesson.title, questionCount: 0 })),
-    ].map((src, idx) => ({ ...src, blockNumber: idx + 1 }));
+    // Active blocks: strictly question-backed sources. An empty Active QBank upload
+    // (no questions extracted yet) does NOT appear as a block — it appears only in
+    // the Active QBank Documents section so the student can open the source file.
+    const activeBlocks = qbankSources
+      .filter((src) => {
+        const lesson = lessons.find((l) => l.id === src.id);
+        const matched = isActiveBlockSource(lesson, src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())]);
+        return matched && src.questionCount > 0;
+      })
+      .map((src, idx) => ({ id: src.id, title: src.title, questionCount: src.questionCount, blockNumber: idx + 1 }));
     const activeBlockQuestionTotal = activeBlocks.reduce((acc, b) => acc + b.questionCount, 0);
 
     const officialBlocks = qbankSources
       .filter((src) => isOfficialBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())], src.id))
       .map((src, idx) => ({ id: src.id, title: src.title, questionCount: src.questionCount, blockNumber: idx + 1 }));
     const officialBlockQuestionTotal = officialBlocks.reduce((acc, b) => acc + b.questionCount, 0);
-    const practicePoolCount = Math.max(0, qbankSources.length - officialBlocks.length - questionBackedActiveIds.size);
+    const practicePoolCount = Math.max(0, qbankSources.length - officialBlocks.length - activeBlocks.length);
 
     return {
       ...subject,
