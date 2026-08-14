@@ -220,16 +220,16 @@ export default async function SubjectDashboardPage({
   const Icon = getSubjectIconName(detail.subject.title);
   const activeBlockIds = new Set(detail.activeBlocks.map((block) => block.id));
   const officialBlockIds = new Set(detail.officialBlocks.map((block) => block.id));
-  // Documents are routed to EXACTLY ONE bucket by the admin's meta.section choice:
-  //   section="notes" → Notes & Documents
-  //   section="qbank" → Active QBank Documents
-  // A lesson that was promoted into `activeBlocks` because it has extracted questions
-  // is ALSO surfaced in the Active QBank Documents section so the student can open
-  // the source file directly — no duplication, no hiding.
-  const notesDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "notes");
-  const activeQbankDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "active-qbank");
-  // Active QBank Documents are exactly the docs the admin uploaded with meta.section="qbank".
-  // Question-backed blocks live in their own section above; empty uploads live here only.
+  // SINGLE SOURCE OF TRUTH: every document id is owned by exactly ONE bucket.
+  //   - If it's an official/fixed block id → never appears anywhere else.
+  //   - If it's a question-backed active id → appears in "Active QBank Files" block list
+  //     (and only there — NOT also in Active QBank Documents).
+  //   - If it's an active upload with no extracted questions yet → appears in
+  //     "Active QBank Documents" so the student can still open the source file.
+  //   - If it's a notes upload → appears in "Notes & Documents".
+  const claimedIds = new Set<string>([...activeBlockIds, ...officialBlockIds]);
+  const notesDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "notes" && !claimedIds.has(doc.id));
+  const activeQbankDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "active-qbank" && !claimedIds.has(doc.id));
   const activeQbankDocumentsForRender: SubjectLesson[] = [...activeQbankDocuments];
 
   const qbankConfigHref = `/qbank/configure?subject=${encodeURIComponent(detail.subject.title)}&exam=${encodeURIComponent(exam)}&returnTo=${encodeURIComponent(`/subjects/${detail.subject.slug}?exam=${exam}`)}`;
