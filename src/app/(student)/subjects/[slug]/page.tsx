@@ -22,6 +22,7 @@ import {
   Calendar,
   Brain,
   Flame,
+  Layers,
 } from "lucide-react";
 import { requireActive, createAdminClient } from "@/lib/supabase/server";
 import { getSubjectDetail } from "@/lib/subject-data";
@@ -210,13 +211,19 @@ export default async function SubjectDashboardPage({
   const Icon = getSubjectIconName(detail.subject.title);
   const activeBlockIds = new Set(detail.activeBlocks.map((block) => block.id));
   const officialBlockIds = new Set(detail.officialBlocks.map((block) => block.id));
-  const representedStructuredIds = new Set([
-    ...detail.activeBlocks.map((block) => block.id),
-    ...detail.officialBlocks.map((block) => block.id),
-  ]);
-  const notesDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "notes");
-  const activeQbankDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "active-qbank");
-  const standaloneActiveQbankDocuments = activeQbankDocuments.filter((doc) => !representedStructuredIds.has(doc.id));
+  // Documents are routed to EXACTLY ONE bucket by the admin's meta.section choice:
+  //   section="notes" → Notes & Documents
+  //   section="qbank" → Active QBank Documents
+  // A lesson that was promoted into `activeBlocks` because it has extracted questions
+  // is ALSO surfaced in the Active QBank Documents section so the student can open
+  // the source file directly — no duplication, no hiding.
+  const notesDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "notes" && !activeBlockIds.has(doc.id) && !officialBlockIds.has(doc.id));
+  const activeQbankDocuments = detail.documents.filter((doc) => classifyDocumentSection(doc as SubjectLesson) === "active-qbank" && !activeBlockIds.has(doc.id));
+  const activeBlocksWithoutDoc = detail.activeBlocks.filter((block) => !activeQbankDocuments.find((d) => d.id === block.id));
+  const activeQbankDocumentsForRender: SubjectLesson[] = [
+    ...activeQbankDocuments,
+    ...activeBlocksWithoutDoc.map((b) => ({ id: b.id, title: b.title } as unknown as SubjectLesson)),
+  ];
 
   const qbankConfigHref = `/qbank/configure?subject=${encodeURIComponent(detail.subject.title)}&exam=${encodeURIComponent(exam)}&returnTo=${encodeURIComponent(`/subjects/${detail.subject.slug}?exam=${exam}`)}`;
   const randomQuizHref = `/qbank/configure?subject=${encodeURIComponent(detail.subject.title)}&exam=${encodeURIComponent(exam)}&mode=random&returnTo=${encodeURIComponent(`/subjects/${detail.subject.slug}?exam=${exam}`)}`;
@@ -529,32 +536,7 @@ export default async function SubjectDashboardPage({
           </div>
         )}
 
-        {standaloneActiveQbankDocuments.length > 0 && (
-          <div className="mt-6 rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider" style={{ background: "rgba(16,185,129,0.20)", color: "#6ee7b7" }}>Active</span>
-                <div className="text-xs uppercase tracking-wider text-emerald-100 font-semibold">Active QBank Documents</div>
-              </div>
-              <div className="text-xs text-emerald-200/80">{standaloneActiveQbankDocuments.length} file{standaloneActiveQbankDocuments.length !== 1 ? "s" : ""}</div>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {standaloneActiveQbankDocuments.map((doc, index) => (
-                <Link
-                  key={doc.id}
-                  href={`/lesson/${doc.id}`}
-                  className="group rounded-xl border border-emerald-400/25 bg-ink-950/40 p-3 hover:border-emerald-400/60 transition"
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold" style={{ background: "rgba(16,185,129,0.25)", color: "#6ee7b7" }}>{index + 1}</span>
-                    <span className="text-sm font-semibold text-white truncate flex-1">{friendlyDocTitle(doc.title, index + 1)}</span>
-                  </div>
-                  <div className="text-xs text-slate-400 truncate">Open active QBank HTML document</div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Active QBank Documents — moved out of Start Practicing (its own dedicated section is rendered below) */}
 
         {/* Official Fixed Blocks — distinct from practice pool */}
         {detail.officialBlocks.length > 0 && (
@@ -599,6 +581,57 @@ export default async function SubjectDashboardPage({
         )}
 
       </div>
+
+      </div>
+
+      {/* ── ACTIVE QBANK DOCUMENTS (dedicated section, exclusive to admin's upload choice) ── */}
+      {activeQbankDocumentsForRender.length > 0 && (
+        <section className="mt-4 rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-teal-500/5 p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-500/15 text-emerald-300 shrink-0">
+                <Layers className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="text-base font-semibold text-white">Active QBank Documents</div>
+                <div className="text-xs text-slate-400">
+                  {activeQbankDocumentsForRender.length} document{activeQbankDocumentsForRender.length !== 1 ? "s" : ""} · routed here because the educator chose <span className="text-emerald-300 font-semibold">Active QBank</span>
+                </div>
+              </div>
+            </div>
+            <span className="rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
+                  style={{ background: "rgba(16,185,129,0.20)", color: "#6ee7b7" }}>
+              Active
+            </span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {activeQbankDocumentsForRender.map((doc, index) => {
+              const linkedBlock = activeBlocksWithoutDoc.find((b) => b.id === doc.id);
+              const href = linkedBlock
+                ? `/qbank?block=${doc.id}&blockTitle=${encodeURIComponent(linkedBlock.title)}&subject=${encodeURIComponent(detail.subject.title)}&exam=${encodeURIComponent(detail.exam)}&returnTo=${encodeURIComponent(`/subjects/${detail.subject.slug}?exam=${detail.exam}`)}`
+                : `/lesson/${doc.id}`;
+              return (
+                <Link
+                  key={doc.id}
+                  href={href}
+                  className="group rounded-xl border border-emerald-400/25 bg-ink-950/40 p-3 hover:border-emerald-400/60 transition"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold"
+                          style={{ background: "rgba(16,185,129,0.25)", color: "#6ee7b7" }}>{index + 1}</span>
+                    <span className="text-sm font-semibold text-white truncate flex-1">{friendlyDocTitle(doc.title, index + 1)}</span>
+                  </div>
+                  <div className="text-xs text-slate-400 truncate">
+                    {linkedBlock && linkedBlock.questionCount > 0
+                      ? `Active QBank block · ${linkedBlock.questionCount} questions`
+                      : "Open active QBank HTML document"}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* ── SECTIONS GRID ────────────────────────────────────────────────── */}
       <div className="mt-4 flex flex-col gap-4">
