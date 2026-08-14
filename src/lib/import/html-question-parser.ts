@@ -172,8 +172,8 @@ function findClassContainers(html: string): string[] {
  * Markers: "Question N", "Q N.", "N." at start of <p>/<h> element, "--- Q N ---"
  */
 const Q_MARKER_RE =
-  /(?:<(?:h[1-6]|p|strong|b|div)[^>]*>)\s*(?:Question\s+\d+|Q[\s\-]*\d+[.:]|^\s*\d{1,3}[.)]\s+[A-Z])/gi;
-const Q_MARKER_PLAIN_RE = /(?:^|\n)\s*(?:Question\s+\d+|Q\s*\d+[.:]|\d{1,3}[.)]\s+(?=[A-Z]))/gi;
+  /<(?:h[1-6]|p|strong|b|div|section|article)[^>]*>\s*(?:Question\s+\d+|Q[\s\-]*\d+[.:]|\d{1,3}[.)]\s+[A-Z])/gi;
+const Q_MARKER_PLAIN_RE = /(?:^|\n)\s*(?:Question\s+\d+|Q\s*\d+[.:]|\d{1,3}[.)]\s+(?=[A-Z]))/gm;
 
 function splitByQuestionMarkers(html: string): string[] {
   const positions: number[] = [];
@@ -191,9 +191,13 @@ function splitByQuestionMarkers(html: string): string[] {
     while ((m = re2.exec(text)) !== null) textPositions.push(m.index);
 
     if (textPositions.length >= 2) {
-      // Map text positions back to approximate html positions (rough split)
-      // Use text-level splitting as fallback
-      const parts = text.split(re2).filter(Boolean);
+      // Use text-level splitting as fallback while preserving each marker.
+      const parts: string[] = [];
+      for (let i = 0; i < textPositions.length; i++) {
+        const start = textPositions[i];
+        const end = i + 1 < textPositions.length ? textPositions[i + 1] : text.length;
+        parts.push(text.slice(start, end));
+      }
       return parts.filter(p => hasChoices(p));
     }
   }
@@ -265,6 +269,21 @@ function splitHtmlIntoQuestionBlocks(html: string): string[] {
 
   const s5 = splitByParagraphText(html);
   if (s5.length >= 2) return s5;
+
+  // Active QBank exports may repeat answer markers without question numbers.
+  const answerMarkers = [...html.matchAll(/(?:correct\s+answer|answer\s+key)\s*[:\-]/gi)];
+  if (answerMarkers.length >= 2) {
+    const parts: string[] = [];
+    let start = 0;
+    for (let i = 0; i < answerMarkers.length; i++) {
+      const markerEnd = answerMarkers[i].index! + answerMarkers[i][0].length;
+      const next = i + 1 < answerMarkers.length ? answerMarkers[i + 1].index! : html.length;
+      const segment = html.slice(start, next);
+      if (hasChoices(htmlToText(segment))) parts.push(segment);
+      start = markerEnd;
+    }
+    if (parts.length >= 2) return parts;
+  }
 
   // If nothing splits, treat the whole thing as one block
   return [html];

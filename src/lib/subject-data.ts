@@ -246,7 +246,7 @@ export async function getSubjectOverviews(exam = "IFOM_CSE"): Promise<SubjectOve
     const documents = lessons.filter((lesson) => {
       const type = typeof lesson.meta?.type === "string" ? String(lesson.meta?.type) : "";
       const assignedSubject = lessonAssignedSubject(lesson);
-      const documentKinds = new Set(["html", "pdf", "html-file", "html-inline", "notes", "qbank"]);
+      const documentKinds = new Set(["html", "pdf", "pptx", "image", "html-file", "html-inline", "notes", "qbank"]);
       return type !== "video" && documentKinds.has(lesson.kind) && subjectTitleMatches(assignedSubject, subject.title);
     });
 
@@ -283,16 +283,27 @@ export async function getSubjectOverviews(exam = "IFOM_CSE"): Promise<SubjectOve
     const qbankSources = [...sourceMap.values()].sort((a, b) => b.questionCount - a.questionCount || a.title.localeCompare(b.title));
     const keyPoints = flashcards.filter((card) => matchesSubject(subject.title, flashcardText(card), card.tags));
 
-    const activeBlocks = qbankSources
-      .filter((src) => isActiveBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())]))
-      .map((src, idx) => ({ id: src.id, title: src.title, questionCount: src.questionCount, blockNumber: idx + 1 }));
+    const questionBackedActiveIds = new Set(
+      qbankSources
+        .filter((src) => isActiveBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())]))
+        .map((src) => src.id),
+    );
+    const emptyActiveLessons = documents.filter((lesson) =>
+      !questionBackedActiveIds.has(lesson.id) && isActiveBlockSource(lesson, lesson.title),
+    );
+    const activeBlocks = [
+      ...qbankSources
+        .filter((src) => isActiveBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())]))
+        .map((src) => ({ id: src.id, title: src.title, questionCount: src.questionCount })),
+      ...emptyActiveLessons.map((lesson) => ({ id: lesson.id, title: lesson.title, questionCount: 0 })),
+    ].map((src, idx) => ({ ...src, blockNumber: idx + 1 }));
     const activeBlockQuestionTotal = activeBlocks.reduce((acc, b) => acc + b.questionCount, 0);
 
     const officialBlocks = qbankSources
       .filter((src) => isOfficialBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())], src.id))
       .map((src, idx) => ({ id: src.id, title: src.title, questionCount: src.questionCount, blockNumber: idx + 1 }));
     const officialBlockQuestionTotal = officialBlocks.reduce((acc, b) => acc + b.questionCount, 0);
-    const practicePoolCount = Math.max(0, qbankSources.length - officialBlocks.length - activeBlocks.length);
+    const practicePoolCount = Math.max(0, qbankSources.length - officialBlocks.length - questionBackedActiveIds.size);
 
     return {
       ...subject,
@@ -326,7 +337,7 @@ export async function getSubjectDetail(slug: string, exam = "IFOM_CSE"): Promise
   const documents = lessons.filter((lesson) => {
     const type = typeof lesson.meta?.type === "string" ? String(lesson.meta?.type) : "";
     const assignedSubject = lessonAssignedSubject(lesson);
-    const documentKinds = new Set(["html", "pdf", "html-file", "html-inline", "notes", "qbank"]);
+    const documentKinds = new Set(["html", "pdf", "pptx", "image", "html-file", "html-inline", "notes", "qbank"]);
     return type !== "video" && documentKinds.has(lesson.kind) && subjectTitleMatches(assignedSubject, subject.title);
   });
 
@@ -363,16 +374,27 @@ export async function getSubjectDetail(slug: string, exam = "IFOM_CSE"): Promise
   const keyPoints = flashcards.filter((card) => matchesSubject(subject.title, flashcardText(card), card.tags));
   const qbankSources = [...sourceMap.values()].sort((a, b) => b.questionCount - a.questionCount || a.title.localeCompare(b.title));
 
-  const activeBlocks = qbankSources
-    .filter((src) => isActiveBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())]))
-    .map((src, idx) => ({ id: src.id, title: src.title, questionCount: src.questionCount, blockNumber: idx + 1 }));
+  const questionBackedActiveIds = new Set(
+    qbankSources
+      .filter((src) => isActiveBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())]))
+      .map((src) => src.id),
+  );
+  const emptyActiveLessons = documents.filter((lesson) =>
+    !questionBackedActiveIds.has(lesson.id) && isActiveBlockSource(lesson, lesson.title),
+  );
+  const activeBlocks = [
+    ...qbankSources
+      .filter((src) => isActiveBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())]))
+      .map((src) => ({ id: src.id, title: src.title, questionCount: src.questionCount })),
+    ...emptyActiveLessons.map((lesson) => ({ id: lesson.id, title: lesson.title, questionCount: 0 })),
+  ].map((src, idx) => ({ ...src, blockNumber: idx + 1 }));
   const activeBlockQuestionTotal = activeBlocks.reduce((acc, b) => acc + b.questionCount, 0);
 
   const officialBlocks = qbankSources
     .filter((src) => isOfficialBlockSource(lessons.find((l) => l.id === src.id), src.title, [...(sourceTagsMap.get(src.id) ?? new Set<string>())], src.id))
     .map((src, idx) => ({ id: src.id, title: src.title, questionCount: src.questionCount, blockNumber: idx + 1 }));
   const officialBlockQuestionTotal = officialBlocks.reduce((acc, b) => acc + b.questionCount, 0);
-  const practicePoolCount = Math.max(0, qbankSources.length - officialBlocks.length - activeBlocks.length);
+  const practicePoolCount = Math.max(0, qbankSources.length - officialBlocks.length - questionBackedActiveIds.size);
 
   return {
     exam,
